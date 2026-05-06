@@ -1,0 +1,251 @@
+# Implementation Checklist
+
+This checklist is the execution layer for `autoresearch_metrics_mvp.md`.
+
+It exists so the next development pass can start from concrete tasks instead of re-reading the whole plan and rediscovering the same decisions.
+
+Development workflow: `development_workflow.md`.
+Context reset anchor: `CURRENT_STATE.md`.
+Autonomous run instructions: `AUTONOMOUS_RUNBOOK.md`.
+
+## 0. Planning Decisions Already Made
+
+- [x] Keep the original broad plan as reference only: `code_metrics_toolkit_plan.md`.
+- [x] Split the work into MVP and full roadmap.
+- [x] Make autoresearch the first product, not a generic NDepend/Sonar clone.
+- [x] Treat `graph.json` as a required product artifact.
+- [x] Treat `chunks.ndjson` as a required product artifact.
+- [x] Use stable `target_id` as a core contract, not a formatting detail.
+- [x] Replace magic `hotspot_score` with explainable `hotspot_rank`.
+- [x] Defer Halstead, MI, LCOM, WMC, NPath, package metrics and layer rules.
+- [x] Require formula documentation as part of each metric DoD.
+- [x] Require shared analysis passes before adding overlapping AST-based metrics.
+- [x] Use orchestrator-led development with bounded subagents only.
+- [x] Use `CURRENT_STATE.md` for context cleanup and handoff.
+- [x] Create autonomous run instructions.
+
+## 1. Local Tooling Assumptions
+
+- [x] .NET SDK is available locally.
+- [x] .NET 8 SDK is available locally.
+- [x] .NET 10 SDK is also available locally, so implementation must pin SDK deliberately.
+- [ ] Add `global.json` to avoid accidentally building with .NET 10.
+- [ ] Target `net8.0` for libraries and CLI unless there is a deliberate reason to require newer .NET.
+- [ ] Pin Roslyn package versions explicitly.
+- [ ] Add `Directory.Build.props` with nullable enabled and warnings policy.
+- [ ] Add `.editorconfig` for formatting and analyzer consistency.
+
+Recommended first `global.json`:
+
+```json
+{
+  "sdk": {
+    "version": "8.0.410",
+    "rollForward": "latestFeature"
+  }
+}
+```
+
+Rationale: .NET 8 is installed and is the conservative runtime target. The machine also has .NET 10, but using it implicitly would make the project less portable and could change Roslyn/MSBuild behavior under us.
+
+## 2. Stop Conditions
+
+Do not start implementing the metric catalog until these are done:
+
+- [ ] JSON schemas exist for every mandatory output.
+- [ ] Golden sample repositories exist.
+- [ ] Stable target id ADR exists.
+- [ ] Complexity formula ADR exists.
+- [ ] Output validation test exists.
+- [ ] CLI end-to-end smoke test exists.
+
+Do not add advanced metrics until these are done:
+
+- [ ] `graph.json` is emitted and schema-validated.
+- [ ] `chunks.ndjson` is emitted and schema-validated.
+- [ ] `summary.json` includes deterministic top-N hotspots.
+- [ ] Hotspot reasons are explainable from component metrics.
+- [ ] Syntax fallback works when semantic loading fails.
+
+## 3. Iteration 0 - Contract First
+
+- [ ] Create solution skeleton.
+- [ ] Add `global.json`.
+- [ ] Add `Directory.Build.props`.
+- [ ] Add `.editorconfig`.
+- [ ] Create `src/CodeMetricsToolkit.Abstractions`.
+- [ ] Create `src/CodeMetricsToolkit.Core`.
+- [ ] Create `src/CodeMetricsToolkit.Cli`.
+- [ ] Create `tests/CodeMetricsToolkit.Tests`.
+- [ ] Create `tests/CodeMetricsToolkit.TestAssets`.
+- [ ] Add schema files under `schemas/`.
+- [ ] Define `manifest.schema.json`.
+- [ ] Define `summary.schema.json`.
+- [ ] Define `metric-result.schema.json`.
+- [ ] Define `graph.schema.json`.
+- [ ] Define `chunk.schema.json`.
+- [ ] Define `diagnostic.schema.json`.
+- [ ] Add schema validation tests.
+- [ ] Add ADR: stable target ids.
+- [ ] Add ADR: cyclomatic complexity v1.0.
+- [ ] Add ADR: cognitive complexity decision.
+- [ ] Add golden expected output without requiring real analysis.
+
+Acceptance:
+
+- [ ] `dotnet build` succeeds.
+- [ ] `dotnet test` succeeds.
+- [ ] Schema validation rejects malformed output.
+- [ ] Target id examples cover overloads, generics, constructors, properties and partial types.
+
+## 4. Iteration 1 - Syntax MVP
+
+- [ ] Implement project/file discovery.
+- [ ] Implement syntax-only C# loading.
+- [ ] Detect file nodes.
+- [ ] Detect namespace nodes where useful for parent context.
+- [ ] Detect type nodes.
+- [ ] Detect member nodes.
+- [ ] Emit syntax fallback target ids.
+- [ ] Calculate `lines_of_code`.
+- [ ] Calculate `non_comment_lines_of_code`.
+- [ ] Calculate `method_length`.
+- [ ] Calculate `parameter_count`.
+- [ ] Emit `manifest.json`.
+- [ ] Emit `summary.json`.
+- [ ] Emit `metrics.ndjson`.
+- [ ] Emit `diagnostics.ndjson`.
+- [ ] Add CLI command `codemetrics analyze <path> --output <dir>`.
+
+Acceptance:
+
+- [ ] CLI analyzes `SimpleProject`.
+- [ ] CLI handles a directory without `.sln`.
+- [ ] CLI handles multiple `.csproj` files.
+- [ ] Output validates against schemas.
+- [ ] Generated files are excluded by default.
+
+## 5. Iteration 2 - Graph and Chunks
+
+- [ ] Add graph node model.
+- [ ] Add graph edge model.
+- [ ] Emit file nodes.
+- [ ] Emit type nodes.
+- [ ] Emit member nodes.
+- [ ] Emit `declares` edges.
+- [ ] Emit `contains` edges.
+- [ ] Add Roslyn semantic loading.
+- [ ] Emit semantic target ids when available.
+- [ ] Emit `inherits` edges.
+- [ ] Emit `implements` edges.
+- [ ] Emit `uses_type` edges.
+- [ ] Emit best-effort `calls` edges.
+- [ ] Mark graph edge confidence.
+- [ ] Emit `graph.json`.
+- [ ] Emit `chunks.ndjson`.
+- [ ] Support `--include-chunk-text`.
+
+Acceptance:
+
+- [ ] Partial types produce one logical type node with multiple declarations.
+- [ ] Related targets can be resolved from a member target.
+- [ ] Syntax fallback still works if semantic load fails.
+- [ ] `graph.json` validates against schema.
+- [ ] `chunks.ndjson` validates against schema.
+
+## 6. Iteration 3 - Complexity and Ranking
+
+- [ ] Implement shared `ControlFlowFacts`.
+- [ ] Implement `cyclomatic_complexity@1.0.0`.
+- [ ] Test all defined cyclomatic decision points.
+- [ ] Implement cognitive complexity according to ADR.
+- [ ] Implement `nesting_depth`.
+- [ ] Add metric formula docs next to implementation.
+- [ ] Add `hotspot_rank` for members.
+- [ ] Add `hotspot_rank` for types.
+- [ ] Add `hotspot_rank` for files.
+- [ ] Add component reasons to `summary.json`.
+- [ ] Add deterministic ordering for ties.
+
+Acceptance:
+
+- [ ] Top-N hotspots are stable on golden samples.
+- [ ] Hotspot reasons include metric values, percentiles and weights.
+- [ ] LOC does not dominate ranking by accident.
+- [ ] Complexity metrics do not re-traverse AST independently when facts already exist.
+
+## 7. Iteration 4 - Diagnostics and Hardening
+
+- [ ] Count compiler diagnostics.
+- [ ] Count nullable diagnostics.
+- [ ] Count analyzer diagnostics if available.
+- [ ] Emit project load diagnostics.
+- [ ] Emit semantic model unavailable diagnostics.
+- [ ] Add `codemetrics validate-output <artifact-dir>`.
+- [ ] Normalize snapshots for paths, timestamps, durations and ordering.
+- [ ] Add medium-repo performance smoke test.
+- [ ] Add cancellation handling in long loops.
+- [ ] Add thread-safety notes to metric authoring docs.
+
+Acceptance:
+
+- [ ] Broken project does not crash full analysis.
+- [ ] Critical diagnostics are visible in `diagnostics.ndjson`.
+- [ ] Output validation catches missing required artifacts.
+- [ ] Performance baseline is recorded.
+
+## 8. Files To Create First
+
+- [ ] `global.json`
+- [ ] `Directory.Build.props`
+- [ ] `.editorconfig`
+- [ ] `CodeMetricsToolkit.sln`
+- [ ] `schemas/manifest.schema.json`
+- [ ] `schemas/summary.schema.json`
+- [ ] `schemas/metric-result.schema.json`
+- [ ] `schemas/graph.schema.json`
+- [ ] `schemas/chunk.schema.json`
+- [ ] `schemas/diagnostic.schema.json`
+- [ ] `docs/adr/0001-stable-target-ids.md`
+- [ ] `docs/adr/0002-cyclomatic-complexity-v1.md`
+- [ ] `docs/adr/0003-cognitive-complexity.md`
+
+## 9. Commands To Keep Green
+
+These commands should become the default verification loop once the solution exists:
+
+```bash
+dotnet build
+dotnet test
+dotnet run --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SimpleProject --output artifacts/simple
+dotnet run --project src/CodeMetricsToolkit.Cli -- validate-output artifacts/simple
+```
+
+## 10. Scope Guard
+
+If a task is not needed for one of these outputs, it belongs in `full_code_metrics_toolkit_roadmap.md`, not in MVP:
+
+- [ ] `manifest.json`
+- [ ] `summary.json`
+- [ ] `metrics.ndjson`
+- [ ] `graph.json`
+- [ ] `chunks.ndjson`
+- [ ] `diagnostics.ndjson`
+
+Deferred by default:
+
+- [ ] CSV
+- [ ] Markdown
+- [ ] SARIF
+- [ ] Quality gates
+- [ ] Baseline compare command
+- [ ] Halstead
+- [ ] Maintainability Index
+- [ ] LCOM
+- [ ] WMC
+- [ ] NPath
+- [ ] Package metrics
+- [ ] Layer violations
+- [ ] Token-based duplication
+
+The unchecked boxes above are intentionally unchecked: they are not MVP work.
