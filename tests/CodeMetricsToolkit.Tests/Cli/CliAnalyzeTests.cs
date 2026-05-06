@@ -30,6 +30,18 @@ public sealed class CliAnalyzeTests
         Assert.Contains(
             File.ReadLines(Path.Combine(output.Path, "metrics.ndjson")),
             line => line.Contains("\"targetIdStability\":\"syntax_fallback\"", StringComparison.Ordinal));
+
+        JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
+        JsonElement[] graphEdges = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "edges");
+        JsonElement[] chunks = ReadNdjson(Path.Combine(output.Path, "chunks.ndjson"));
+
+        Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "file"));
+        Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "type") && HasPropertyValue(node, "targetIdStability", "semantic"));
+        Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "member") && HasPropertyValue(node, "targetIdStability", "semantic"));
+        Assert.Contains(graphEdges, edge => HasPropertyValue(edge, "kind", "declares"));
+        Assert.Contains(graphEdges, edge => HasPropertyValue(edge, "kind", "contains"));
+        Assert.Contains(chunks, chunk => HasPropertyValue(chunk, "targetKind", "member") && chunk.GetProperty("textHash").GetString()!.StartsWith("sha256:", StringComparison.Ordinal));
+        Assert.DoesNotContain(chunks, chunk => chunk.TryGetProperty("text", out _));
     }
 
     [Fact]
@@ -67,6 +79,93 @@ public sealed class CliAnalyzeTests
             line => line.Contains("Generated.g.cs", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task AnalyzeCommandMergesPartialTypeGraphNode()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("PartialTypesProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
+        JsonElement[] graphEdges = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "edges");
+        const string partialTypeId = "type:PartialTypesProject/T:PartialTypesProject.PartialOrder";
+
+        JsonElement partialType = Assert.Single(graphNodes, node => HasPropertyValue(node, "id", partialTypeId));
+        Assert.Equal(2, partialType.GetProperty("declarations").GetArrayLength());
+        Assert.Equal(2, graphEdges.Count(edge =>
+            HasPropertyValue(edge, "kind", "declares") &&
+            HasPropertyValue(edge, "to", partialTypeId)));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandEmitsSemanticRelationshipEdges()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("SemanticGraphProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] graphEdges = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "edges");
+
+        Assert.Contains(graphEdges, edge =>
+            HasPropertyValue(edge, "kind", "inherits") &&
+            HasPropertyValue(edge, "from", "type:SemanticGraphProject/T:SemanticGraphProject.OrderService") &&
+            HasPropertyValue(edge, "to", "type:SemanticGraphProject/T:SemanticGraphProject.ServiceBase"));
+        Assert.Contains(graphEdges, edge =>
+            HasPropertyValue(edge, "kind", "implements") &&
+            HasPropertyValue(edge, "from", "type:SemanticGraphProject/T:SemanticGraphProject.OrderService") &&
+            HasPropertyValue(edge, "to", "type:SemanticGraphProject/T:SemanticGraphProject.IOrderService"));
+        Assert.Contains(graphEdges, edge => HasPropertyValue(edge, "kind", "uses_type"));
+        Assert.Contains(graphEdges, edge => HasPropertyValue(edge, "kind", "calls"));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandCanIncludeChunkText()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("SimpleProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--include-chunk-text");
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] chunks = ReadNdjson(Path.Combine(output.Path, "chunks.ndjson"));
+
+        Assert.Contains(chunks, chunk =>
+            HasPropertyValue(chunk, "chunkKind", "member_body") &&
+            chunk.TryGetProperty("text", out JsonElement text) &&
+            text.GetString()!.Contains("LastResult = left + right;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandCanForceSyntaxFallback()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("SimpleProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--syntax-only");
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
+        JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
+        JsonElement[] chunks = ReadNdjson(Path.Combine(output.Path, "chunks.ndjson"));
+
+        Assert.Equal("syntax", manifest.RootElement.GetProperty("mode").GetString());
+        Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "type") && HasPropertyValue(node, "targetIdStability", "syntax_fallback"));
+        Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "member") && HasPropertyValue(node, "targetIdStability", "syntax_fallback"));
+        Assert.Contains(chunks, chunk => HasPropertyValue(chunk, "targetKind", "member") && HasPropertyValue(chunk, "targetIdStability", "syntax_fallback"));
+    }
+
     private static async Task<int> RunCliAsync(params string[] args)
     {
         using var output = new StringWriter();
@@ -91,6 +190,37 @@ public sealed class CliAnalyzeTests
         Assert.True(File.Exists(Path.Combine(outputPath, "diagnostics.ndjson")));
         Assert.True(File.Exists(Path.Combine(outputPath, "graph.json")));
         Assert.True(File.Exists(Path.Combine(outputPath, "chunks.ndjson")));
+    }
+
+    private static JsonElement[] ReadJsonArray(string artifactPath, string propertyName)
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(artifactPath));
+
+        return document.RootElement
+            .GetProperty(propertyName)
+            .EnumerateArray()
+            .Select(element => element.Clone())
+            .ToArray();
+    }
+
+    private static JsonElement[] ReadNdjson(string artifactPath)
+    {
+        return File.ReadLines(artifactPath)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line =>
+            {
+                using JsonDocument document = JsonDocument.Parse(line);
+
+                return document.RootElement.Clone();
+            })
+            .ToArray();
+    }
+
+    private static bool HasPropertyValue(JsonElement element, string propertyName, string expectedValue)
+    {
+        return element.TryGetProperty(propertyName, out JsonElement property) &&
+            property.ValueKind == JsonValueKind.String &&
+            string.Equals(property.GetString(), expectedValue, StringComparison.Ordinal);
     }
 
     private static void CreateGeneratedFileSample(string rootPath)

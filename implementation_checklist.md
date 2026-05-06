@@ -61,11 +61,11 @@ Do not start implementing the metric catalog until these are done:
 
 Do not add advanced metrics until these are done:
 
-- [ ] `graph.json` is emitted and schema-validated.
-- [ ] `chunks.ndjson` is emitted and schema-validated.
+- [x] `graph.json` is emitted and schema-validated.
+- [x] `chunks.ndjson` is emitted and schema-validated.
 - [ ] `summary.json` includes deterministic top-N hotspots.
 - [ ] Hotspot reasons are explainable from component metrics.
-- [ ] Syntax fallback works when semantic loading fails.
+- [x] Syntax fallback works when semantic loading fails.
 
 ## 3. Iteration 0 - Contract First
 
@@ -127,31 +127,31 @@ Acceptance:
 
 ## 5. Iteration 2 - Graph and Chunks
 
-- [ ] Add graph node model.
-- [ ] Add graph edge model.
-- [ ] Emit file nodes.
-- [ ] Emit type nodes.
-- [ ] Emit member nodes.
-- [ ] Emit `declares` edges.
-- [ ] Emit `contains` edges.
-- [ ] Add Roslyn semantic loading.
-- [ ] Emit semantic target ids when available.
-- [ ] Emit `inherits` edges.
-- [ ] Emit `implements` edges.
-- [ ] Emit `uses_type` edges.
-- [ ] Emit best-effort `calls` edges.
-- [ ] Mark graph edge confidence.
-- [ ] Emit `graph.json`.
-- [ ] Emit `chunks.ndjson`.
-- [ ] Support `--include-chunk-text`.
+- [x] Add graph node model.
+- [x] Add graph edge model.
+- [x] Emit file nodes.
+- [x] Emit type nodes.
+- [x] Emit member nodes.
+- [x] Emit `declares` edges.
+- [x] Emit `contains` edges.
+- [x] Add Roslyn semantic loading.
+- [x] Emit semantic target ids when available.
+- [x] Emit `inherits` edges.
+- [x] Emit `implements` edges.
+- [x] Emit `uses_type` edges.
+- [x] Emit best-effort `calls` edges.
+- [x] Mark graph edge confidence.
+- [x] Emit `graph.json`.
+- [x] Emit `chunks.ndjson`.
+- [x] Support `--include-chunk-text`.
 
 Acceptance:
 
-- [ ] Partial types produce one logical type node with multiple declarations.
-- [ ] Related targets can be resolved from a member target.
-- [ ] Syntax fallback still works if semantic load fails.
-- [ ] `graph.json` validates against schema.
-- [ ] `chunks.ndjson` validates against schema.
+- [x] Partial types produce one logical type node with multiple declarations.
+- [x] Related targets can be resolved from a member target.
+- [x] Syntax fallback still works if semantic load fails.
+- [x] `graph.json` validates against schema.
+- [x] `chunks.ndjson` validates against schema.
 
 ## 6. Iteration 3 - Complexity and Ranking
 

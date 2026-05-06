@@ -45,6 +45,8 @@ public static class CliApplication
         string inputPath = args[0];
         string outputPath = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "autoresearch");
         bool includeGeneratedCode = false;
+        bool includeChunkText = false;
+        bool syntaxOnly = false;
         int top = 20;
 
         for (int index = 1; index < args.Count; index++)
@@ -66,6 +68,14 @@ public static class CliApplication
 
                 case "--include-generated":
                     includeGeneratedCode = true;
+                    break;
+
+                case "--include-chunk-text":
+                    includeChunkText = true;
+                    break;
+
+                case "--syntax-only":
+                    syntaxOnly = true;
                     break;
 
                 case "--top":
@@ -91,6 +101,8 @@ public static class CliApplication
                     InputPath = inputPath,
                     OutputPath = outputPath,
                     IncludeGeneratedCode = includeGeneratedCode,
+                    IncludeChunkText = includeChunkText,
+                    SyntaxOnly = syntaxOnly,
                     Top = top
                 },
                 cancellationToken).ConfigureAwait(false);

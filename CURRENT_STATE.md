@@ -2,7 +2,7 @@
 
 ## Active Iteration
 
-Iteration 2 - Graph and Chunks (next)
+Iteration 3 - Complexity and Ranking (next)
 
 ## Completed
 
@@ -22,6 +22,12 @@ Iteration 2 - Graph and Chunks (next)
 - Syntax metrics implemented: `lines_of_code`, `non_comment_lines_of_code`, `method_length`, and `parameter_count`.
 - CLI smoke tests cover `SimpleProject`, a directory without `.sln`, multiple `.csproj` files, schema-valid output, and generated-file exclusion.
 - Iteration 1 writes schema-valid empty placeholders for `graph.json` and `chunks.ndjson` only because `manifest.json` requires all mandatory artifact names.
+- Iteration 2 graph and chunks implemented.
+- `graph.json` now emits file/type/member nodes, `declares` and `contains` edges, and semantic `inherits`, `implements`, `uses_type`, and best-effort `calls` edges.
+- `chunks.ndjson` now emits file/type/member chunks with source ranges, token estimates, SHA-256 text hashes, and related target ids.
+- `--include-chunk-text` adds source text to chunk lines when needed.
+- `--syntax-only` forces the syntax fallback path and keeps graph/chunk output schema-valid.
+- Partial type declarations are merged into one logical type node when semantic ids are available.
 
 ## In Progress
 
@@ -29,19 +35,21 @@ Iteration 2 - Graph and Chunks (next)
 
 ## Next Actions
 
-- Start Iteration 2 from `implementation_checklist.md`.
-- Replace placeholder `graph.json` with real file/type/member graph nodes.
-- Emit `declares` and `contains` edges.
-- Add first real `chunks.ndjson` output with source ranges.
-- Decide how much semantic loading belongs in Iteration 2 without breaking syntax fallback.
+- Start Iteration 3 from `implementation_checklist.md`.
+- Implement shared `ControlFlowFacts`.
+- Implement `cyclomatic_complexity@1.0.0`.
+- Add formula tests for defined cyclomatic decision points.
+- Add cognitive complexity and `nesting_depth` after the shared control-flow pass exists.
 
 ## Verification
 
 - `dotnet --version`: passed, returned `8.0.410`.
 - `dotnet restore CodeMetricsToolkit.sln`: passed.
 - `dotnet build CodeMetricsToolkit.sln`: passed.
-- `dotnet test CodeMetricsToolkit.sln`: passed, 11 tests.
-- `dotnet run --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SimpleProject --output artifacts/simple`: passed.
+- `dotnet test CodeMetricsToolkit.sln --no-restore`: passed, 15 tests.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SimpleProject --output artifacts/iteration2-simple`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SemanticGraphProject --output artifacts/iteration2-semantic`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/PartialTypesProject --output artifacts/iteration2-partial`: passed.
 
 ## Known Decisions
 
@@ -49,7 +57,7 @@ Iteration 2 - Graph and Chunks (next)
 - Test asset projects are intentionally not added to the solution; `BrokenProject` and nullable diagnostics fixtures are analyzer inputs, not normal build targets.
 - `graph.json` and `chunks.ndjson` remain first-class product artifacts.
 - `targetIdStability` is required for metric results and chunks.
-- Do not treat the current empty `graph.json` and `chunks.ndjson` as completed graph/chunk implementation.
+- `graph.json` and `chunks.ndjson` are no longer placeholders after Iteration 2.
 - Do not start complexity/ranking metrics until graph/chunk context exists.
 
 ## Blockers

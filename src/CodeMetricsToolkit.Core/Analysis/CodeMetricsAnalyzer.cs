@@ -15,7 +15,7 @@ public static class CodeMetricsAnalyzer
 
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         DiscoveredSources sources = SourceFileDiscovery.Discover(request.InputPath, request.IncludeGeneratedCode);
-        var facts = SyntaxFactsCollector.Collect(sources, cancellationToken);
+        var facts = SyntaxFactsCollector.Collect(sources, useSemantic: !request.SyntaxOnly, cancellationToken);
         IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts);
         string outputPath = Path.GetFullPath(request.OutputPath);
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
@@ -24,6 +24,7 @@ public static class CodeMetricsAnalyzer
             outputPath,
             facts,
             metrics,
+            request.IncludeChunkText,
             startedAt,
             completedAt,
             cancellationToken).ConfigureAwait(false);

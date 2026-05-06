@@ -24,6 +24,7 @@ public static class ArtifactWriter
         string outputPath,
         SyntaxAnalysisFacts facts,
         IReadOnlyList<MetricResultLine> metrics,
+        bool includeChunkText,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken)
@@ -36,7 +37,7 @@ public static class ArtifactWriter
 
         await WriteJsonAsync(
             Path.Combine(outputPath, ArtifactNames.Manifest),
-            CreateManifest(facts.RootPath, startedAt, completedAt),
+            CreateManifest(facts.RootPath, facts.Mode, startedAt, completedAt),
             cancellationToken).ConfigureAwait(false);
 
         await WriteJsonAsync(
@@ -51,12 +52,12 @@ public static class ArtifactWriter
 
         await WriteJsonAsync(
             Path.Combine(outputPath, ArtifactNames.Graph),
-            new GraphArtifact(ContractVersion.Current, [], []),
+            GraphProjector.Project(facts),
             cancellationToken).ConfigureAwait(false);
 
-        await File.WriteAllTextAsync(
+        await WriteNdjsonAsync(
             Path.Combine(outputPath, ArtifactNames.Chunks),
-            string.Empty,
+            ChunkProjector.Project(facts, includeChunkText),
             cancellationToken).ConfigureAwait(false);
 
         await WriteNdjsonAsync(
@@ -67,6 +68,7 @@ public static class ArtifactWriter
 
     private static ManifestArtifact CreateManifest(
         string rootPath,
+        string mode,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt)
     {
@@ -80,7 +82,7 @@ public static class ArtifactWriter
             startedAt,
             completedAt,
             durationMs,
-            "syntax",
+            mode,
             new ArtifactMap(
                 ArtifactNames.Summary,
                 ArtifactNames.Metrics,
@@ -172,11 +174,6 @@ public static class ArtifactWriter
         int MetricResultCount,
         int DiagnosticCount,
         IReadOnlyList<object> Hotspots);
-
-    private sealed record GraphArtifact(
-        string SchemaVersion,
-        IReadOnlyList<object> Nodes,
-        IReadOnlyList<object> Edges);
 
     private sealed record DiagnosticLine(
         string SchemaVersion,

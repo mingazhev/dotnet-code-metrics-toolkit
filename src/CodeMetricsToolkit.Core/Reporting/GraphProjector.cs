@@ -1,0 +1,80 @@
+using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Facts;
+
+namespace CodeMetricsToolkit.Core.Reporting;
+
+public static class GraphProjector
+{
+    public static GraphArtifact Project(SyntaxAnalysisFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+
+        IReadOnlyList<GraphNodeLine> nodes = facts.Files
+            .OrderBy(file => file.TargetId, StringComparer.Ordinal)
+            .Select(CreateFileNode)
+            .Concat(facts.Types
+                .OrderBy(type => type.TargetId, StringComparer.Ordinal)
+                .Select(CreateTypeNode))
+            .Concat(facts.Members
+                .OrderBy(member => member.TargetId, StringComparer.Ordinal)
+                .Select(CreateMemberNode))
+            .ToArray();
+
+        IReadOnlyList<GraphEdgeLine> edges = facts.GraphEdges
+            .OrderBy(edge => edge.From, StringComparer.Ordinal)
+            .ThenBy(edge => edge.Kind, StringComparer.Ordinal)
+            .ThenBy(edge => edge.To, StringComparer.Ordinal)
+            .Select(edge => new GraphEdgeLine(edge.From, edge.To, edge.Kind, edge.Confidence))
+            .ToArray();
+
+        return new GraphArtifact(ContractVersion.Current, nodes, edges);
+    }
+
+    private static GraphNodeLine CreateFileNode(FileFacts file)
+    {
+        return new GraphNodeLine
+        {
+            Id = file.TargetId,
+            Kind = "file",
+            Name = Path.GetFileName(file.FilePath),
+            TargetIdStability = file.TargetIdStability,
+            FilePath = file.FilePath,
+            StartLine = file.StartLine,
+            EndLine = file.EndLine
+        };
+    }
+
+    private static GraphNodeLine CreateTypeNode(TypeFacts type)
+    {
+        return new GraphNodeLine
+        {
+            Id = type.TargetId,
+            Kind = "type",
+            Name = type.Name,
+            TargetIdStability = type.TargetIdStability,
+            FilePath = type.FilePath,
+            StartLine = type.StartLine,
+            EndLine = type.EndLine,
+            Declarations = type.Declarations
+                .Select(span => new GraphSourceSpanLine(span.FilePath, span.StartLine, span.EndLine))
+                .ToArray()
+        };
+    }
+
+    private static GraphNodeLine CreateMemberNode(MemberFacts member)
+    {
+        return new GraphNodeLine
+        {
+            Id = member.TargetId,
+            Kind = "member",
+            Name = member.Name,
+            TargetIdStability = member.TargetIdStability,
+            FilePath = member.FilePath,
+            StartLine = member.StartLine,
+            EndLine = member.EndLine,
+            Declarations = member.Declarations
+                .Select(span => new GraphSourceSpanLine(span.FilePath, span.StartLine, span.EndLine))
+                .ToArray()
+        };
+    }
+}
