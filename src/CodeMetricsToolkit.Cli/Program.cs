@@ -1,3 +1,5 @@
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Cli;
 
-Console.WriteLine($"CodeMetricsToolkit contract {ContractVersion.Current}");
+int exitCode = await CliApplication.RunAsync(args, Console.Out, Console.Error, CancellationToken.None);
+
+return exitCode;

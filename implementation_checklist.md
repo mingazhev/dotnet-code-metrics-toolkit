@@ -57,7 +57,7 @@ Do not start implementing the metric catalog until these are done:
 - [x] Stable target id ADR exists.
 - [x] Complexity formula ADR exists.
 - [x] Output validation test exists.
-- [ ] CLI end-to-end smoke test exists.
+- [x] CLI end-to-end smoke test exists.
 
 Do not add advanced metrics until these are done:
 
@@ -100,30 +100,30 @@ Acceptance:
 
 ## 4. Iteration 1 - Syntax MVP
 
-- [ ] Implement project/file discovery.
-- [ ] Implement syntax-only C# loading.
-- [ ] Detect file nodes.
-- [ ] Detect namespace nodes where useful for parent context.
-- [ ] Detect type nodes.
-- [ ] Detect member nodes.
-- [ ] Emit syntax fallback target ids.
-- [ ] Calculate `lines_of_code`.
-- [ ] Calculate `non_comment_lines_of_code`.
-- [ ] Calculate `method_length`.
-- [ ] Calculate `parameter_count`.
-- [ ] Emit `manifest.json`.
-- [ ] Emit `summary.json`.
-- [ ] Emit `metrics.ndjson`.
-- [ ] Emit `diagnostics.ndjson`.
-- [ ] Add CLI command `codemetrics analyze <path> --output <dir>`.
+- [x] Implement project/file discovery.
+- [x] Implement syntax-only C# loading.
+- [x] Detect file nodes.
+- [x] Detect namespace nodes where useful for parent context.
+- [x] Detect type nodes.
+- [x] Detect member nodes.
+- [x] Emit syntax fallback target ids.
+- [x] Calculate `lines_of_code`.
+- [x] Calculate `non_comment_lines_of_code`.
+- [x] Calculate `method_length`.
+- [x] Calculate `parameter_count`.
+- [x] Emit `manifest.json`.
+- [x] Emit `summary.json`.
+- [x] Emit `metrics.ndjson`.
+- [x] Emit `diagnostics.ndjson`.
+- [x] Add CLI command `codemetrics analyze <path> --output <dir>`.
 
 Acceptance:
 
-- [ ] CLI analyzes `SimpleProject`.
-- [ ] CLI handles a directory without `.sln`.
-- [ ] CLI handles multiple `.csproj` files.
-- [ ] Output validates against schemas.
-- [ ] Generated files are excluded by default.
+- [x] CLI analyzes `SimpleProject`.
+- [x] CLI handles a directory without `.sln`.
+- [x] CLI handles multiple `.csproj` files.
+- [x] Output validates against schemas.
+- [x] Generated files are excluded by default.
 
 ## 5. Iteration 2 - Graph and Chunks
 

@@ -2,7 +2,7 @@
 
 ## Active Iteration
 
-Iteration 1 - Syntax MVP (next)
+Iteration 2 - Graph and Chunks (next)
 
 ## Completed
 
@@ -16,6 +16,12 @@ Iteration 1 - Syntax MVP (next)
 - Golden sample projects created under `tests/CodeMetricsToolkit.TestAssets`.
 - ADRs created for stable target ids, cyclomatic complexity v1.0, and cognitive complexity baseline.
 - `implementation_checklist.md` updated for completed Iteration 0 items.
+- Iteration 1 syntax MVP implemented.
+- `codemetrics analyze <path> --output <dir>` writes `manifest.json`, `summary.json`, `metrics.ndjson`, and `diagnostics.ndjson`.
+- Syntax fallback target ids are emitted for file, type, and member targets.
+- Syntax metrics implemented: `lines_of_code`, `non_comment_lines_of_code`, `method_length`, and `parameter_count`.
+- CLI smoke tests cover `SimpleProject`, a directory without `.sln`, multiple `.csproj` files, schema-valid output, and generated-file exclusion.
+- Iteration 1 writes schema-valid empty placeholders for `graph.json` and `chunks.ndjson` only because `manifest.json` requires all mandatory artifact names.
 
 ## In Progress
 
@@ -23,18 +29,19 @@ Iteration 1 - Syntax MVP (next)
 
 ## Next Actions
 
-- Start Iteration 1 from `implementation_checklist.md`.
-- Implement project/file discovery and syntax-only C# loading.
-- Emit syntax fallback ids for files, types, and members.
-- Add first real `codemetrics analyze <path> --output <dir>` CLI path.
-- Keep CLI end-to-end smoke unchecked until `analyze` exists.
+- Start Iteration 2 from `implementation_checklist.md`.
+- Replace placeholder `graph.json` with real file/type/member graph nodes.
+- Emit `declares` and `contains` edges.
+- Add first real `chunks.ndjson` output with source ranges.
+- Decide how much semantic loading belongs in Iteration 2 without breaking syntax fallback.
 
 ## Verification
 
 - `dotnet --version`: passed, returned `8.0.410`.
 - `dotnet restore CodeMetricsToolkit.sln`: passed.
 - `dotnet build CodeMetricsToolkit.sln`: passed.
-- `dotnet test CodeMetricsToolkit.sln`: passed, 8 tests.
+- `dotnet test CodeMetricsToolkit.sln`: passed, 11 tests.
+- `dotnet run --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SimpleProject --output artifacts/simple`: passed.
 
 ## Known Decisions
 
@@ -42,7 +49,8 @@ Iteration 1 - Syntax MVP (next)
 - Test asset projects are intentionally not added to the solution; `BrokenProject` and nullable diagnostics fixtures are analyzer inputs, not normal build targets.
 - `graph.json` and `chunks.ndjson` remain first-class product artifacts.
 - `targetIdStability` is required for metric results and chunks.
-- Do not start the metric catalog until the CLI smoke path exists.
+- Do not treat the current empty `graph.json` and `chunks.ndjson` as completed graph/chunk implementation.
+- Do not start complexity/ranking metrics until graph/chunk context exists.
 
 ## Blockers
 
