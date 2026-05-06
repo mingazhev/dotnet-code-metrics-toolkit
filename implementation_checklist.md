@@ -194,7 +194,30 @@ Acceptance:
 - [x] Output validation catches missing required artifacts.
 - [x] Performance baseline is recorded.
 
-## 8. Files To Create First
+## 8. Iteration 5 - MVP Completion
+
+- [x] Emit `diagnostic_count@1.0.0` metrics for source-linked file/type/member targets.
+- [x] Support `tags` on metric results for diagnostic tag counts.
+- [x] Emit `outgoing_type_dependency_count@1.0.0`.
+- [x] Emit `dependency_cycle_count@1.0.0`.
+- [x] Emit `incoming_type_dependency_count@1.0.0` as an additional blast-radius signal.
+- [x] Emit `type_count@1.0.0` and `member_count@1.0.0`.
+- [x] Emit file/type member complexity aggregate metrics.
+- [x] Update `hotspot_rank@1.0.0` to use MVP weights with diagnostics and dependency signals.
+- [x] Add `codemetrics list-metrics`.
+- [x] Add `codemetrics explain <metric-id>`.
+- [x] Accept MVP analyze options `--include`, `--exclude`, `--semantic`, `--no-restore`, and `--max-degree-of-parallelism`.
+- [x] Document limitations for partial semantic loading, restore, parallelism and source-less diagnostics.
+
+Acceptance:
+
+- [x] Required MVP metric ids are visible in `metrics.ndjson`.
+- [x] Diagnostic tags are visible on metric rows when applicable.
+- [x] CLI catalog commands expose formula and target-kind metadata.
+- [x] Output still validates against schemas.
+- [x] `dotnet test CodeMetricsToolkit.sln` passes.
+
+## 9. Files To Create First
 
 - [x] `global.json`
 - [x] `Directory.Build.props`
@@ -210,7 +233,7 @@ Acceptance:
 - [x] `docs/adr/0002-cyclomatic-complexity-v1.md`
 - [x] `docs/adr/0003-cognitive-complexity.md`
 
-## 9. Commands To Keep Green
+## 10. Commands To Keep Green
 
 These commands should become the default verification loop once the solution exists:
 
@@ -221,7 +244,7 @@ dotnet run --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsTool
 dotnet run --project src/CodeMetricsToolkit.Cli -- validate-output artifacts/simple
 ```
 
-## 10. Scope Guard
+## 11. Scope Guard
 
 If a task is not needed for one of these outputs, it belongs in `full_code_metrics_toolkit_roadmap.md`, not in MVP:
 

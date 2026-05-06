@@ -18,12 +18,18 @@ public static class SourceFileDiscovery
         ".designer.cs"
     ];
 
-    public static DiscoveredSources Discover(string inputPath, bool includeGeneratedCode)
+    public static DiscoveredSources Discover(
+        string inputPath,
+        bool includeGeneratedCode,
+        IReadOnlyList<string>? includePatterns = null,
+        IReadOnlyList<string>? excludePatterns = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
 
         string rootPath = ResolveRootPath(inputPath);
         var rootDirectory = new DirectoryInfo(rootPath);
+        includePatterns ??= [];
+        excludePatterns ??= [];
 
         if (!rootDirectory.Exists)
         {
@@ -36,6 +42,7 @@ public static class SourceFileDiscovery
             .ToList();
 
         List<DiscoveredSourceFile> sourceFiles = EnumerateFiles(rootDirectory, "*.cs", includeGeneratedCode)
+            .Where(file => ShouldIncludeSourceFile(rootPath, file.FullName, includePatterns, excludePatterns))
             .Select(file => CreateSourceFile(rootPath, projectPaths, file.FullName))
             .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
             .ToList();
@@ -99,6 +106,75 @@ public static class SourceFileDiscovery
     {
         return GeneratedFileSuffixes.Any(suffix => fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) ||
             string.Equals(fileName, "AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldIncludeSourceFile(
+        string rootPath,
+        string fullPath,
+        IReadOnlyList<string> includePatterns,
+        IReadOnlyList<string> excludePatterns)
+    {
+        string relativePath = ToRelativePath(rootPath, fullPath);
+
+        bool included = includePatterns.Count == 0 ||
+            includePatterns.Any(pattern => GlobMatches(pattern, relativePath));
+        bool excluded = excludePatterns.Any(pattern => GlobMatches(pattern, relativePath));
+
+        return included && !excluded;
+    }
+
+    private static bool GlobMatches(string pattern, string relativePath)
+    {
+        string normalizedPattern = pattern.Replace(Path.DirectorySeparatorChar, '/');
+        string normalizedPath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
+
+        if (GlobRegex(normalizedPattern).IsMatch(normalizedPath))
+        {
+            return true;
+        }
+
+        if (!normalizedPattern.Contains('/', StringComparison.Ordinal))
+        {
+            return GlobRegex(normalizedPattern).IsMatch(Path.GetFileName(normalizedPath));
+        }
+
+        return false;
+    }
+
+    private static System.Text.RegularExpressions.Regex GlobRegex(string pattern)
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.Append('^');
+
+        for (int index = 0; index < pattern.Length; index++)
+        {
+            char current = pattern[index];
+
+            if (current == '*')
+            {
+                bool isDoubleStar = index + 1 < pattern.Length && pattern[index + 1] == '*';
+                builder.Append(isDoubleStar ? ".*" : "[^/]*");
+
+                if (isDoubleStar)
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            if (current == '?')
+            {
+                builder.Append("[^/]");
+                continue;
+            }
+
+            builder.Append(System.Text.RegularExpressions.Regex.Escape(current.ToString()));
+        }
+
+        builder.Append('$');
+
+        return new System.Text.RegularExpressions.Regex(builder.ToString(), System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     }
 
     private static DiscoveredSourceFile CreateSourceFile(

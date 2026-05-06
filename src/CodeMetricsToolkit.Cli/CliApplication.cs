@@ -1,5 +1,6 @@
 using CodeMetricsToolkit.Abstractions;
 using CodeMetricsToolkit.Core.Analysis;
+using CodeMetricsToolkit.Core.Metrics;
 using CodeMetricsToolkit.Core.Validation;
 
 namespace CodeMetricsToolkit.Cli;
@@ -25,6 +26,10 @@ public static class CliApplication
         return args[0] switch
         {
             "analyze" => await RunAnalyzeAsync(args.Skip(1).ToArray(), output, error, cancellationToken)
+                .ConfigureAwait(false),
+            "list-metrics" => await RunListMetricsAsync(args.Skip(1).ToArray(), output, error)
+                .ConfigureAwait(false),
+            "explain" => await RunExplainAsync(args.Skip(1).ToArray(), output, error)
                 .ConfigureAwait(false),
             "validate-output" => await RunValidateOutputAsync(args.Skip(1).ToArray(), output, error, cancellationToken)
                 .ConfigureAwait(false),
@@ -91,7 +96,11 @@ public static class CliApplication
         bool includeGeneratedCode = false;
         bool includeChunkText = false;
         bool syntaxOnly = false;
+        bool noRestore = false;
+        int? maxDegreeOfParallelism = null;
         int top = 20;
+        var includePatterns = new List<string>();
+        var excludePatterns = new List<string>();
 
         for (int index = 1; index < args.Count; index++)
         {
@@ -114,12 +123,50 @@ public static class CliApplication
                     includeGeneratedCode = true;
                     break;
 
+                case "--include":
+                    if (index + 1 >= args.Count)
+                    {
+                        await error.WriteLineAsync($"{option} requires a value.").ConfigureAwait(false);
+                        return 1;
+                    }
+
+                    includePatterns.Add(args[++index]);
+                    break;
+
+                case "--exclude":
+                    if (index + 1 >= args.Count)
+                    {
+                        await error.WriteLineAsync($"{option} requires a value.").ConfigureAwait(false);
+                        return 1;
+                    }
+
+                    excludePatterns.Add(args[++index]);
+                    break;
+
                 case "--include-chunk-text":
                     includeChunkText = true;
                     break;
 
                 case "--syntax-only":
                     syntaxOnly = true;
+                    break;
+
+                case "--semantic":
+                    syntaxOnly = false;
+                    break;
+
+                case "--no-restore":
+                    noRestore = true;
+                    break;
+
+                case "--max-degree-of-parallelism":
+                    if (index + 1 >= args.Count || !int.TryParse(args[++index], out int parsedMaxDegreeOfParallelism) || parsedMaxDegreeOfParallelism <= 0)
+                    {
+                        await error.WriteLineAsync("--max-degree-of-parallelism requires a positive integer.").ConfigureAwait(false);
+                        return 1;
+                    }
+
+                    maxDegreeOfParallelism = parsedMaxDegreeOfParallelism;
                     break;
 
                 case "--top":
@@ -144,9 +191,13 @@ public static class CliApplication
                 {
                     InputPath = inputPath,
                     OutputPath = outputPath,
+                    IncludePatterns = includePatterns,
+                    ExcludePatterns = excludePatterns,
                     IncludeGeneratedCode = includeGeneratedCode,
                     IncludeChunkText = includeChunkText,
                     SyntaxOnly = syntaxOnly,
+                    NoRestore = noRestore,
+                    MaxDegreeOfParallelism = maxDegreeOfParallelism,
                     Top = top
                 },
                 cancellationToken).ConfigureAwait(false);
@@ -186,6 +237,66 @@ public static class CliApplication
         }
     }
 
+    private static async Task<int> RunListMetricsAsync(
+        IReadOnlyList<string> args,
+        TextWriter output,
+        TextWriter error)
+    {
+        if (args.Count != 0)
+        {
+            await error.WriteLineAsync("Usage: codemetrics list-metrics").ConfigureAwait(false);
+            return 1;
+        }
+
+        foreach (MetricDescriptor metric in MetricCatalog.All.OrderBy(metric => metric.Id, StringComparer.Ordinal))
+        {
+            await output.WriteLineAsync(
+                    $"{metric.Id}@{metric.Version}\t{string.Join(",", metric.TargetKinds)}\t{metric.AnalysisMode}\t{metric.Unit}")
+                .ConfigureAwait(false);
+        }
+
+        return 0;
+    }
+
+    private static async Task<int> RunExplainAsync(
+        IReadOnlyList<string> args,
+        TextWriter output,
+        TextWriter error)
+    {
+        if (args.Count != 1)
+        {
+            await error.WriteLineAsync("Usage: codemetrics explain <metric-id|metric-id@version>").ConfigureAwait(false);
+            return 1;
+        }
+
+        MetricDescriptor? metric = MetricCatalog.Find(args[0]);
+
+        if (metric is null)
+        {
+            await error.WriteLineAsync($"Unknown metric: {args[0]}").ConfigureAwait(false);
+            return 1;
+        }
+
+        await output.WriteLineAsync($"{metric.Id}@{metric.Version}").ConfigureAwait(false);
+        await output.WriteLineAsync($"Target kinds: {string.Join(", ", metric.TargetKinds)}").ConfigureAwait(false);
+        await output.WriteLineAsync($"Analysis mode: {metric.AnalysisMode}").ConfigureAwait(false);
+        await output.WriteLineAsync($"Unit: {metric.Unit}").ConfigureAwait(false);
+        await output.WriteLineAsync($"Formula: {metric.Formula}").ConfigureAwait(false);
+        await output.WriteLineAsync(metric.Description).ConfigureAwait(false);
+
+        if (metric.KnownLimitations.Count > 0)
+        {
+            await output.WriteLineAsync("Known limitations:").ConfigureAwait(false);
+
+            foreach (string limitation in metric.KnownLimitations)
+            {
+                await output.WriteLineAsync($"- {limitation}").ConfigureAwait(false);
+            }
+        }
+
+        return 0;
+    }
+
     private static async Task<int> UnknownCommandAsync(string command, TextWriter error)
     {
         await error.WriteLineAsync($"Unknown command: {command}").ConfigureAwait(false);
@@ -196,6 +307,10 @@ public static class CliApplication
 
     private static Task WriteUsageAsync(TextWriter writer)
     {
-        return writer.WriteLineAsync("Usage: codemetrics analyze <path> --output <dir>\n       codemetrics validate-output <artifact-dir>");
+        return writer.WriteLineAsync(
+            "Usage: codemetrics analyze <path> --output <dir>\n" +
+            "       codemetrics list-metrics\n" +
+            "       codemetrics explain <metric-id|metric-id@version>\n" +
+            "       codemetrics validate-output <artifact-dir>");
     }
 }

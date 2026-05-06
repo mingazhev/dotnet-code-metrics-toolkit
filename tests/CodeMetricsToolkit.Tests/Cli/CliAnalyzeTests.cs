@@ -44,6 +44,10 @@ public sealed class CliAnalyzeTests
         Assert.Contains(graphEdges, edge => HasPropertyValue(edge, "kind", "contains"));
         Assert.Contains(chunks, chunk => HasPropertyValue(chunk, "targetKind", "member") && chunk.GetProperty("textHash").GetString()!.StartsWith("sha256:", StringComparison.Ordinal));
         Assert.DoesNotContain(chunks, chunk => chunk.TryGetProperty("text", out _));
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        Assert.Contains(metrics, metric => HasPropertyValue(metric, "metricId", "diagnostic_count"));
+        Assert.Contains(metrics, metric => HasPropertyValue(metric, "metricId", "member_count"));
     }
 
     [Fact]
@@ -126,6 +130,11 @@ public sealed class CliAnalyzeTests
             HasPropertyValue(edge, "to", "type:SemanticGraphProject/T:SemanticGraphProject.IOrderService"));
         Assert.Contains(graphEdges, edge => HasPropertyValue(edge, "kind", "uses_type"));
         Assert.Contains(graphEdges, edge => HasPropertyValue(edge, "kind", "calls"));
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        const string orderServiceId = "type:SemanticGraphProject/T:SemanticGraphProject.OrderService";
+        Assert.Equal(7, GetMetric(metrics, orderServiceId, "outgoing_type_dependency_count").GetProperty("numericValue").GetInt32());
+        Assert.Equal(0, GetMetric(metrics, orderServiceId, "dependency_cycle_count").GetProperty("numericValue").GetInt32());
     }
 
     [Fact]
@@ -198,10 +207,10 @@ public sealed class CliAnalyzeTests
         Assert.Equal(3, hotspots.Length);
         Assert.Equal(scoreTargetId, hotspots[0].GetProperty("targetId").GetString());
         Assert.Equal(1, hotspots[0].GetProperty("rank").GetInt32());
-        Assert.Equal(1, hotspots[0].GetProperty("rankScore").GetDouble());
+        Assert.Equal(0.9, hotspots[0].GetProperty("rankScore").GetDouble());
         Assert.Contains(
             hotspots[0].GetProperty("reasons").EnumerateArray(),
-            reason => reason.GetString() == "cyclomatic_complexity=23 p1 w0.35");
+            reason => reason.GetString() == "cyclomatic_complexity=23 p1 w0.25");
 
         JsonElement[] components = hotspots[0]
             .GetProperty("components")
@@ -211,8 +220,9 @@ public sealed class CliAnalyzeTests
 
         JsonElement methodLength = Assert.Single(components, component => HasPropertyValue(component, "metricId", "method_length"));
         JsonElement cyclomatic = Assert.Single(components, component => HasPropertyValue(component, "metricId", "cyclomatic_complexity"));
-        Assert.Equal(0.10, methodLength.GetProperty("weight").GetDouble());
+        Assert.Equal(0.15, methodLength.GetProperty("weight").GetDouble());
         Assert.True(cyclomatic.GetProperty("weight").GetDouble() > methodLength.GetProperty("weight").GetDouble());
+        Assert.Contains(components, component => HasPropertyValue(component, "metricId", "diagnostic_count"));
     }
 
     [Fact]
@@ -247,6 +257,85 @@ public sealed class CliAnalyzeTests
 
         Assert.Contains(diagnostics, diagnostic => HasPropertyValue(diagnostic, "id", "CS8602") && HasTag(diagnostic, "nullable"));
         Assert.Contains(diagnostics, diagnostic => HasPropertyValue(diagnostic, "id", "CS8603") && HasTag(diagnostic, "nullable"));
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        JsonElement nullableFileDiagnosticCount = Assert.Single(metrics, metric =>
+            HasPropertyValue(metric, "targetId", "file:NullableCases.cs") &&
+            HasPropertyValue(metric, "metricId", "diagnostic_count") &&
+            !metric.TryGetProperty("tags", out _));
+
+        Assert.Equal(4, nullableFileDiagnosticCount.GetProperty("numericValue").GetInt32());
+        Assert.Contains(metrics, metric =>
+            HasPropertyValue(metric, "targetId", "file:NullableCases.cs") &&
+            HasPropertyValue(metric, "metricId", "diagnostic_count") &&
+            HasTag(metric, "nullable") &&
+            metric.GetProperty("numericValue").GetInt32() == 4);
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandSupportsIncludeAndExcludeGlobs()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
+
+        int exitCode = await RunCliAsync(
+            "analyze",
+            assetsPath,
+            "--output",
+            output.Path,
+            "--include",
+            "SemanticGraphProject/*.cs",
+            "--exclude",
+            "**/Domain.cs");
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        Assert.Equal(2, summary.RootElement.GetProperty("fileCount").GetInt32());
+        Assert.DoesNotContain(
+            File.ReadLines(Path.Combine(output.Path, "metrics.ndjson")),
+            line => line.Contains("Domain.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandAcceptsSemanticNoRestoreAndMaxDegreeOptions()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("SimpleProject");
+
+        int exitCode = await RunCliAsync(
+            "analyze",
+            projectPath,
+            "--output",
+            output.Path,
+            "--semantic",
+            "--no-restore",
+            "--max-degree-of-parallelism",
+            "2");
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
+        Assert.Equal("semantic", manifest.RootElement.GetProperty("mode").GetString());
+    }
+
+    [Fact]
+    public async Task ListMetricsAndExplainCommandsExposeMetricCatalog()
+    {
+        using var listOutput = new StringWriter();
+        using var listError = new StringWriter();
+        int listExitCode = await CliApplication.RunAsync(["list-metrics"], listOutput, listError, CancellationToken.None);
+
+        using var explainOutput = new StringWriter();
+        using var explainError = new StringWriter();
+        int explainExitCode = await CliApplication.RunAsync(["explain", "diagnostic_count"], explainOutput, explainError, CancellationToken.None);
+
+        Assert.Equal(0, listExitCode);
+        Assert.Equal(0, explainExitCode);
+        Assert.Contains("diagnostic_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Formula: number of diagnostics whose span overlaps the target", explainOutput.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -14,10 +14,16 @@ public static class CodeMetricsAnalyzer
         ArgumentNullException.ThrowIfNull(request);
 
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
-        DiscoveredSources sources = SourceFileDiscovery.Discover(request.InputPath, request.IncludeGeneratedCode);
+        DiscoveredSources sources = SourceFileDiscovery.Discover(
+            request.InputPath,
+            request.IncludeGeneratedCode,
+            request.IncludePatterns,
+            request.ExcludePatterns);
         var facts = SyntaxFactsCollector.Collect(sources, useSemantic: !request.SyntaxOnly, cancellationToken);
         HotspotRanking hotspotRanking = HotspotRanker.Rank(facts, request.Top, cancellationToken);
-        IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts)
+        IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts, cancellationToken)
+            .Concat(GraphMetricProjector.Project(facts, cancellationToken))
+            .Concat(DiagnosticMetricProjector.Project(facts, cancellationToken))
             .Concat(hotspotRanking.Metrics)
             .ToArray();
         string outputPath = Path.GetFullPath(request.OutputPath);

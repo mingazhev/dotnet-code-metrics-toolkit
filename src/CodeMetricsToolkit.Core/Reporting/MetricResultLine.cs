@@ -14,4 +14,5 @@ public sealed record MetricResultLine
     public required string FilePath { get; init; }
     public required int StartLine { get; init; }
     public required int EndLine { get; init; }
+    public IReadOnlyList<string>? Tags { get; init; }
 }

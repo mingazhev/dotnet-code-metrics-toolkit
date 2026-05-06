@@ -42,6 +42,13 @@ Post-Iteration 4 review / next MVP slice
 - Snapshot normalization utility removes volatile paths, timestamps, durations, and sorts known arrays for stable tests.
 - Medium-repo smoke coverage and performance baseline were added.
 - Long analysis/ranking/control-flow loops now honor cancellation tokens.
+- Iteration 5 MVP completion implemented.
+- `metrics.ndjson` now includes required MVP metrics `outgoing_type_dependency_count`, `dependency_cycle_count`, and `diagnostic_count`.
+- Additional source-linked metrics were added for `incoming_type_dependency_count`, `type_count`, `member_count`, and file/type member complexity aggregates.
+- `diagnostic_count@1.0.0` supports metric `tags`, including compiler and nullable tags when present.
+- `hotspot_rank@1.0.0` now uses the MVP weights with diagnostics, parameter counts, member/type counts, and outgoing type dependencies.
+- CLI now supports `list-metrics`, `explain <metric-id>`, `--include`, `--exclude`, `--semantic`, `--no-restore`, and `--max-degree-of-parallelism`.
+- MVP limitations are documented in `docs/mvp-limitations.md`.
 
 ## In Progress
 
@@ -49,9 +56,8 @@ Post-Iteration 4 review / next MVP slice
 
 ## Next Actions
 
-- Review MVP readiness against `autoresearch_metrics_mvp.md`.
-- Decide whether to start Iteration 5 as packaging/docs polish or branch into full roadmap items.
 - Consider adding real MSBuildWorkspace loading before analyzing production repositories; current semantic loading is still lightweight.
+- Consider adding real parallel analysis after the fact collectors have deterministic ordering and thread-safety coverage.
 
 ## Verification
 
@@ -59,6 +65,13 @@ Post-Iteration 4 review / next MVP slice
 - `dotnet restore CodeMetricsToolkit.sln`: passed.
 - `dotnet build CodeMetricsToolkit.sln`: passed.
 - `dotnet test CodeMetricsToolkit.sln --no-restore`: passed, 44 tests.
+- `dotnet test CodeMetricsToolkit.sln`: passed, 47 tests after Iteration 5.
+- `dotnet run --project src/CodeMetricsToolkit.Cli -- list-metrics`: passed and lists 19 metric descriptors.
+- `dotnet run --project src/CodeMetricsToolkit.Cli -- explain outgoing_type_dependency_count`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets --output artifacts/iteration5-medium --top 5`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- validate-output artifacts/iteration5-medium`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets --output artifacts/iteration5-filtered --include 'SemanticGraphProject/*.cs' --exclude '**/Domain.cs' --top 3`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- validate-output artifacts/iteration5-filtered`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SimpleProject --output artifacts/iteration2-simple`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SemanticGraphProject --output artifacts/iteration2-semantic`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/PartialTypesProject --output artifacts/iteration2-partial`: passed.
@@ -77,6 +90,9 @@ Post-Iteration 4 review / next MVP slice
 - LOC is deliberately capped at low hotspot weight so it does not dominate complexity signals.
 - Semantic analysis still uses lightweight Roslyn compilations, not full MSBuildWorkspace project loading.
 - Synthetic implicit-usings trees are used for semantic accuracy but their own diagnostics are filtered from output.
+- `--max-degree-of-parallelism` is accepted for CLI contract compatibility, but current analysis is still sequential.
+- `--no-restore` is accepted because the MVP does not perform restore.
+- Project-load diagnostics without source spans are emitted in `diagnostics.ndjson` but not attributed to `diagnostic_count` metrics.
 
 ## Blockers
 
