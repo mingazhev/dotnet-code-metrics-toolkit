@@ -7,11 +7,12 @@ namespace CodeMetricsToolkit.Core.Metrics;
 
 public static class ControlFlowFactsCollector
 {
-    public static ControlFlowFacts Collect(SyntaxNode declaration)
+    public static ControlFlowFacts Collect(SyntaxNode declaration, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(declaration);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        var walker = new ControlFlowWalker();
+        var walker = new ControlFlowWalker(cancellationToken);
         walker.Visit(declaration);
 
         return new ControlFlowFacts
@@ -25,13 +26,25 @@ public static class ControlFlowFactsCollector
 
     private sealed class ControlFlowWalker : CSharpSyntaxWalker
     {
+        private readonly CancellationToken _cancellationToken;
         private int _currentNestingDepth;
+
+        public ControlFlowWalker(CancellationToken cancellationToken)
+        {
+            _cancellationToken = cancellationToken;
+        }
 
         public int DecisionPointCount { get; private set; }
 
         public int CognitiveComplexity { get; private set; }
 
         public int NestingDepth { get; private set; }
+
+        public override void Visit(SyntaxNode? node)
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            base.Visit(node);
+        }
 
         public override void VisitIfStatement(IfStatementSyntax node)
         {

@@ -120,7 +120,8 @@ public static class ArtifactWriter
             diagnostic.ProjectPath,
             diagnostic.FilePath,
             diagnostic.StartLine,
-            diagnostic.EndLine);
+            diagnostic.EndLine,
+            diagnostic.Tags);
     }
 
     private static async Task WriteJsonAsync<T>(
@@ -188,5 +189,6 @@ public static class ArtifactWriter
         string? ProjectPath,
         string? FilePath,
         int? StartLine,
-        int? EndLine);
+        int? EndLine,
+        IReadOnlyList<string>? Tags);
 }

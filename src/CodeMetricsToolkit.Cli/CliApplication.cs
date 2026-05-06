@@ -1,5 +1,6 @@
 using CodeMetricsToolkit.Abstractions;
 using CodeMetricsToolkit.Core.Analysis;
+using CodeMetricsToolkit.Core.Validation;
 
 namespace CodeMetricsToolkit.Cli;
 
@@ -25,8 +26,51 @@ public static class CliApplication
         {
             "analyze" => await RunAnalyzeAsync(args.Skip(1).ToArray(), output, error, cancellationToken)
                 .ConfigureAwait(false),
+            "validate-output" => await RunValidateOutputAsync(args.Skip(1).ToArray(), output, error, cancellationToken)
+                .ConfigureAwait(false),
             _ => await UnknownCommandAsync(args[0], error).ConfigureAwait(false)
         };
+    }
+
+    private static async Task<int> RunValidateOutputAsync(
+        IReadOnlyList<string> args,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        if (args.Count != 1)
+        {
+            await error.WriteLineAsync("Usage: codemetrics validate-output <artifact-dir>").ConfigureAwait(false);
+            return 1;
+        }
+
+        try
+        {
+            OutputValidationResult result = OutputValidator.Validate(args[0], cancellationToken);
+
+            if (result.IsValid)
+            {
+                await output.WriteLineAsync("Output artifacts are valid.").ConfigureAwait(false);
+                return 0;
+            }
+
+            foreach (string validationError in result.Errors)
+            {
+                await error.WriteLineAsync(validationError).ConfigureAwait(false);
+            }
+
+            return 2;
+        }
+        catch (OperationCanceledException)
+        {
+            await error.WriteLineAsync("Validation canceled.").ConfigureAwait(false);
+            return 130;
+        }
+        catch (ArgumentException exception)
+        {
+            await error.WriteLineAsync(exception.Message).ConfigureAwait(false);
+            return 1;
+        }
     }
 
     private static async Task<int> RunAnalyzeAsync(
@@ -152,6 +196,6 @@ public static class CliApplication
 
     private static Task WriteUsageAsync(TextWriter writer)
     {
-        return writer.WriteLineAsync("Usage: codemetrics analyze <path> --output <dir>");
+        return writer.WriteLineAsync("Usage: codemetrics analyze <path> --output <dir>\n       codemetrics validate-output <artifact-dir>");
     }
 }

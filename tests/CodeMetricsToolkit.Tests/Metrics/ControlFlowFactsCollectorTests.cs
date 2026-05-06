@@ -31,7 +31,7 @@ public sealed class ControlFlowFactsCollectorTests
     {
         MethodDeclarationSyntax method = ParseTargetMethod(body);
 
-        var facts = ControlFlowFactsCollector.Collect(method);
+        var facts = ControlFlowFactsCollector.Collect(method, CancellationToken.None);
 
         Assert.Equal(expectedComplexity, facts.CyclomaticComplexity);
     }
@@ -56,7 +56,7 @@ public sealed class ControlFlowFactsCollectorTests
             }
             """);
 
-        var facts = ControlFlowFactsCollector.Collect(method);
+        var facts = ControlFlowFactsCollector.Collect(method, CancellationToken.None);
 
         Assert.Equal(1, facts.CyclomaticComplexity);
     }
@@ -75,7 +75,7 @@ public sealed class ControlFlowFactsCollectorTests
             }
             """);
 
-        var facts = ControlFlowFactsCollector.Collect(method);
+        var facts = ControlFlowFactsCollector.Collect(method, CancellationToken.None);
 
         Assert.Equal(3, facts.CyclomaticComplexity);
         Assert.Equal(3, facts.CognitiveComplexity);

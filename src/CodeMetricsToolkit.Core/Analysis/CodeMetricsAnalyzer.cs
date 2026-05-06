@@ -16,7 +16,7 @@ public static class CodeMetricsAnalyzer
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         DiscoveredSources sources = SourceFileDiscovery.Discover(request.InputPath, request.IncludeGeneratedCode);
         var facts = SyntaxFactsCollector.Collect(sources, useSemantic: !request.SyntaxOnly, cancellationToken);
-        HotspotRanking hotspotRanking = HotspotRanker.Rank(facts, request.Top);
+        HotspotRanking hotspotRanking = HotspotRanker.Rank(facts, request.Top, cancellationToken);
         IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts)
             .Concat(hotspotRanking.Metrics)
             .ToArray();

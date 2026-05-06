@@ -2,7 +2,7 @@
 
 ## Active Iteration
 
-Iteration 4 - Diagnostics and Hardening (next)
+Post-Iteration 4 review / next MVP slice
 
 ## Completed
 
@@ -34,6 +34,14 @@ Iteration 4 - Diagnostics and Hardening (next)
 - `metrics.ndjson` now includes `hotspot_rank@1.0.0` for member, type, and file targets.
 - Metric formulas are documented next to the implementation in `src/CodeMetricsToolkit.Core/Metrics/README.md`.
 - Cyclomatic tests cover every decision and non-decision point listed in ADR 0002.
+- Iteration 4 diagnostics and hardening implemented.
+- `diagnostics.ndjson` now includes syntax, compiler, nullable, project-load, and available analyzer diagnostic tags.
+- Invalid project files emit `project_load_failed` with `critical` severity while syntax fallback continues.
+- Lightweight semantic compilation honors SDK implicit usings to avoid false compiler diagnostics.
+- `codemetrics validate-output <artifact-dir>` validates mandatory artifacts and JSON/NDJSON parseability, returning exit code 2 on validation failures.
+- Snapshot normalization utility removes volatile paths, timestamps, durations, and sorts known arrays for stable tests.
+- Medium-repo smoke coverage and performance baseline were added.
+- Long analysis/ranking/control-flow loops now honor cancellation tokens.
 
 ## In Progress
 
@@ -41,22 +49,22 @@ Iteration 4 - Diagnostics and Hardening (next)
 
 ## Next Actions
 
-- Start Iteration 4 from `implementation_checklist.md`.
-- Count compiler, nullable, and analyzer diagnostics.
-- Emit project load and semantic model availability diagnostics.
-- Add `codemetrics validate-output <artifact-dir>`.
-- Normalize snapshots for paths, timestamps, durations, and ordering.
+- Review MVP readiness against `autoresearch_metrics_mvp.md`.
+- Decide whether to start Iteration 5 as packaging/docs polish or branch into full roadmap items.
+- Consider adding real MSBuildWorkspace loading before analyzing production repositories; current semantic loading is still lightweight.
 
 ## Verification
 
 - `dotnet --version`: passed, returned `8.0.410`.
 - `dotnet restore CodeMetricsToolkit.sln`: passed.
 - `dotnet build CodeMetricsToolkit.sln`: passed.
-- `dotnet test CodeMetricsToolkit.sln --no-restore`: passed, 37 tests.
+- `dotnet test CodeMetricsToolkit.sln --no-restore`: passed, 44 tests.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SimpleProject --output artifacts/iteration2-simple`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SemanticGraphProject --output artifacts/iteration2-semantic`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/PartialTypesProject --output artifacts/iteration2-partial`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/ComplexityProject --output artifacts/iteration3-complexity --top 3`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets --output artifacts/iteration4-medium --top 5`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- validate-output artifacts/iteration4-medium`: passed.
 
 ## Known Decisions
 
@@ -67,6 +75,8 @@ Iteration 4 - Diagnostics and Hardening (next)
 - `graph.json` and `chunks.ndjson` are no longer placeholders after Iteration 2.
 - `cognitive_complexity` remains `0.1.0` and explicitly Sonar-inspired, not Sonar-compatible.
 - LOC is deliberately capped at low hotspot weight so it does not dominate complexity signals.
+- Semantic analysis still uses lightweight Roslyn compilations, not full MSBuildWorkspace project loading.
+- Synthetic implicit-usings trees are used for semantic accuracy but their own diagnostics are filtered from output.
 
 ## Blockers
 

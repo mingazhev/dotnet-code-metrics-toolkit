@@ -13,14 +13,16 @@ public static class HotspotRanker
         ["file"] = 2
     };
 
-    public static HotspotRanking Rank(SyntaxAnalysisFacts facts, int top)
+    public static HotspotRanking Rank(SyntaxAnalysisFacts facts, int top, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(facts);
+        cancellationToken.ThrowIfCancellationRequested();
 
         List<HotspotCandidate> candidates = CreateMemberCandidates(facts)
             .Concat(CreateTypeCandidates(facts))
             .Concat(CreateFileCandidates(facts))
             .ToList();
+        cancellationToken.ThrowIfCancellationRequested();
 
         Dictionary<ComponentKey, Dictionary<double, double>> percentiles = CalculatePercentiles(candidates);
         IReadOnlyList<RankedHotspot> rankedHotspots = candidates
@@ -30,6 +32,7 @@ public static class HotspotRanker
             .ThenBy(candidate => candidate.TargetId, StringComparer.Ordinal)
             .Select((candidate, index) => candidate with { Rank = index + 1 })
             .ToArray();
+        cancellationToken.ThrowIfCancellationRequested();
 
         IReadOnlyList<HotspotLine> hotspots = rankedHotspots
             .Where(hotspot => hotspot.Score > 0)

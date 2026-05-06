@@ -110,3 +110,18 @@ lines_of_code                    0.10
 
 LOC deliberately has a low weight. It can break ties and add context, but should
 not dominate ranking over complexity signals.
+
+## Metric Authoring Notes
+
+Metric authors should keep implementations stateless and thread-safe:
+
+```text
+do not store mutable per-run state in static fields
+derive metrics from shared facts when possible
+accept and honor CancellationToken in long syntax walks
+emit diagnostics instead of throwing for recoverable per-target failures
+document formula changes with a new metric version
+```
+
+If a metric needs a cache, scope it to one analysis run and treat it as private
+implementation detail. Public metric output must remain deterministic.

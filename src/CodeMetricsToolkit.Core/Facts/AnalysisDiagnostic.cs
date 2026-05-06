@@ -9,4 +9,5 @@ public sealed record AnalysisDiagnostic
     public string? FilePath { get; init; }
     public int? StartLine { get; init; }
     public int? EndLine { get; init; }
+    public IReadOnlyList<string>? Tags { get; init; }
 }

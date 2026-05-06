@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CodeMetricsToolkit.Cli;
 using CodeMetricsToolkit.Tests.SchemaValidation;
+using CodeMetricsToolkit.Tests.Snapshots;
 
 namespace CodeMetricsToolkit.Tests.Cli;
 
@@ -171,7 +173,7 @@ public sealed class CliAnalyzeTests
     {
         using TemporaryDirectory output = TemporaryDirectory.Create();
         string projectPath = TestAssetPath("ComplexityProject");
-        const string scoreTargetId = "member:ComplexityProject/M:ComplexityProject.DecisionSamples.Score(ComplexityProject.Order,IReadOnlyList{System.Int32})";
+        const string scoreTargetId = "member:ComplexityProject/M:ComplexityProject.DecisionSamples.Score(ComplexityProject.Order,System.Collections.Generic.IReadOnlyList{System.Int32})";
 
         int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--top", "3");
 
@@ -213,6 +215,118 @@ public sealed class CliAnalyzeTests
         Assert.True(cyclomatic.GetProperty("weight").GetDouble() > methodLength.GetProperty("weight").GetDouble());
     }
 
+    [Fact]
+    public async Task AnalyzeCommandDoesNotCrashOnBrokenProjectAndEmitsCompilerDiagnostics()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("BrokenProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] diagnostics = ReadNdjson(Path.Combine(output.Path, "diagnostics.ndjson"));
+
+        Assert.Contains(diagnostics, diagnostic => HasPropertyValue(diagnostic, "id", "CS1002") && HasTag(diagnostic, "syntax"));
+        Assert.Contains(diagnostics, diagnostic => HasPropertyValue(diagnostic, "id", "CS0246") && HasTag(diagnostic, "compiler"));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandEmitsNullableDiagnostics()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("NullableDiagnosticsProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] diagnostics = ReadNdjson(Path.Combine(output.Path, "diagnostics.ndjson"));
+
+        Assert.Contains(diagnostics, diagnostic => HasPropertyValue(diagnostic, "id", "CS8602") && HasTag(diagnostic, "nullable"));
+        Assert.Contains(diagnostics, diagnostic => HasPropertyValue(diagnostic, "id", "CS8603") && HasTag(diagnostic, "nullable"));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandEmitsCriticalProjectLoadDiagnostic()
+    {
+        using TemporaryDirectory input = TemporaryDirectory.Create();
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        CreateInvalidProjectSample(input.Path);
+
+        int exitCode = await RunCliAsync("analyze", input.Path, "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] diagnostics = ReadNdjson(Path.Combine(output.Path, "diagnostics.ndjson"));
+
+        Assert.Contains(diagnostics, diagnostic =>
+            HasPropertyValue(diagnostic, "id", "project_load_failed") &&
+            HasPropertyValue(diagnostic, "severity", "critical") &&
+            HasTag(diagnostic, "project_load"));
+    }
+
+    [Fact]
+    public async Task ValidateOutputCommandCatchesMissingRequiredArtifact()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(output.Path, "manifest.json"), "{}");
+
+        int exitCode = await RunCliAllowFailureAsync("validate-output", output.Path);
+
+        Assert.Equal(2, exitCode);
+    }
+
+    [Fact]
+    public async Task ValidateOutputCommandAcceptsGeneratedArtifacts()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("SimpleProject");
+
+        int analyzeExitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        int validateExitCode = await RunCliAsync("validate-output", output.Path);
+
+        Assert.Equal(0, analyzeExitCode);
+        Assert.Equal(0, validateExitCode);
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandCompletesMediumRepoSmokeWithinThreshold()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
+        var stopwatch = Stopwatch.StartNew();
+
+        int exitCode = await RunCliAsync("analyze", assetsPath, "--output", output.Path, "--top", "5");
+
+        stopwatch.Stop();
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Analysis took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
+    public async Task SnapshotNormalizerRemovesVolatileManifestFields()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("SimpleProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+
+        string normalizedManifest = ArtifactSnapshotNormalizer.NormalizeJsonFile(Path.Combine(output.Path, "manifest.json"));
+        using JsonDocument normalized = JsonDocument.Parse(normalizedManifest);
+
+        Assert.Equal("<root>", normalized.RootElement.GetProperty("rootPath").GetString());
+        Assert.Equal("<timestamp>", normalized.RootElement.GetProperty("startedAt").GetString());
+        Assert.Equal(0, normalized.RootElement.GetProperty("durationMs").GetInt32());
+    }
+
     private static async Task<int> RunCliAsync(params string[] args)
     {
         using var output = new StringWriter();
@@ -222,6 +336,14 @@ public sealed class CliAnalyzeTests
 
         Assert.True(exitCode == 0, error.ToString());
         return exitCode;
+    }
+
+    private static async Task<int> RunCliAllowFailureAsync(params string[] args)
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        return await CliApplication.RunAsync(args, output, error, CancellationToken.None);
     }
 
     private static string TestAssetPath(string assetName)
@@ -270,6 +392,12 @@ public sealed class CliAnalyzeTests
             string.Equals(property.GetString(), expectedValue, StringComparison.Ordinal);
     }
 
+    private static bool HasTag(JsonElement element, string expectedTag)
+    {
+        return element.TryGetProperty("tags", out JsonElement tags) &&
+            tags.EnumerateArray().Any(tag => tag.GetString() == expectedTag);
+    }
+
     private static JsonElement GetMetric(JsonElement[] metrics, string targetId, string metricId)
     {
         return Assert.Single(metrics, metric =>
@@ -309,6 +437,28 @@ public sealed class CliAnalyzeTests
             public sealed class Generated
             {
                 public int Value() => 13;
+            }
+            """);
+    }
+
+    private static void CreateInvalidProjectSample(string rootPath)
+    {
+        File.WriteAllText(
+            Path.Combine(rootPath, "InvalidProject.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+            """);
+
+        File.WriteAllText(
+            Path.Combine(rootPath, "ValidSyntax.cs"),
+            """
+            namespace InvalidProject;
+
+            public sealed class ValidSyntax
+            {
+                public int Value() => 42;
             }
             """);
     }

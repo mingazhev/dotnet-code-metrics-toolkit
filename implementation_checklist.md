@@ -176,23 +176,23 @@ Acceptance:
 
 ## 7. Iteration 4 - Diagnostics and Hardening
 
-- [ ] Count compiler diagnostics.
-- [ ] Count nullable diagnostics.
-- [ ] Count analyzer diagnostics if available.
-- [ ] Emit project load diagnostics.
-- [ ] Emit semantic model unavailable diagnostics.
-- [ ] Add `codemetrics validate-output <artifact-dir>`.
-- [ ] Normalize snapshots for paths, timestamps, durations and ordering.
-- [ ] Add medium-repo performance smoke test.
-- [ ] Add cancellation handling in long loops.
-- [ ] Add thread-safety notes to metric authoring docs.
+- [x] Count compiler diagnostics.
+- [x] Count nullable diagnostics.
+- [x] Count analyzer diagnostics if available.
+- [x] Emit project load diagnostics.
+- [x] Emit semantic model unavailable diagnostics.
+- [x] Add `codemetrics validate-output <artifact-dir>`.
+- [x] Normalize snapshots for paths, timestamps, durations and ordering.
+- [x] Add medium-repo performance smoke test.
+- [x] Add cancellation handling in long loops.
+- [x] Add thread-safety notes to metric authoring docs.
 
 Acceptance:
 
-- [ ] Broken project does not crash full analysis.
-- [ ] Critical diagnostics are visible in `diagnostics.ndjson`.
-- [ ] Output validation catches missing required artifacts.
-- [ ] Performance baseline is recorded.
+- [x] Broken project does not crash full analysis.
+- [x] Critical diagnostics are visible in `diagnostics.ndjson`.
+- [x] Output validation catches missing required artifacts.
+- [x] Performance baseline is recorded.
 
 ## 8. Files To Create First
 

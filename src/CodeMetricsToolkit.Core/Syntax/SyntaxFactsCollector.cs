@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
+using System.Xml.Linq;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Metrics;
@@ -23,9 +24,10 @@ public static class SyntaxFactsCollector
         ArgumentNullException.ThrowIfNull(sources);
 
         var diagnostics = new List<AnalysisDiagnostic>();
-        List<SourceFileContext> sourceFiles = ParseSourceFiles(sources.SourceFiles, diagnostics, cancellationToken);
+        var diagnosticKeys = new HashSet<string>(StringComparer.Ordinal);
+        List<SourceFileContext> sourceFiles = ParseSourceFiles(sources.SourceFiles, diagnostics, diagnosticKeys, cancellationToken);
         Dictionary<string, ProjectSemanticContext> semanticContexts = useSemantic
-            ? CreateSemanticContexts(sourceFiles, diagnostics)
+            ? CreateSemanticContexts(sources.RootPath, sourceFiles, diagnostics, diagnosticKeys, cancellationToken)
             : [];
 
         IReadOnlyList<FileFacts> files = sourceFiles
@@ -77,6 +79,7 @@ public static class SyntaxFactsCollector
     private static List<SourceFileContext> ParseSourceFiles(
         IReadOnlyList<DiscoveredSourceFile> sourceFiles,
         List<AnalysisDiagnostic> diagnostics,
+        HashSet<string> diagnosticKeys,
         CancellationToken cancellationToken)
     {
         var contexts = new List<SourceFileContext>();
@@ -97,7 +100,10 @@ public static class SyntaxFactsCollector
 
             foreach (Diagnostic diagnostic in syntaxTree.GetDiagnostics(cancellationToken))
             {
-                diagnostics.Add(ToAnalysisDiagnostic(diagnostic, sourceFile));
+                AddDiagnostic(
+                    diagnostics,
+                    diagnosticKeys,
+                    ToSyntaxDiagnostic(diagnostic, sourceFile));
             }
         }
 
@@ -105,29 +111,36 @@ public static class SyntaxFactsCollector
     }
 
     private static Dictionary<string, ProjectSemanticContext> CreateSemanticContexts(
+        string rootPath,
         IReadOnlyList<SourceFileContext> sourceFiles,
-        List<AnalysisDiagnostic> diagnostics)
+        List<AnalysisDiagnostic> diagnostics,
+        HashSet<string> diagnosticKeys,
+        CancellationToken cancellationToken)
     {
         var semanticContexts = new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal);
 
         foreach (IGrouping<string, SourceFileContext> projectGroup in sourceFiles.GroupBy(context => context.SourceFile.ProjectPath))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
-                string assemblyName = ResolveAssemblyName(projectGroup.Key);
+                ProjectLoadInfo projectLoadInfo = LoadProjectInfo(rootPath, projectGroup.Key);
+                string assemblyName = projectLoadInfo.AssemblyName;
                 CSharpCompilation compilation = CSharpCompilation.Create(
                     assemblyName,
-                    projectGroup.Select(context => context.SyntaxTree),
+                    CreateCompilationSyntaxTrees(rootPath, projectGroup.Key, projectGroup, projectLoadInfo),
                     CreateDefaultReferences(),
                     new CSharpCompilationOptions(
                         OutputKind.DynamicallyLinkedLibrary,
                         nullableContextOptions: NullableContextOptions.Enable));
 
                 semanticContexts.Add(projectGroup.Key, new ProjectSemanticContext(assemblyName, compilation));
+                AddCompilationDiagnostics(rootPath, projectGroup.Key, compilation, diagnostics, diagnosticKeys, cancellationToken);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
             {
-                diagnostics.Add(new AnalysisDiagnostic
+                AddDiagnostic(diagnostics, diagnosticKeys, new AnalysisDiagnostic
                 {
                     Id = "semantic_model_unavailable",
                     Severity = "warning",
@@ -135,12 +148,112 @@ public static class SyntaxFactsCollector
                     ProjectPath = projectGroup.Key,
                     FilePath = null,
                     StartLine = null,
-                    EndLine = null
+                    EndLine = null,
+                    Tags = ["semantic"]
+                });
+            }
+            catch (Exception exception) when (exception is System.Xml.XmlException or InvalidDataException)
+            {
+                AddDiagnostic(diagnostics, diagnosticKeys, new AnalysisDiagnostic
+                {
+                    Id = "project_load_failed",
+                    Severity = "critical",
+                    Message = exception.Message,
+                    ProjectPath = projectGroup.Key,
+                    FilePath = projectGroup.Key,
+                    StartLine = null,
+                    EndLine = null,
+                    Tags = ["project_load"]
                 });
             }
         }
 
         return semanticContexts;
+    }
+
+    private static ProjectLoadInfo LoadProjectInfo(string rootPath, string projectPath)
+    {
+        if (!projectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ProjectLoadInfo(ResolveAssemblyName(projectPath), ImplicitUsingsEnabled: false);
+        }
+
+        string fullProjectPath = Path.Combine(rootPath, projectPath);
+
+        if (!File.Exists(fullProjectPath))
+        {
+            throw new InvalidDataException($"Project file was discovered but no longer exists: {projectPath}");
+        }
+
+        XDocument project = XDocument.Load(fullProjectPath);
+        string assemblyName = project
+            .Descendants("AssemblyName")
+            .Select(element => element.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? ResolveAssemblyName(projectPath);
+        bool implicitUsingsEnabled = project
+            .Descendants("ImplicitUsings")
+            .Any(element => string.Equals(element.Value.Trim(), "enable", StringComparison.OrdinalIgnoreCase));
+
+        return new ProjectLoadInfo(assemblyName, implicitUsingsEnabled);
+    }
+
+    private static IEnumerable<SyntaxTree> CreateCompilationSyntaxTrees(
+        string rootPath,
+        string projectPath,
+        IEnumerable<SourceFileContext> projectGroup,
+        ProjectLoadInfo projectLoadInfo)
+    {
+        foreach (SourceFileContext context in projectGroup)
+        {
+            yield return context.SyntaxTree;
+        }
+
+        if (!projectLoadInfo.ImplicitUsingsEnabled)
+        {
+            yield break;
+        }
+
+        yield return CSharpSyntaxTree.ParseText(
+            """
+            global using System;
+            global using System.Collections.Generic;
+            global using System.IO;
+            global using System.Linq;
+            global using System.Net.Http;
+            global using System.Threading;
+            global using System.Threading.Tasks;
+            """,
+            CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp12),
+            path: Path.Combine(rootPath, projectPath + ".ImplicitUsings.g.cs"));
+    }
+
+    private static void AddCompilationDiagnostics(
+        string rootPath,
+        string projectPath,
+        CSharpCompilation compilation,
+        List<AnalysisDiagnostic> diagnostics,
+        HashSet<string> diagnosticKeys,
+        CancellationToken cancellationToken)
+    {
+        foreach (Diagnostic diagnostic in compilation.GetDiagnostics(cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (IsSyntheticImplicitUsingsDiagnostic(diagnostic))
+            {
+                continue;
+            }
+
+            AddDiagnostic(
+                diagnostics,
+                diagnosticKeys,
+                ToCompilationDiagnostic(rootPath, projectPath, diagnostic));
+        }
+    }
+
+    private static bool IsSyntheticImplicitUsingsDiagnostic(Diagnostic diagnostic)
+    {
+        return diagnostic.Location.SourceTree?.FilePath.EndsWith(".ImplicitUsings.g.cs", StringComparison.Ordinal) == true;
     }
 
     private static List<TypeDeclarationInfo> CollectTypeDeclarations(
@@ -266,7 +379,8 @@ public static class SyntaxFactsCollector
                     memberDeclaration,
                     parentType,
                     typeDeclaration.Context,
-                    typeDeclaration.SemanticModel));
+                    typeDeclaration.SemanticModel,
+                    cancellationToken));
             }
         }
 
@@ -277,12 +391,13 @@ public static class SyntaxFactsCollector
         MemberDeclarationSyntax memberDeclaration,
         TypeFacts parentType,
         SourceFileContext context,
-        SemanticModel? semanticModel)
+        SemanticModel? semanticModel,
+        CancellationToken cancellationToken)
     {
         ISymbol? symbol = GetDeclaredSymbol(memberDeclaration, semanticModel);
         string memberName = GetMemberName(memberDeclaration);
         int parameterCount = GetParameterCount(memberDeclaration);
-        FileLinePositionSpan lineSpan = context.SyntaxTree.GetLineSpan(memberDeclaration.Span);
+        FileLinePositionSpan lineSpan = context.SyntaxTree.GetLineSpan(memberDeclaration.Span, cancellationToken);
         int startLine = ToOneBasedLine(lineSpan.StartLinePosition.Line);
         int endLine = ToOneBasedLine(lineSpan.EndLinePosition.Line);
         string? documentationCommentId = GetDocumentationCommentId(symbol);
@@ -296,7 +411,7 @@ public static class SyntaxFactsCollector
                 startLine)
             : TargetIds.MemberSemantic(symbol.ContainingAssembly.Name, documentationCommentId);
         string targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
-        ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration);
+        ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration, cancellationToken);
 
         return new MemberDeclarationInfo(
             memberDeclaration,
@@ -705,7 +820,7 @@ public static class SyntaxFactsCollector
         return zeroBasedLine + 1;
     }
 
-    private static AnalysisDiagnostic ToAnalysisDiagnostic(Diagnostic diagnostic, DiscoveredSourceFile sourceFile)
+    private static AnalysisDiagnostic ToSyntaxDiagnostic(Diagnostic diagnostic, DiscoveredSourceFile sourceFile)
     {
         FileLinePositionSpan lineSpan = diagnostic.Location.GetLineSpan();
 
@@ -717,8 +832,74 @@ public static class SyntaxFactsCollector
             ProjectPath = sourceFile.ProjectPath,
             FilePath = sourceFile.RelativePath,
             StartLine = ToOneBasedLine(lineSpan.StartLinePosition.Line),
-            EndLine = ToOneBasedLine(lineSpan.EndLinePosition.Line)
+            EndLine = ToOneBasedLine(lineSpan.EndLinePosition.Line),
+            Tags = ["syntax"]
         };
+    }
+
+    private static AnalysisDiagnostic ToCompilationDiagnostic(
+        string rootPath,
+        string projectPath,
+        Diagnostic diagnostic)
+    {
+        FileLinePositionSpan lineSpan = diagnostic.Location.GetLineSpan();
+        string? filePath = diagnostic.Location.SourceTree?.FilePath is { Length: > 0 } fullPath
+            ? Path.GetRelativePath(rootPath, fullPath).Replace(Path.DirectorySeparatorChar, '/')
+            : null;
+        int? startLine = diagnostic.Location.IsInSource
+            ? ToOneBasedLine(lineSpan.StartLinePosition.Line)
+            : null;
+        int? endLine = diagnostic.Location.IsInSource
+            ? ToOneBasedLine(lineSpan.EndLinePosition.Line)
+            : null;
+
+        return new AnalysisDiagnostic
+        {
+            Id = diagnostic.Id,
+            Severity = ToSeverity(diagnostic.Severity),
+            Message = diagnostic.GetMessage(CultureInfo.InvariantCulture),
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            StartLine = startLine,
+            EndLine = endLine,
+            Tags = CreateDiagnosticTags(diagnostic)
+        };
+    }
+
+    private static List<string> CreateDiagnosticTags(Diagnostic diagnostic)
+    {
+        List<string> tags = diagnostic.Id.StartsWith("CS", StringComparison.Ordinal)
+            ? ["compiler"]
+            : ["analyzer"];
+
+        if (IsNullableDiagnostic(diagnostic.Id))
+        {
+            tags.Add("nullable");
+        }
+
+        return tags;
+    }
+
+    private static bool IsNullableDiagnostic(string diagnosticId)
+    {
+        return diagnosticId.StartsWith("CS86", StringComparison.Ordinal) ||
+            diagnosticId.StartsWith("CS87", StringComparison.Ordinal) ||
+            diagnosticId.StartsWith("CS88", StringComparison.Ordinal);
+    }
+
+    private static void AddDiagnostic(
+        List<AnalysisDiagnostic> diagnostics,
+        HashSet<string> diagnosticKeys,
+        AnalysisDiagnostic diagnostic)
+    {
+        string key = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{diagnostic.Id}\n{diagnostic.ProjectPath}\n{diagnostic.FilePath}\n{diagnostic.StartLine}\n{diagnostic.EndLine}\n{diagnostic.Message}");
+
+        if (diagnosticKeys.Add(key))
+        {
+            diagnostics.Add(diagnostic);
+        }
     }
 
     private static string ToSeverity(DiagnosticSeverity severity)
@@ -813,6 +994,10 @@ public static class SyntaxFactsCollector
     private sealed record ProjectSemanticContext(
         string AssemblyName,
         CSharpCompilation Compilation);
+
+    private sealed record ProjectLoadInfo(
+        string AssemblyName,
+        bool ImplicitUsingsEnabled);
 
     private sealed record TypeDeclarationInfo(
         BaseTypeDeclarationSyntax Declaration,
