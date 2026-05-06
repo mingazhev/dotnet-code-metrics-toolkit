@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "0.1.0",
+  "nodes": [
+    {
+      "id": "file:tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
+      "kind": "file",
+      "name": "Calculator.cs",
+      "filePath": "tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs"
+    },
+    {
+      "id": "type:SimpleProject/T:SimpleProject.Calculator",
+      "kind": "type",
+      "name": "SimpleProject.Calculator",
+      "targetIdStability": "semantic",
+      "filePath": "tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
+      "startLine": 3,
+      "endLine": 9,
+      "declarations": [
+        {
+          "filePath": "tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
+          "startLine": 3,
+          "endLine": 9
+        }
+      ]
+    },
+    {
+      "id": "member:SimpleProject/M:SimpleProject.Calculator.Add(System.Int32,System.Int32)",
+      "kind": "member",
+      "name": "Calculator.Add",
+      "targetIdStability": "semantic",
+      "filePath": "tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
+      "startLine": 5,
+      "endLine": 8
+    }
+  ],
+  "edges": [
+    {
+      "from": "file:tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
+      "to": "type:SimpleProject/T:SimpleProject.Calculator",
+      "kind": "declares",
+      "confidence": "exact"
+    },
+    {
+      "from": "type:SimpleProject/T:SimpleProject.Calculator",
+      "to": "member:SimpleProject/M:SimpleProject.Calculator.Add(System.Int32,System.Int32)",
+      "kind": "contains",
+      "confidence": "exact"
+    }
+  ]
+}

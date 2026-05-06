@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codemetricstoolkit.local/schemas/summary.schema.json",
+  "title": "CodeMetricsToolkit summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "rootPath",
+    "projectCount",
+    "fileCount",
+    "typeCount",
+    "memberCount",
+    "metricResultCount",
+    "diagnosticCount",
+    "hotspots"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "rootPath": { "type": "string", "minLength": 1 },
+    "projectCount": { "type": "integer", "minimum": 0 },
+    "fileCount": { "type": "integer", "minimum": 0 },
+    "typeCount": { "type": "integer", "minimum": 0 },
+    "memberCount": { "type": "integer", "minimum": 0 },
+    "metricResultCount": { "type": "integer", "minimum": 0 },
+    "diagnosticCount": { "type": "integer", "minimum": 0 },
+    "hotspots": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/hotspot" }
+    }
+  },
+  "$defs": {
+    "targetKind": {
+      "enum": [ "solution", "project", "file", "type", "member" ]
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "metricId", "value", "percentile", "weight" ],
+      "properties": {
+        "metricId": { "type": "string", "minLength": 1 },
+        "value": { "type": "number" },
+        "percentile": { "type": "number", "minimum": 0, "maximum": 1 },
+        "weight": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "hotspot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetId",
+        "targetKind",
+        "targetName",
+        "rank",
+        "rankScore",
+        "filePath",
+        "startLine",
+        "endLine",
+        "reasons"
+      ],
+      "properties": {
+        "targetId": { "type": "string", "minLength": 1 },
+        "targetKind": { "$ref": "#/$defs/targetKind" },
+        "targetName": { "type": "string", "minLength": 1 },
+        "rank": { "type": "integer", "minimum": 1 },
+        "rankScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "filePath": { "type": "string", "minLength": 1 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "components": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/component" }
+        }
+      }
+    }
+  }
+}

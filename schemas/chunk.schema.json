@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codemetricstoolkit.local/schemas/chunk.schema.json",
+  "title": "CodeMetricsToolkit chunk line",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "chunkId",
+    "targetId",
+    "targetKind",
+    "targetIdStability",
+    "chunkKind",
+    "filePath",
+    "startLine",
+    "endLine",
+    "tokenEstimate",
+    "textHash",
+    "relatedTargetIds"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "chunkId": { "type": "string", "minLength": 1 },
+    "targetId": { "type": "string", "minLength": 1 },
+    "targetKind": { "enum": [ "file", "type", "member" ] },
+    "targetIdStability": { "enum": [ "semantic", "syntax_fallback", "line_fallback" ] },
+    "chunkKind": {
+      "enum": [
+        "file_header",
+        "type_declaration",
+        "member_body",
+        "constructor_body",
+        "property_body",
+        "diagnostic_span"
+      ]
+    },
+    "filePath": { "type": "string", "minLength": 1 },
+    "startLine": { "type": "integer", "minimum": 1 },
+    "endLine": { "type": "integer", "minimum": 1 },
+    "tokenEstimate": { "type": "integer", "minimum": 0 },
+    "textHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "relatedTargetIds": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "text": { "type": "string" }
+  }
+}

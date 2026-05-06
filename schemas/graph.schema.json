@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codemetricstoolkit.local/schemas/graph.schema.json",
+  "title": "CodeMetricsToolkit graph",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [ "schemaVersion", "nodes", "edges" ],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "sourceSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "filePath", "startLine", "endLine" ],
+      "properties": {
+        "filePath": { "type": "string", "minLength": 1 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "id", "kind", "name" ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": [ "solution", "project", "file", "type", "member" ] },
+        "name": { "type": "string", "minLength": 1 },
+        "targetIdStability": { "enum": [ "semantic", "syntax_fallback", "line_fallback" ] },
+        "filePath": { "type": "string", "minLength": 1 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "declarations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourceSpan" }
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "from", "to", "kind", "confidence" ],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": [ "declares", "contains", "inherits", "implements", "uses_type", "calls" ]
+        },
+        "confidence": { "enum": [ "exact", "partial" ] }
+      }
+    }
+  }
+}

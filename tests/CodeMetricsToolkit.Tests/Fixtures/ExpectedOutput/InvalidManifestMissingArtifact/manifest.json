@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "0.1.0",
+  "tool": "CodeMetricsToolkit",
+  "toolVersion": "0.1.0",
+  "rootPath": "/repo",
+  "startedAt": "2026-05-06T08:00:00Z",
+  "completedAt": "2026-05-06T08:00:01Z",
+  "durationMs": 1000,
+  "mode": "semantic",
+  "artifacts": {
+    "summary": "summary.json",
+    "metrics": "metrics.ndjson",
+    "chunks": "chunks.ndjson",
+    "diagnostics": "diagnostics.ndjson"
+  }
+}

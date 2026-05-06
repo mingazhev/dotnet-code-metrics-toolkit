@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codemetricstoolkit.local/schemas/metric-result.schema.json",
+  "title": "CodeMetricsToolkit metric result line",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "metricId",
+    "metricVersion",
+    "targetId",
+    "targetKind",
+    "targetIdStability",
+    "valueKind",
+    "unit"
+  ],
+  "oneOf": [
+    {
+      "required": [ "numericValue" ],
+      "not": {
+        "anyOf": [
+          { "required": [ "stringValue" ] },
+          { "required": [ "boolValue" ] }
+        ]
+      }
+    },
+    {
+      "required": [ "stringValue" ],
+      "not": {
+        "anyOf": [
+          { "required": [ "numericValue" ] },
+          { "required": [ "boolValue" ] }
+        ]
+      }
+    },
+    {
+      "required": [ "boolValue" ],
+      "not": {
+        "anyOf": [
+          { "required": [ "numericValue" ] },
+          { "required": [ "stringValue" ] }
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "metricId": { "type": "string", "minLength": 1 },
+    "metricVersion": { "type": "string", "minLength": 1 },
+    "targetId": { "type": "string", "minLength": 1 },
+    "targetKind": { "enum": [ "solution", "project", "file", "type", "member" ] },
+    "targetIdStability": { "enum": [ "semantic", "syntax_fallback", "line_fallback" ] },
+    "valueKind": { "enum": [ "integer", "number", "string", "boolean" ] },
+    "numericValue": { "type": "number" },
+    "stringValue": { "type": "string" },
+    "boolValue": { "type": "boolean" },
+    "unit": { "type": "string", "minLength": 1 },
+    "filePath": { "type": "string", "minLength": 1 },
+    "startLine": { "type": "integer", "minimum": 1 },
+    "endLine": { "type": "integer", "minimum": 1 },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

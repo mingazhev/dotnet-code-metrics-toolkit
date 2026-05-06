@@ -1,0 +1,1 @@
+{"schemaVersion":"0.1.0","metricId":"cyclomatic_complexity","metricVersion":"1.0.0","targetId":"member:SimpleProject/M:SimpleProject.Calculator.Add(System.Int32,System.Int32)","targetKind":"member","targetIdStability":"semantic","valueKind":"integer","unit":"count"}

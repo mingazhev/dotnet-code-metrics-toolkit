@@ -1,0 +1,1 @@
+{"schemaVersion":"0.1.0","id":"project_load_partial","severity":"warning","message":"Semantic model was partially unavailable.","projectPath":"tests/CodeMetricsToolkit.TestAssets/SimpleProject/SimpleProject.csproj","tags":["project_load"]}

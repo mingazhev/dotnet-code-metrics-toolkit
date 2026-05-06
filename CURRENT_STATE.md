@@ -2,48 +2,48 @@
 
 ## Active Iteration
 
-Pre-implementation planning.
+Iteration 1 - Syntax MVP (next)
 
 ## Completed
 
-- Original broad metrics plan copied into `code_metrics_toolkit_plan.md`.
-- Autoresearch-focused MVP plan created in `autoresearch_metrics_mvp.md`.
-- Deferred full toolkit roadmap created in `full_code_metrics_toolkit_roadmap.md`.
-- Execution checklist created in `implementation_checklist.md`.
-- Development workflow created in `development_workflow.md`.
-- Autonomous runbook created in `AUTONOMOUS_RUNBOOK.md`.
-- Autonomous Iteration 0 prompt created in `prompts/autonomous_iteration0.md`.
-- Local .NET SDK availability checked: .NET 8.0.410 and .NET 10.0.203 are installed.
+- Git repository initialized in `/Users/mingazhev/Repos/meetups/ods_autoresearch` with baseline commit `935eaa5`.
+- Iteration worktree created at `/Users/mingazhev/Repos/meetups/ods_autoresearch-iteration0` on branch `iteration-0-contract-first`.
+- Iteration 0 solution skeleton created: `CodeMetricsToolkit.sln`, `Abstractions`, `Core`, `Cli`, and `Tests`.
+- SDK pinned with `global.json` to .NET SDK `8.0.410`; projects target `net8.0`.
+- Roslyn packages pinned to `4.11.0` because SDK `8.0.410` uses compiler `4.11.0`.
+- Mandatory output schemas created for `manifest`, `summary`, `metric-result`, `graph`, `chunk`, and `diagnostic`.
+- Schema validation tests created with valid fixture output and malformed negative cases.
+- Golden sample projects created under `tests/CodeMetricsToolkit.TestAssets`.
+- ADRs created for stable target ids, cyclomatic complexity v1.0, and cognitive complexity baseline.
+- `implementation_checklist.md` updated for completed Iteration 0 items.
 
 ## In Progress
 
-- No implementation has started yet.
+- No implementation slice is currently in progress.
 
 ## Next Actions
 
-- Add `global.json` pinned to .NET 8.0.410.
-- Add `Directory.Build.props`.
-- Add `.editorconfig`.
-- Create solution skeleton.
-- Start Iteration 0 from `implementation_checklist.md`.
-- For unattended work, run the command from `AUTONOMOUS_RUNBOOK.md`.
+- Start Iteration 1 from `implementation_checklist.md`.
+- Implement project/file discovery and syntax-only C# loading.
+- Emit syntax fallback ids for files, types, and members.
+- Add first real `codemetrics analyze <path> --output <dir>` CLI path.
+- Keep CLI end-to-end smoke unchecked until `analyze` exists.
 
 ## Verification
 
-- `dotnet --info`: passed.
-- `git status --short`: failed because this directory is not a git repository.
-- `dotnet build`: not run because no solution exists yet.
-- `dotnet test`: not run because no solution exists yet.
+- `dotnet --version`: passed, returned `8.0.410`.
+- `dotnet restore CodeMetricsToolkit.sln`: passed.
+- `dotnet build CodeMetricsToolkit.sln`: passed.
+- `dotnet test CodeMetricsToolkit.sln`: passed, 8 tests.
 
 ## Known Decisions
 
-- Use orchestrator-led development with bounded subagents only.
-- Do not use subagents for schemas, target id policy, metric formulas or scope decisions.
-- Treat `CURRENT_STATE.md` as context reset anchor.
-- Treat `implementation_checklist.md` as execution tracker.
-- Use `AUTONOMOUS_RUNBOOK.md` for non-interactive Codex runs.
-- Keep full toolkit features deferred until autoresearch MVP is working end-to-end.
+- Work for implementation should happen in `/Users/mingazhev/Repos/meetups/ods_autoresearch-iteration0`, not the main planning worktree.
+- Test asset projects are intentionally not added to the solution; `BrokenProject` and nullable diagnostics fixtures are analyzer inputs, not normal build targets.
+- `graph.json` and `chunks.ndjson` remain first-class product artifacts.
+- `targetIdStability` is required for metric results and chunks.
+- Do not start the metric catalog until the CLI smoke path exists.
 
 ## Blockers
 
-- Repository has not been initialized here. Either initialize git in this folder or move the plan into the intended implementation repository before serious implementation.
+- None.

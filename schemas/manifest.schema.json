@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codemetricstoolkit.local/schemas/manifest.schema.json",
+  "title": "CodeMetricsToolkit manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "tool",
+    "toolVersion",
+    "rootPath",
+    "startedAt",
+    "completedAt",
+    "durationMs",
+    "mode",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "tool": { "const": "CodeMetricsToolkit" },
+    "toolVersion": { "type": "string", "minLength": 1 },
+    "rootPath": { "type": "string", "minLength": 1 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "durationMs": { "type": "integer", "minimum": 0 },
+    "mode": { "enum": [ "syntax", "semantic", "partial_semantic" ] },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "metrics",
+        "graph",
+        "chunks",
+        "diagnostics"
+      ],
+      "properties": {
+        "summary": { "const": "summary.json" },
+        "metrics": { "const": "metrics.ndjson" },
+        "graph": { "const": "graph.json" },
+        "chunks": { "const": "chunks.ndjson" },
+        "diagnostics": { "const": "diagnostics.ndjson" }
+      }
+    }
+  }
+}

@@ -29,11 +29,11 @@ Autonomous run instructions: `AUTONOMOUS_RUNBOOK.md`.
 - [x] .NET SDK is available locally.
 - [x] .NET 8 SDK is available locally.
 - [x] .NET 10 SDK is also available locally, so implementation must pin SDK deliberately.
-- [ ] Add `global.json` to avoid accidentally building with .NET 10.
-- [ ] Target `net8.0` for libraries and CLI unless there is a deliberate reason to require newer .NET.
-- [ ] Pin Roslyn package versions explicitly.
-- [ ] Add `Directory.Build.props` with nullable enabled and warnings policy.
-- [ ] Add `.editorconfig` for formatting and analyzer consistency.
+- [x] Add `global.json` to avoid accidentally building with .NET 10.
+- [x] Target `net8.0` for libraries and CLI unless there is a deliberate reason to require newer .NET.
+- [x] Pin Roslyn package versions explicitly.
+- [x] Add `Directory.Build.props` with nullable enabled and warnings policy.
+- [x] Add `.editorconfig` for formatting and analyzer consistency.
 
 Recommended first `global.json`:
 
@@ -52,11 +52,11 @@ Rationale: .NET 8 is installed and is the conservative runtime target. The machi
 
 Do not start implementing the metric catalog until these are done:
 
-- [ ] JSON schemas exist for every mandatory output.
-- [ ] Golden sample repositories exist.
-- [ ] Stable target id ADR exists.
-- [ ] Complexity formula ADR exists.
-- [ ] Output validation test exists.
+- [x] JSON schemas exist for every mandatory output.
+- [x] Golden sample repositories exist.
+- [x] Stable target id ADR exists.
+- [x] Complexity formula ADR exists.
+- [x] Output validation test exists.
 - [ ] CLI end-to-end smoke test exists.
 
 Do not add advanced metrics until these are done:
@@ -69,34 +69,34 @@ Do not add advanced metrics until these are done:
 
 ## 3. Iteration 0 - Contract First
 
-- [ ] Create solution skeleton.
-- [ ] Add `global.json`.
-- [ ] Add `Directory.Build.props`.
-- [ ] Add `.editorconfig`.
-- [ ] Create `src/CodeMetricsToolkit.Abstractions`.
-- [ ] Create `src/CodeMetricsToolkit.Core`.
-- [ ] Create `src/CodeMetricsToolkit.Cli`.
-- [ ] Create `tests/CodeMetricsToolkit.Tests`.
-- [ ] Create `tests/CodeMetricsToolkit.TestAssets`.
-- [ ] Add schema files under `schemas/`.
-- [ ] Define `manifest.schema.json`.
-- [ ] Define `summary.schema.json`.
-- [ ] Define `metric-result.schema.json`.
-- [ ] Define `graph.schema.json`.
-- [ ] Define `chunk.schema.json`.
-- [ ] Define `diagnostic.schema.json`.
-- [ ] Add schema validation tests.
-- [ ] Add ADR: stable target ids.
-- [ ] Add ADR: cyclomatic complexity v1.0.
-- [ ] Add ADR: cognitive complexity decision.
-- [ ] Add golden expected output without requiring real analysis.
+- [x] Create solution skeleton.
+- [x] Add `global.json`.
+- [x] Add `Directory.Build.props`.
+- [x] Add `.editorconfig`.
+- [x] Create `src/CodeMetricsToolkit.Abstractions`.
+- [x] Create `src/CodeMetricsToolkit.Core`.
+- [x] Create `src/CodeMetricsToolkit.Cli`.
+- [x] Create `tests/CodeMetricsToolkit.Tests`.
+- [x] Create `tests/CodeMetricsToolkit.TestAssets`.
+- [x] Add schema files under `schemas/`.
+- [x] Define `manifest.schema.json`.
+- [x] Define `summary.schema.json`.
+- [x] Define `metric-result.schema.json`.
+- [x] Define `graph.schema.json`.
+- [x] Define `chunk.schema.json`.
+- [x] Define `diagnostic.schema.json`.
+- [x] Add schema validation tests.
+- [x] Add ADR: stable target ids.
+- [x] Add ADR: cyclomatic complexity v1.0.
+- [x] Add ADR: cognitive complexity decision.
+- [x] Add golden expected output without requiring real analysis.
 
 Acceptance:
 
-- [ ] `dotnet build` succeeds.
-- [ ] `dotnet test` succeeds.
-- [ ] Schema validation rejects malformed output.
-- [ ] Target id examples cover overloads, generics, constructors, properties and partial types.
+- [x] `dotnet build` succeeds.
+- [x] `dotnet test` succeeds.
+- [x] Schema validation rejects malformed output.
+- [x] Target id examples cover overloads, generics, constructors, properties and partial types.
 
 ## 4. Iteration 1 - Syntax MVP
 
@@ -196,19 +196,19 @@ Acceptance:
 
 ## 8. Files To Create First
 
-- [ ] `global.json`
-- [ ] `Directory.Build.props`
-- [ ] `.editorconfig`
-- [ ] `CodeMetricsToolkit.sln`
-- [ ] `schemas/manifest.schema.json`
-- [ ] `schemas/summary.schema.json`
-- [ ] `schemas/metric-result.schema.json`
-- [ ] `schemas/graph.schema.json`
-- [ ] `schemas/chunk.schema.json`
-- [ ] `schemas/diagnostic.schema.json`
-- [ ] `docs/adr/0001-stable-target-ids.md`
-- [ ] `docs/adr/0002-cyclomatic-complexity-v1.md`
-- [ ] `docs/adr/0003-cognitive-complexity.md`
+- [x] `global.json`
+- [x] `Directory.Build.props`
+- [x] `.editorconfig`
+- [x] `CodeMetricsToolkit.sln`
+- [x] `schemas/manifest.schema.json`
+- [x] `schemas/summary.schema.json`
+- [x] `schemas/metric-result.schema.json`
+- [x] `schemas/graph.schema.json`
+- [x] `schemas/chunk.schema.json`
+- [x] `schemas/diagnostic.schema.json`
+- [x] `docs/adr/0001-stable-target-ids.md`
+- [x] `docs/adr/0002-cyclomatic-complexity-v1.md`
+- [x] `docs/adr/0003-cognitive-complexity.md`
 
 ## 9. Commands To Keep Green
 
