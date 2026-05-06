@@ -354,7 +354,7 @@ public static class HotspotRanker
                     .GroupBy(type => type.FilePath, StringComparer.Ordinal)
                     .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
                 outgoingDependencies.ToDictionary(entry => entry.Key, entry => entry.Value.Count, StringComparer.Ordinal),
-                facts.Diagnostics);
+                facts.Health.DiagnosticsIncludedInHotspotRank ? facts.Diagnostics : []);
         }
 
         public IReadOnlyList<MemberFacts> MembersForType(string targetId)

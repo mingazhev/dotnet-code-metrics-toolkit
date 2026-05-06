@@ -7,6 +7,17 @@
   "memberCount": 1,
   "metricResultCount": 1,
   "diagnosticCount": 1,
+  "analysisHealth": {
+    "analysisQuality": "trusted",
+    "semanticModel": "msbuild",
+    "restoreStatus": "success",
+    "buildStatus": "not_run",
+    "trustedDiagnostics": true,
+    "diagnosticsIncludedInHotspotRank": true,
+    "messages": [
+      "dotnet restore succeeded for SimpleProject.csproj."
+    ]
+  },
   "hotspots": [
     {
       "targetId": "member:SimpleProject/M:SimpleProject.Calculator.Add(System.Int32,System.Int32)",

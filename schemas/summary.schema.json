@@ -13,6 +13,7 @@
     "memberCount",
     "metricResultCount",
     "diagnosticCount",
+    "analysisHealth",
     "hotspots"
   ],
   "properties": {
@@ -24,6 +25,7 @@
     "memberCount": { "type": "integer", "minimum": 0 },
     "metricResultCount": { "type": "integer", "minimum": 0 },
     "diagnosticCount": { "type": "integer", "minimum": 0 },
+    "analysisHealth": { "$ref": "#/$defs/analysisHealth" },
     "hotspots": {
       "type": "array",
       "items": { "$ref": "#/$defs/hotspot" }
@@ -42,6 +44,31 @@
         "value": { "type": "number" },
         "percentile": { "type": "number", "minimum": 0, "maximum": 1 },
         "weight": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "analysisHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysisQuality",
+        "semanticModel",
+        "restoreStatus",
+        "buildStatus",
+        "trustedDiagnostics",
+        "diagnosticsIncludedInHotspotRank",
+        "messages"
+      ],
+      "properties": {
+        "analysisQuality": { "enum": [ "trusted", "degraded", "syntax_only" ] },
+        "semanticModel": { "enum": [ "msbuild", "not_available", "none" ] },
+        "restoreStatus": { "enum": [ "not_run", "success", "failed" ] },
+        "buildStatus": { "enum": [ "not_run", "success", "failed" ] },
+        "trustedDiagnostics": { "type": "boolean" },
+        "diagnosticsIncludedInHotspotRank": { "type": "boolean" },
+        "messages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     },
     "hotspot": {

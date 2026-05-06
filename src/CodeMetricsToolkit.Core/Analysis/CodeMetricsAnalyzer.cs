@@ -14,12 +14,21 @@ public static class CodeMetricsAnalyzer
         ArgumentNullException.ThrowIfNull(request);
 
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+        using IsolatedInput? isolatedInput = request.IsolateInput
+            ? InputIsolator.CopyToTemporaryDirectory(request.InputPath)
+            : null;
+        string inputPath = isolatedInput?.IsolatedRootPath ?? request.InputPath;
         DiscoveredSources sources = SourceFileDiscovery.Discover(
-            request.InputPath,
+            inputPath,
             request.IncludeGeneratedCode,
             request.IncludePatterns,
             request.ExcludePatterns);
-        var facts = SyntaxFactsCollector.Collect(sources, useSemantic: !request.SyntaxOnly, cancellationToken);
+        var facts = await SyntaxFactsCollector.CollectAsync(
+                sources,
+                useSemantic: !request.SyntaxOnly,
+                noRestore: request.NoRestore,
+                cancellationToken)
+            .ConfigureAwait(false);
         HotspotRanking hotspotRanking = HotspotRanker.Rank(facts, request.Top, cancellationToken);
         IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts, cancellationToken)
             .Concat(GraphMetricProjector.Project(facts, cancellationToken))
@@ -50,7 +59,8 @@ public static class CodeMetricsAnalyzer
                 TypeCount = facts.Types.Count,
                 MemberCount = facts.Members.Count,
                 MetricResultCount = metrics.Count,
-                DiagnosticCount = facts.Diagnostics.Count
+                DiagnosticCount = facts.Diagnostics.Count,
+                Health = facts.Health
             }
         };
     }

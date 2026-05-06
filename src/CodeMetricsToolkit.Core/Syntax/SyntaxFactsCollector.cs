@@ -1,12 +1,13 @@
 using System.Globalization;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Xml.Linq;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Metrics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 
 namespace CodeMetricsToolkit.Core.Syntax;
@@ -16,19 +17,27 @@ public static class SyntaxFactsCollector
     private const string SemanticStability = "semantic";
     private const string SyntaxFallbackStability = "syntax_fallback";
 
-    public static SyntaxAnalysisFacts Collect(
+    public static async Task<SyntaxAnalysisFacts> CollectAsync(
         DiscoveredSources sources,
         bool useSemantic,
+        bool noRestore,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sources);
 
         var diagnostics = new List<AnalysisDiagnostic>();
         var diagnosticKeys = new HashSet<string>(StringComparer.Ordinal);
-        List<SourceFileContext> sourceFiles = ParseSourceFiles(sources.SourceFiles, diagnostics, diagnosticKeys, cancellationToken);
-        Dictionary<string, ProjectSemanticContext> semanticContexts = useSemantic
-            ? CreateSemanticContexts(sources.RootPath, sourceFiles, diagnostics, diagnosticKeys, cancellationToken)
-            : [];
+        SemanticLoadResult semanticLoad = useSemantic
+            ? await CreateSemanticContextsAsync(sources, noRestore, diagnostics, diagnosticKeys, cancellationToken)
+                .ConfigureAwait(false)
+            : SemanticLoadResult.SyntaxOnly("Syntax-only analysis was requested.");
+        List<SourceFileContext> sourceFiles = await ParseSourceFilesAsync(
+                sources.SourceFiles,
+                semanticLoad.Contexts,
+                diagnostics,
+                diagnosticKeys,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         IReadOnlyList<FileFacts> files = sourceFiles
             .Select(context => CreateFileFacts(context))
@@ -37,7 +46,7 @@ public static class SyntaxFactsCollector
 
         List<TypeDeclarationInfo> typeDeclarations = CollectTypeDeclarations(
             sourceFiles,
-            semanticContexts,
+            semanticLoad.Contexts,
             cancellationToken);
         Dictionary<string, TypeFacts> typeFactsById = CreateTypeFacts(typeDeclarations);
         IReadOnlyList<TypeFacts> types = typeFactsById.Values
@@ -62,6 +71,7 @@ public static class SyntaxFactsCollector
         return new SyntaxAnalysisFacts
         {
             Mode = DetermineMode(typeDeclarations, memberDeclarations),
+            Health = CreateHealth(useSemantic, semanticLoad),
             RootPath = sources.RootPath,
             ProjectPaths = sources.ProjectPaths,
             Files = files,
@@ -76,8 +86,9 @@ public static class SyntaxFactsCollector
         };
     }
 
-    private static List<SourceFileContext> ParseSourceFiles(
+    private static async Task<List<SourceFileContext>> ParseSourceFilesAsync(
         IReadOnlyList<DiscoveredSourceFile> sourceFiles,
+        IReadOnlyDictionary<string, ProjectSemanticContext> semanticContexts,
         List<AnalysisDiagnostic> diagnostics,
         HashSet<string> diagnosticKeys,
         CancellationToken cancellationToken)
@@ -88,13 +99,28 @@ public static class SyntaxFactsCollector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            SourceText sourceText = SourceText.From(File.ReadAllText(sourceFile.FullPath));
-            SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(
-                sourceText,
-                CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp12),
-                path: sourceFile.FullPath,
-                cancellationToken: cancellationToken);
-            SyntaxNode root = syntaxTree.GetRoot(cancellationToken);
+            SyntaxTree syntaxTree;
+            SourceText sourceText;
+            SyntaxNode root;
+
+            if (semanticContexts.TryGetValue(sourceFile.ProjectPath, out ProjectSemanticContext? semanticContext) &&
+                semanticContext.SyntaxTreesByFullPath.TryGetValue(NormalizeFullPath(sourceFile.FullPath), out SyntaxTree? workspaceSyntaxTree))
+            {
+                syntaxTree = workspaceSyntaxTree;
+                sourceText = await syntaxTree.GetTextAsync(cancellationToken).ConfigureAwait(false);
+                root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                sourceText = SourceText.From(await File.ReadAllTextAsync(sourceFile.FullPath, cancellationToken).ConfigureAwait(false));
+                syntaxTree = CSharpSyntaxTree.ParseText(
+                    sourceText,
+                    CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp12),
+                    path: sourceFile.FullPath,
+                    cancellationToken: cancellationToken);
+                root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             var context = new SourceFileContext(sourceFile, sourceText, syntaxTree, root);
             contexts.Add(context);
 
@@ -110,127 +136,385 @@ public static class SyntaxFactsCollector
         return contexts;
     }
 
-    private static Dictionary<string, ProjectSemanticContext> CreateSemanticContexts(
-        string rootPath,
-        IReadOnlyList<SourceFileContext> sourceFiles,
+    private static async Task<SemanticLoadResult> CreateSemanticContextsAsync(
+        DiscoveredSources sources,
+        bool noRestore,
         List<AnalysisDiagnostic> diagnostics,
         HashSet<string> diagnosticKeys,
         CancellationToken cancellationToken)
     {
-        var semanticContexts = new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal);
+        var messages = DetectAmbientBuildFiles(sources.RootPath).ToList();
+        RestoreResult restore = await RestoreProjectsAsync(sources, noRestore, cancellationToken).ConfigureAwait(false);
+        messages.AddRange(restore.Messages);
+        if (restore.Status == "failed")
+        {
+            messages.Add("Compiler diagnostics were suppressed because restore failed; emitted diagnostics are not treated as code-quality metrics.");
+        }
 
-        foreach (IGrouping<string, SourceFileContext> projectGroup in sourceFiles.GroupBy(context => context.SourceFile.ProjectPath))
+        if (sources.ProjectPaths.Count == 0)
+        {
+            messages.Add("No C# project files were discovered; semantic analysis fell back to syntax-only parsing.");
+            return new SemanticLoadResult(new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal), "not_available", restore.Status, TrustDiagnostics: false, WorkspaceHadFailures: true, messages);
+        }
+
+        try
+        {
+            using MSBuildWorkspace workspace = MSBuildWorkspace.Create(CreateWorkspaceProperties());
+            workspace.SkipUnrecognizedProjects = true;
+            workspace.LoadMetadataForReferencedProjects = false;
+
+            var workspaceDiagnostics = new List<WorkspaceDiagnostic>();
+            workspace.WorkspaceFailed += (_, args) => workspaceDiagnostics.Add(args.Diagnostic);
+
+            Solution solution = await LoadWorkspaceSolutionAsync(sources, workspace, cancellationToken).ConfigureAwait(false);
+            IReadOnlySet<string> includedSourcePaths = sources.SourceFiles
+                .Select(source => NormalizeFullPath(source.FullPath))
+                .ToHashSet(StringComparer.Ordinal);
+            Dictionary<string, ProjectSemanticContext> contexts = await CreateProjectContextsAsync(
+                    sources.RootPath,
+                    solution,
+                    includedSourcePaths,
+                    collectCompilationDiagnostics: restore.Status != "failed",
+                    diagnostics,
+                    diagnosticKeys,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (WorkspaceDiagnostic workspaceDiagnostic in workspaceDiagnostics)
+            {
+                AddDiagnostic(diagnostics, diagnosticKeys, ToWorkspaceDiagnostic(workspaceDiagnostic));
+            }
+
+            bool workspaceHadFailures = workspaceDiagnostics.Any(diagnostic => diagnostic.Kind == WorkspaceDiagnosticKind.Failure);
+            if (workspaceHadFailures)
+            {
+                AddProjectLoadFailureDiagnostics(
+                    sources,
+                    diagnostics,
+                    diagnosticKeys,
+                    "MSBuildWorkspace reported project load failures; see workspace_load diagnostics for details.");
+            }
+
+            if (contexts.Count == 0)
+            {
+                messages.Add("MSBuildWorkspace did not load any project compilations; semantic analysis fell back to syntax-only parsing.");
+                workspaceHadFailures = true;
+            }
+
+            return new SemanticLoadResult(
+                contexts,
+                contexts.Count == 0 ? "not_available" : "msbuild",
+                restore.Status,
+                TrustDiagnostics: contexts.Count > 0 && !workspaceHadFailures && restore.Status != "failed",
+                WorkspaceHadFailures: workspaceHadFailures,
+                messages);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            messages.Add($"MSBuildWorkspace failed: {exception.Message}");
+            AddProjectLoadFailureDiagnostics(sources, diagnostics, diagnosticKeys, exception.Message);
+
+            return new SemanticLoadResult(new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal), "not_available", restore.Status, TrustDiagnostics: false, WorkspaceHadFailures: true, messages);
+        }
+    }
+
+    private static Dictionary<string, string> CreateWorkspaceProperties()
+    {
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DesignTimeBuild"] = "true",
+            ["BuildProjectReferences"] = "false",
+            ["SkipCompilerExecution"] = "true",
+            ["ProvideCommandLineArgs"] = "true",
+            ["CopyBuildOutputToOutputDirectory"] = "false",
+            ["CopyOutputSymbolsToOutputDirectory"] = "false",
+            ["CopyDocumentationFileToOutputDirectory"] = "false"
+        };
+    }
+
+    private static async Task<Solution> LoadWorkspaceSolutionAsync(
+        DiscoveredSources sources,
+        MSBuildWorkspace workspace,
+        CancellationToken cancellationToken)
+    {
+        if (sources.SolutionPaths.Count == 1)
+        {
+            return await workspace.OpenSolutionAsync(
+                    Path.Combine(sources.RootPath, sources.SolutionPaths[0]),
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        foreach (string projectPath in sources.ProjectPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            try
-            {
-                ProjectLoadInfo projectLoadInfo = LoadProjectInfo(rootPath, projectGroup.Key);
-                string assemblyName = projectLoadInfo.AssemblyName;
-                CSharpCompilation compilation = CSharpCompilation.Create(
-                    assemblyName,
-                    CreateCompilationSyntaxTrees(rootPath, projectGroup.Key, projectGroup, projectLoadInfo),
-                    CreateDefaultReferences(),
-                    new CSharpCompilationOptions(
-                        OutputKind.DynamicallyLinkedLibrary,
-                        nullableContextOptions: NullableContextOptions.Enable));
-
-                semanticContexts.Add(projectGroup.Key, new ProjectSemanticContext(assemblyName, compilation));
-                AddCompilationDiagnostics(rootPath, projectGroup.Key, compilation, diagnostics, diagnosticKeys, cancellationToken);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
-            {
-                AddDiagnostic(diagnostics, diagnosticKeys, new AnalysisDiagnostic
-                {
-                    Id = "semantic_model_unavailable",
-                    Severity = "warning",
-                    Message = exception.Message,
-                    ProjectPath = projectGroup.Key,
-                    FilePath = null,
-                    StartLine = null,
-                    EndLine = null,
-                    Tags = ["semantic"]
-                });
-            }
-            catch (Exception exception) when (exception is System.Xml.XmlException or InvalidDataException)
-            {
-                AddDiagnostic(diagnostics, diagnosticKeys, new AnalysisDiagnostic
-                {
-                    Id = "project_load_failed",
-                    Severity = "critical",
-                    Message = exception.Message,
-                    ProjectPath = projectGroup.Key,
-                    FilePath = projectGroup.Key,
-                    StartLine = null,
-                    EndLine = null,
-                    Tags = ["project_load"]
-                });
-            }
+            await workspace.OpenProjectAsync(
+                    Path.Combine(sources.RootPath, projectPath),
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        return semanticContexts;
+        return workspace.CurrentSolution;
     }
 
-    private static ProjectLoadInfo LoadProjectInfo(string rootPath, string projectPath)
-    {
-        if (!projectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ProjectLoadInfo(ResolveAssemblyName(projectPath), ImplicitUsingsEnabled: false);
-        }
-
-        string fullProjectPath = Path.Combine(rootPath, projectPath);
-
-        if (!File.Exists(fullProjectPath))
-        {
-            throw new InvalidDataException($"Project file was discovered but no longer exists: {projectPath}");
-        }
-
-        XDocument project = XDocument.Load(fullProjectPath);
-        string assemblyName = project
-            .Descendants("AssemblyName")
-            .Select(element => element.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? ResolveAssemblyName(projectPath);
-        bool implicitUsingsEnabled = project
-            .Descendants("ImplicitUsings")
-            .Any(element => string.Equals(element.Value.Trim(), "enable", StringComparison.OrdinalIgnoreCase));
-
-        return new ProjectLoadInfo(assemblyName, implicitUsingsEnabled);
-    }
-
-    private static IEnumerable<SyntaxTree> CreateCompilationSyntaxTrees(
+    private static async Task<Dictionary<string, ProjectSemanticContext>> CreateProjectContextsAsync(
         string rootPath,
-        string projectPath,
-        IEnumerable<SourceFileContext> projectGroup,
-        ProjectLoadInfo projectLoadInfo)
+        Solution solution,
+        IReadOnlySet<string> includedSourcePaths,
+        bool collectCompilationDiagnostics,
+        List<AnalysisDiagnostic> diagnostics,
+        HashSet<string> diagnosticKeys,
+        CancellationToken cancellationToken)
     {
-        foreach (SourceFileContext context in projectGroup)
+        var contexts = new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal);
+
+        foreach (Project project in solution.Projects.Where(project => project.Language == LanguageNames.CSharp))
         {
-            yield return context.SyntaxTree;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string? projectRelativePath = ToRelativeProjectPath(rootPath, project.FilePath);
+            if (projectRelativePath is null)
+            {
+                continue;
+            }
+
+            Compilation? compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            if (compilation is not CSharpCompilation csharpCompilation)
+            {
+                continue;
+            }
+
+            Dictionary<string, SyntaxTree> syntaxTreesByFullPath = csharpCompilation.SyntaxTrees
+                .Where(tree => !string.IsNullOrWhiteSpace(tree.FilePath))
+                .GroupBy(tree => NormalizeFullPath(tree.FilePath), StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+            contexts[projectRelativePath] = new ProjectSemanticContext(
+                project.AssemblyName ?? ResolveAssemblyName(projectRelativePath),
+                csharpCompilation,
+                syntaxTreesByFullPath);
+            if (collectCompilationDiagnostics)
+            {
+                AddCompilationDiagnostics(
+                    rootPath,
+                    projectRelativePath,
+                    csharpCompilation,
+                    includedSourcePaths,
+                    diagnostics,
+                    diagnosticKeys,
+                    cancellationToken);
+            }
         }
 
-        if (!projectLoadInfo.ImplicitUsingsEnabled)
+        return contexts;
+    }
+
+    private static async Task<RestoreResult> RestoreProjectsAsync(
+        DiscoveredSources sources,
+        bool noRestore,
+        CancellationToken cancellationToken)
+    {
+        if (noRestore)
         {
-            yield break;
+            return new RestoreResult("not_run", ["Restore was skipped because --no-restore was specified."]);
         }
 
-        yield return CSharpSyntaxTree.ParseText(
-            """
-            global using System;
-            global using System.Collections.Generic;
-            global using System.IO;
-            global using System.Linq;
-            global using System.Net.Http;
-            global using System.Threading;
-            global using System.Threading.Tasks;
-            """,
-            CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp12),
-            path: Path.Combine(rootPath, projectPath + ".ImplicitUsings.g.cs"));
+        IReadOnlyList<string> targetPaths = SelectRestoreTargets(sources);
+        if (targetPaths.Count == 0)
+        {
+            return new RestoreResult("not_run", ["Restore was skipped because no solution or project file was discovered."]);
+        }
+
+        var messages = new List<string>();
+
+        foreach (string targetPath in targetPaths)
+        {
+            ProcessResult result = await RunProcessAsync(
+                    "dotnet",
+                    ["restore", targetPath],
+                    sources.RootPath,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (result.ExitCode != 0)
+            {
+                messages.Add($"dotnet restore failed for {Path.GetFileName(targetPath)} with exit code {result.ExitCode}: {TrimProcessOutput(result)}");
+                return new RestoreResult("failed", messages);
+            }
+
+            messages.Add($"dotnet restore succeeded for {Path.GetFileName(targetPath)}.");
+        }
+
+        return new RestoreResult("success", messages);
+    }
+
+    private static string[] SelectRestoreTargets(DiscoveredSources sources)
+    {
+        if (sources.SolutionPaths.Count == 1)
+        {
+            return [Path.Combine(sources.RootPath, sources.SolutionPaths[0])];
+        }
+
+        return sources.ProjectPaths
+            .Select(projectPath => Path.Combine(sources.RootPath, projectPath))
+            .ToArray();
+    }
+
+    private static async Task<ProcessResult> RunProcessAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                WorkingDirectory = workingDirectory,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            }
+        };
+
+        foreach (string argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        process.Start();
+        Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        Task<string> error = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+        return new ProcessResult(
+            process.ExitCode,
+            await output.ConfigureAwait(false),
+            await error.ConfigureAwait(false));
+    }
+
+    private static string TrimProcessOutput(ProcessResult result)
+    {
+        string text = string.IsNullOrWhiteSpace(result.StandardError)
+            ? result.StandardOutput
+            : result.StandardError;
+        string flattened = string.Join(" ", text
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(4));
+
+        return string.IsNullOrWhiteSpace(flattened) ? "no process output" : flattened;
+    }
+
+    private static IEnumerable<string> DetectAmbientBuildFiles(string rootPath)
+    {
+        var root = new DirectoryInfo(rootPath);
+
+        for (DirectoryInfo? directory = root.Parent; directory is not null; directory = directory.Parent)
+        {
+            foreach (string fileName in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "NuGet.config", "nuget.config" })
+            {
+                string candidate = Path.Combine(directory.FullName, fileName);
+                if (File.Exists(candidate))
+                {
+                    yield return $"Ambient MSBuild/NuGet file outside analyzed root may affect project evaluation: {candidate}";
+                }
+            }
+        }
+    }
+
+    private static void AddProjectLoadFailureDiagnostics(
+        DiscoveredSources sources,
+        List<AnalysisDiagnostic> diagnostics,
+        HashSet<string> diagnosticKeys,
+        string message)
+    {
+        foreach (string projectPath in sources.ProjectPaths.DefaultIfEmpty(sources.RootPath))
+        {
+            AddDiagnostic(diagnostics, diagnosticKeys, new AnalysisDiagnostic
+            {
+                Id = "project_load_failed",
+                Severity = "critical",
+                Message = message,
+                ProjectPath = projectPath,
+                FilePath = projectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ? projectPath : null,
+                StartLine = null,
+                EndLine = null,
+                Tags = ["project_load"]
+            });
+        }
+    }
+
+    private static AnalysisDiagnostic ToWorkspaceDiagnostic(WorkspaceDiagnostic diagnostic)
+    {
+        return new AnalysisDiagnostic
+        {
+            Id = diagnostic.Kind == WorkspaceDiagnosticKind.Failure ? "workspace_load_failed" : "workspace_load_warning",
+            Severity = diagnostic.Kind == WorkspaceDiagnosticKind.Failure ? "error" : "warning",
+            Message = diagnostic.Message,
+            ProjectPath = null,
+            FilePath = null,
+            StartLine = null,
+            EndLine = null,
+            Tags = ["workspace_load"]
+        };
+    }
+
+    private static AnalysisHealth CreateHealth(bool useSemantic, SemanticLoadResult semanticLoad)
+    {
+        if (!useSemantic)
+        {
+            return new AnalysisHealth
+            {
+                AnalysisQuality = "syntax_only",
+                SemanticModel = "none",
+                RestoreStatus = "not_run",
+                BuildStatus = "not_run",
+                TrustedDiagnostics = false,
+                DiagnosticsIncludedInHotspotRank = false,
+                Messages = semanticLoad.Messages
+            };
+        }
+
+        bool trusted = semanticLoad.TrustDiagnostics;
+
+        return new AnalysisHealth
+        {
+            AnalysisQuality = trusted ? "trusted" : "degraded",
+            SemanticModel = semanticLoad.SemanticModel,
+            RestoreStatus = semanticLoad.RestoreStatus,
+            BuildStatus = "not_run",
+            TrustedDiagnostics = trusted,
+            DiagnosticsIncludedInHotspotRank = trusted,
+            Messages = semanticLoad.Messages
+        };
+    }
+
+    private static string? ToRelativeProjectPath(string rootPath, string? projectPath)
+    {
+        if (string.IsNullOrWhiteSpace(projectPath))
+        {
+            return null;
+        }
+
+        string relativePath = Path.GetRelativePath(rootPath, projectPath)
+            .Replace(Path.DirectorySeparatorChar, '/');
+
+        return relativePath.StartsWith("..", StringComparison.Ordinal) ? null : relativePath;
+    }
+
+    private static string NormalizeFullPath(string path)
+    {
+        return Path.GetFullPath(path)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
     private static void AddCompilationDiagnostics(
         string rootPath,
         string projectPath,
         CSharpCompilation compilation,
+        IReadOnlySet<string> includedSourcePaths,
         List<AnalysisDiagnostic> diagnostics,
         HashSet<string> diagnosticKeys,
         CancellationToken cancellationToken)
@@ -240,6 +524,13 @@ public static class SyntaxFactsCollector
             cancellationToken.ThrowIfCancellationRequested();
 
             if (IsSyntheticImplicitUsingsDiagnostic(diagnostic))
+            {
+                continue;
+            }
+
+            if (diagnostic.Location.IsInSource &&
+                diagnostic.Location.SourceTree?.FilePath is { Length: > 0 } diagnosticFilePath &&
+                !includedSourcePaths.Contains(NormalizeFullPath(diagnosticFilePath)))
             {
                 continue;
             }
@@ -267,8 +558,10 @@ public static class SyntaxFactsCollector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            SemanticModel? semanticModel = semanticContexts.TryGetValue(context.SourceFile.ProjectPath, out ProjectSemanticContext? project)
-                ? project.Compilation.GetSemanticModel(context.SyntaxTree, ignoreAccessibility: true)
+            bool treeBelongsToCompilation = semanticContexts.TryGetValue(context.SourceFile.ProjectPath, out ProjectSemanticContext? project) &&
+                project.SyntaxTreesByFullPath.ContainsKey(NormalizeFullPath(context.SyntaxTree.FilePath));
+            SemanticModel? semanticModel = treeBelongsToCompilation
+                ? project!.Compilation.GetSemanticModel(context.SyntaxTree, ignoreAccessibility: true)
                 : null;
             string assemblyName = project?.AssemblyName ?? ResolveAssemblyName(context.SourceFile.ProjectPath);
 
@@ -295,9 +588,10 @@ public static class SyntaxFactsCollector
         string fallbackName = BuildQualifiedTypeName(typeDeclaration);
         string name = symbol?.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) ?? fallbackName;
         string? documentationCommentId = GetDocumentationCommentId(symbol);
+        string assemblyName = symbol?.ContainingAssembly?.Name ?? fallbackAssemblyName;
         string targetId = documentationCommentId is null || symbol is null
             ? TargetIds.Type(context.SourceFile.ProjectKey, fallbackName, context.SourceFile.RelativePath)
-            : TargetIds.TypeSemantic(symbol.ContainingAssembly.Name ?? fallbackAssemblyName, documentationCommentId);
+            : TargetIds.TypeSemantic(assemblyName, documentationCommentId);
         string targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
         TextSpan span = typeDeclaration.Span;
         FileLinePositionSpan lineSpan = context.SyntaxTree.GetLineSpan(span);
@@ -401,6 +695,7 @@ public static class SyntaxFactsCollector
         int startLine = ToOneBasedLine(lineSpan.StartLinePosition.Line);
         int endLine = ToOneBasedLine(lineSpan.EndLinePosition.Line);
         string? documentationCommentId = GetDocumentationCommentId(symbol);
+        string assemblyName = symbol?.ContainingAssembly?.Name ?? ResolveAssemblyName(context.SourceFile.ProjectPath);
         string targetId = documentationCommentId is null || symbol is null
             ? TargetIds.Member(
                 context.SourceFile.ProjectKey,
@@ -409,7 +704,7 @@ public static class SyntaxFactsCollector
                 parameterCount,
                 context.SourceFile.RelativePath,
                 startLine)
-            : TargetIds.MemberSemantic(symbol.ContainingAssembly.Name, documentationCommentId);
+            : TargetIds.MemberSemantic(assemblyName, documentationCommentId);
         string targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
         ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration, cancellationToken);
 
@@ -892,14 +1187,44 @@ public static class SyntaxFactsCollector
         HashSet<string> diagnosticKeys,
         AnalysisDiagnostic diagnostic)
     {
-        string key = string.Create(
-            CultureInfo.InvariantCulture,
-            $"{diagnostic.Id}\n{diagnostic.ProjectPath}\n{diagnostic.FilePath}\n{diagnostic.StartLine}\n{diagnostic.EndLine}\n{diagnostic.Message}");
+        string key = DiagnosticKey(diagnostic);
 
         if (diagnosticKeys.Add(key))
         {
             diagnostics.Add(diagnostic);
+            return;
         }
+
+        for (int index = 0; index < diagnostics.Count; index++)
+        {
+            AnalysisDiagnostic existing = diagnostics[index];
+            if (!string.Equals(DiagnosticKey(existing), key, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string[]? tags = MergeTags(existing.Tags, diagnostic.Tags);
+            diagnostics[index] = existing with { Tags = tags };
+            return;
+        }
+    }
+
+    private static string DiagnosticKey(AnalysisDiagnostic diagnostic)
+    {
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{diagnostic.Id}\n{diagnostic.ProjectPath}\n{diagnostic.FilePath}\n{diagnostic.StartLine}\n{diagnostic.EndLine}\n{diagnostic.Message}");
+    }
+
+    private static string[]? MergeTags(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
+    {
+        string[] tags = (left ?? [])
+            .Concat(right ?? [])
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return tags.Length == 0 ? null : tags;
     }
 
     private static string ToSeverity(DiagnosticSeverity severity)
@@ -937,11 +1262,17 @@ public static class SyntaxFactsCollector
 
     private static string? GetSymbolMapKey(ISymbol? symbol)
     {
-        string? documentationCommentId = GetDocumentationCommentId(symbol);
+        if (symbol is null)
+        {
+            return null;
+        }
 
-        return documentationCommentId is null || symbol is null
+        string? documentationCommentId = GetDocumentationCommentId(symbol);
+        string? assemblyName = symbol.OriginalDefinition.ContainingAssembly?.Name;
+
+        return documentationCommentId is null || assemblyName is null
             ? null
-            : $"{symbol.OriginalDefinition.ContainingAssembly.Name}/{documentationCommentId}";
+            : $"{assemblyName}/{documentationCommentId}";
     }
 
     private static bool TryGetTypeTarget(
@@ -993,11 +1324,31 @@ public static class SyntaxFactsCollector
 
     private sealed record ProjectSemanticContext(
         string AssemblyName,
-        CSharpCompilation Compilation);
+        CSharpCompilation Compilation,
+        IReadOnlyDictionary<string, SyntaxTree> SyntaxTreesByFullPath);
 
-    private sealed record ProjectLoadInfo(
-        string AssemblyName,
-        bool ImplicitUsingsEnabled);
+    private sealed record SemanticLoadResult(
+        IReadOnlyDictionary<string, ProjectSemanticContext> Contexts,
+        string SemanticModel,
+        string RestoreStatus,
+        bool TrustDiagnostics,
+        bool WorkspaceHadFailures,
+        IReadOnlyList<string> Messages)
+    {
+        public static SemanticLoadResult SyntaxOnly(string message)
+        {
+            return new SemanticLoadResult(new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal), "none", "not_run", TrustDiagnostics: false, WorkspaceHadFailures: false, [message]);
+        }
+    }
+
+    private sealed record RestoreResult(
+        string Status,
+        IReadOnlyList<string> Messages);
+
+    private sealed record ProcessResult(
+        int ExitCode,
+        string StandardOutput,
+        string StandardError);
 
     private sealed record TypeDeclarationInfo(
         BaseTypeDeclarationSyntax Declaration,

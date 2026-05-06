@@ -107,6 +107,7 @@ public static class ArtifactWriter
             facts.Members.Count,
             metrics.Count,
             facts.Diagnostics.Count,
+            facts.Health,
             hotspots);
     }
 
@@ -179,6 +180,7 @@ public static class ArtifactWriter
         int MemberCount,
         int MetricResultCount,
         int DiagnosticCount,
+        AnalysisHealth AnalysisHealth,
         IReadOnlyList<HotspotLine> Hotspots);
 
     private sealed record DiagnosticLine(

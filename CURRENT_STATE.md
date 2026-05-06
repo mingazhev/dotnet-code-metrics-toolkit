@@ -2,7 +2,7 @@
 
 ## Active Iteration
 
-Post-Iteration 4 review / next MVP slice
+Post-MVP hardening: trusted MSBuild semantic analysis
 
 ## Completed
 
@@ -49,6 +49,15 @@ Post-Iteration 4 review / next MVP slice
 - `hotspot_rank@1.0.0` now uses the MVP weights with diagnostics, parameter counts, member/type counts, and outgoing type dependencies.
 - CLI now supports `list-metrics`, `explain <metric-id>`, `--include`, `--exclude`, `--semantic`, `--no-restore`, and `--max-degree-of-parallelism`.
 - MVP limitations are documented in `docs/mvp-limitations.md`.
+- Post-MVP production-readiness hardening implemented.
+- Semantic analysis now uses `MSBuildWorkspace` instead of lightweight manual compilations.
+- `codemetrics analyze` runs `dotnet restore` by default and records restore status in `summary.json.analysisHealth`.
+- `summary.json` now includes `analysisHealth` with quality, semantic model, restore/build status, trusted diagnostics, hotspot diagnostic inclusion, and health messages.
+- `diagnostic_count@1.0.0` is emitted only when diagnostics are trusted.
+- `hotspot_rank@1.0.0` excludes diagnostic components when diagnostics are untrusted.
+- Ambient parent MSBuild/NuGet files outside the analyzed root are reported as health messages.
+- Compiler diagnostics are suppressed when restore fails so environment/setup failures are not reported as code-quality metrics.
+- CLI now supports `--isolate-input` to copy the target root to a temporary directory before restore/MSBuild loading.
 
 ## In Progress
 
@@ -56,7 +65,7 @@ Post-Iteration 4 review / next MVP slice
 
 ## Next Actions
 
-- Consider adding real MSBuildWorkspace loading before analyzing production repositories; current semantic loading is still lightweight.
+- Consider preserving original source-root metadata when `--isolate-input` is used; current artifact root points at the temporary isolated copy used for analysis.
 - Consider adding real parallel analysis after the fact collectors have deterministic ordering and thread-safety coverage.
 
 ## Verification
@@ -66,6 +75,12 @@ Post-Iteration 4 review / next MVP slice
 - `dotnet build CodeMetricsToolkit.sln`: passed.
 - `dotnet test CodeMetricsToolkit.sln --no-restore`: passed, 44 tests.
 - `dotnet test CodeMetricsToolkit.sln`: passed, 47 tests after Iteration 5.
+- `dotnet test CodeMetricsToolkit.sln`: passed, 47 tests after MSBuildWorkspace hardening.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze /private/tmp/codemetrics-inputs/payment-terminal.app.api-2025-12-30-5a511a95 --output artifacts/metrics/payment-terminal.app.api-2025-12-30-5a511a95-msbuild --top 20`: passed; trusted MSBuild run, 516 files, 838 types, 1514 members, 27317 metrics, 54 diagnostics.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- validate-output artifacts/metrics/payment-terminal.app.api-2025-12-30-5a511a95-msbuild`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze artifacts/input/payment-terminal.app.api-2025-12-30-5a511a95 --output artifacts/check-contaminated --top 5`: passed; degraded run due parent MSBuild contamination, diagnostics untrusted and excluded from hotspot rank.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- validate-output artifacts/check-contaminated`: passed.
+- `dotnet run --project src/CodeMetricsToolkit.Cli -- analyze artifacts/input/payment-terminal.app.api-2025-12-30-5a511a95 --output artifacts/check-isolated --isolate-input --top 5`: passed; trusted MSBuild run from temporary isolated copy, 54 diagnostics.
 - `dotnet run --project src/CodeMetricsToolkit.Cli -- list-metrics`: passed and lists 19 metric descriptors.
 - `dotnet run --project src/CodeMetricsToolkit.Cli -- explain outgoing_type_dependency_count`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets --output artifacts/iteration5-medium --top 5`: passed.
@@ -88,11 +103,13 @@ Post-Iteration 4 review / next MVP slice
 - `graph.json` and `chunks.ndjson` are no longer placeholders after Iteration 2.
 - `cognitive_complexity` remains `0.1.0` and explicitly Sonar-inspired, not Sonar-compatible.
 - LOC is deliberately capped at low hotspot weight so it does not dominate complexity signals.
-- Semantic analysis still uses lightweight Roslyn compilations, not full MSBuildWorkspace project loading.
-- Synthetic implicit-usings trees are used for semantic accuracy but their own diagnostics are filtered from output.
+- Semantic analysis uses `MSBuildWorkspace` and project compilations loaded through the real project system.
+- Target repositories should be analyzed outside this tool's worktree when MSBuild parent-file contamination is possible.
+- `--isolate-input` is the preferred CLI fallback when a target root already lives under a contaminated parent directory.
 - `--max-degree-of-parallelism` is accepted for CLI contract compatibility, but current analysis is still sequential.
-- `--no-restore` is accepted because the MVP does not perform restore.
+- `--no-restore` skips the default restore step; diagnostics should be treated according to `analysisHealth`.
 - Project-load diagnostics without source spans are emitted in `diagnostics.ndjson` but not attributed to `diagnostic_count` metrics.
+- `diagnostic_count` metrics and hotspot diagnostic components require trusted diagnostics.
 
 ## Blockers
 

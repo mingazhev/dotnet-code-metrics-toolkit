@@ -26,6 +26,10 @@ public sealed class CliAnalyzeTests
         Assert.Equal(1, root.GetProperty("fileCount").GetInt32());
         Assert.Equal(1, root.GetProperty("typeCount").GetInt32());
         Assert.True(root.GetProperty("memberCount").GetInt32() > 0);
+        JsonElement analysisHealth = root.GetProperty("analysisHealth");
+        Assert.Equal("trusted", analysisHealth.GetProperty("analysisQuality").GetString());
+        Assert.Equal("msbuild", analysisHealth.GetProperty("semanticModel").GetString());
+        Assert.True(analysisHealth.GetProperty("trustedDiagnostics").GetBoolean());
         Assert.Contains(
             File.ReadLines(Path.Combine(output.Path, "metrics.ndjson")),
             line => line.Contains("\"metricId\":\"method_length\"", StringComparison.Ordinal));
@@ -322,6 +326,25 @@ public sealed class CliAnalyzeTests
     }
 
     [Fact]
+    public async Task AnalyzeCommandCanIsolateInputFromAmbientBuildFiles()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("SimpleProject");
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--isolate-input");
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        JsonElement analysisHealth = summary.RootElement.GetProperty("analysisHealth");
+        Assert.Equal("trusted", analysisHealth.GetProperty("analysisQuality").GetString());
+        Assert.DoesNotContain(
+            analysisHealth.GetProperty("messages").EnumerateArray(),
+            message => message.GetString()!.Contains("Ambient MSBuild", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ListMetricsAndExplainCommandsExposeMetricCatalog()
     {
         using var listOutput = new StringWriter();
@@ -356,6 +379,14 @@ public sealed class CliAnalyzeTests
             HasPropertyValue(diagnostic, "id", "project_load_failed") &&
             HasPropertyValue(diagnostic, "severity", "critical") &&
             HasTag(diagnostic, "project_load"));
+
+        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        JsonElement analysisHealth = summary.RootElement.GetProperty("analysisHealth");
+        Assert.Equal("degraded", analysisHealth.GetProperty("analysisQuality").GetString());
+        Assert.False(analysisHealth.GetProperty("trustedDiagnostics").GetBoolean());
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        Assert.DoesNotContain(metrics, metric => HasPropertyValue(metric, "metricId", "diagnostic_count"));
     }
 
     [Fact]

@@ -36,6 +36,11 @@ public static class SourceFileDiscovery
             throw new DirectoryNotFoundException($"Input path does not exist: {inputPath}");
         }
 
+        List<string> solutionPaths = EnumerateFiles(rootDirectory, "*.sln", includeGeneratedCode: true)
+            .Select(file => ToRelativePath(rootPath, file.FullName))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
         List<string> projectPaths = EnumerateFiles(rootDirectory, "*.csproj", includeGeneratedCode: true)
             .Select(file => ToRelativePath(rootPath, file.FullName))
             .Order(StringComparer.Ordinal)
@@ -47,7 +52,7 @@ public static class SourceFileDiscovery
             .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
             .ToList();
 
-        return new DiscoveredSources(rootPath, projectPaths, sourceFiles);
+        return new DiscoveredSources(rootPath, solutionPaths, projectPaths, sourceFiles);
     }
 
     private static string ResolveRootPath(string inputPath)
@@ -234,6 +239,7 @@ public static class SourceFileDiscovery
 
 public sealed record DiscoveredSources(
     string RootPath,
+    IReadOnlyList<string> SolutionPaths,
     IReadOnlyList<string> ProjectPaths,
     IReadOnlyList<DiscoveredSourceFile> SourceFiles);
 

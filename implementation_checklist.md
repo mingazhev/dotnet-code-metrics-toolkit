@@ -217,6 +217,31 @@ Acceptance:
 - [x] Output still validates against schemas.
 - [x] `dotnet test CodeMetricsToolkit.sln` passes.
 
+## 8.1. Production Repo Hardening - MSBuild and Trust
+
+- [x] Replace lightweight semantic compilations with `MSBuildWorkspace`.
+- [x] Run `dotnet restore` by default before semantic loading.
+- [x] Keep `--no-restore` as an explicit skip.
+- [x] Add solution discovery so single-solution repos load through the solution file.
+- [x] Reuse workspace syntax trees so semantic models and target ids come from the loaded compilation.
+- [x] Add `summary.json.analysisHealth`.
+- [x] Track `analysisQuality`, `semanticModel`, `restoreStatus`, `buildStatus`, `trustedDiagnostics`, and `diagnosticsIncludedInHotspotRank`.
+- [x] Detect ambient parent MSBuild/NuGet files outside the analyzed root.
+- [x] Add `--isolate-input` to copy the target root to a temporary directory before restore/MSBuild loading.
+- [x] Suppress compiler diagnostics when restore fails.
+- [x] Skip `diagnostic_count` metric projection when diagnostics are untrusted.
+- [x] Exclude diagnostic components from `hotspot_rank` when diagnostics are untrusted.
+- [x] Keep broken-project and invalid-project runs non-crashing.
+- [x] Validate a real `payment-terminal.app.api` December 2025 snapshot in isolated and contaminated locations.
+
+Acceptance:
+
+- [x] `dotnet test CodeMetricsToolkit.sln` passes.
+- [x] Isolated `payment-terminal.app.api` December 2025 snapshot reports trusted diagnostics.
+- [x] Contaminated in-repo snapshot reports degraded quality and excludes diagnostics from hotspot ranking.
+- [x] `--isolate-input` can recover a contaminated in-repo snapshot by analyzing a temporary copy.
+- [x] Output still validates against schemas.
+
 ## 9. Files To Create First
 
 - [x] `global.json`

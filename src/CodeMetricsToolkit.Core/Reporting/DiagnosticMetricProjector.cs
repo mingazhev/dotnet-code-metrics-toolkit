@@ -8,6 +8,11 @@ public static class DiagnosticMetricProjector
     {
         ArgumentNullException.ThrowIfNull(facts);
 
+        if (!facts.Health.TrustedDiagnostics)
+        {
+            return [];
+        }
+
         var metrics = new List<MetricResultLine>();
 
         foreach (FileFacts file in facts.Files.OrderBy(file => file.TargetId, StringComparer.Ordinal))

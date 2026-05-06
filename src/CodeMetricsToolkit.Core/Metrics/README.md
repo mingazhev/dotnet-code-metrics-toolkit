@@ -220,11 +220,20 @@ project_load
 Project-load diagnostics without a source span remain first-class diagnostics in
 `diagnostics.ndjson`, but are not attributed to file/type/member metric targets.
 
+`diagnostic_count` is emitted only when `summary.json.analysisHealth.trustedDiagnostics`
+is `true`. If restore or MSBuild project loading fails, compiler diagnostics are
+not treated as code-quality metrics because they may reflect a broken analysis
+environment instead of broken source code.
+
 ## hotspot_rank@1.0.0
 
 `hotspot_rank` is deterministic and explainable. Each candidate receives a rank
 score in `[0, 1]` from weighted percentiles. Higher metric values increase the
 percentile. Ties are ordered by target kind and target id.
+
+Diagnostic components are included only when
+`summary.json.analysisHealth.diagnosticsIncludedInHotspotRank` is `true`.
+Otherwise the ranker re-normalizes the remaining component weights.
 
 Member weights:
 

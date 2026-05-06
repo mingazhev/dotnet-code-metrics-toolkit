@@ -97,6 +97,7 @@ public static class CliApplication
         bool includeChunkText = false;
         bool syntaxOnly = false;
         bool noRestore = false;
+        bool isolateInput = false;
         int? maxDegreeOfParallelism = null;
         int top = 20;
         var includePatterns = new List<string>();
@@ -159,6 +160,10 @@ public static class CliApplication
                     noRestore = true;
                     break;
 
+                case "--isolate-input":
+                    isolateInput = true;
+                    break;
+
                 case "--max-degree-of-parallelism":
                     if (index + 1 >= args.Count || !int.TryParse(args[++index], out int parsedMaxDegreeOfParallelism) || parsedMaxDegreeOfParallelism <= 0)
                     {
@@ -197,6 +202,7 @@ public static class CliApplication
                     IncludeChunkText = includeChunkText,
                     SyntaxOnly = syntaxOnly,
                     NoRestore = noRestore,
+                    IsolateInput = isolateInput,
                     MaxDegreeOfParallelism = maxDegreeOfParallelism,
                     Top = top
                 },
@@ -206,6 +212,9 @@ public static class CliApplication
                 .ConfigureAwait(false);
             await output.WriteLineAsync(
                     $"Files: {result.Summary.FileCount}; Types: {result.Summary.TypeCount}; Members: {result.Summary.MemberCount}; Metrics: {result.Summary.MetricResultCount}.")
+                .ConfigureAwait(false);
+            await output.WriteLineAsync(
+                    $"Analysis quality: {result.Summary.Health.AnalysisQuality}; Semantic model: {result.Summary.Health.SemanticModel}; Trusted diagnostics: {result.Summary.Health.TrustedDiagnostics}.")
                 .ConfigureAwait(false);
 
             return 0;
@@ -308,7 +317,7 @@ public static class CliApplication
     private static Task WriteUsageAsync(TextWriter writer)
     {
         return writer.WriteLineAsync(
-            "Usage: codemetrics analyze <path> --output <dir>\n" +
+            "Usage: codemetrics analyze <path> --output <dir> [--isolate-input]\n" +
             "       codemetrics list-metrics\n" +
             "       codemetrics explain <metric-id|metric-id@version>\n" +
             "       codemetrics validate-output <artifact-dir>");
