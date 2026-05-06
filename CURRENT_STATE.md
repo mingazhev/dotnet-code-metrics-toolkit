@@ -2,7 +2,7 @@
 
 ## Active Iteration
 
-Iteration 3 - Complexity and Ranking (next)
+Iteration 4 - Diagnostics and Hardening (next)
 
 ## Completed
 
@@ -28,6 +28,12 @@ Iteration 3 - Complexity and Ranking (next)
 - `--include-chunk-text` adds source text to chunk lines when needed.
 - `--syntax-only` forces the syntax fallback path and keeps graph/chunk output schema-valid.
 - Partial type declarations are merged into one logical type node when semantic ids are available.
+- Iteration 3 complexity and ranking implemented.
+- Shared `ControlFlowFacts` now feeds `cyclomatic_complexity@1.0.0`, `cognitive_complexity@0.1.0`, and `nesting_depth@1.0.0`.
+- `summary.json` now includes deterministic top-N hotspots with reasons and component values, percentiles, and weights.
+- `metrics.ndjson` now includes `hotspot_rank@1.0.0` for member, type, and file targets.
+- Metric formulas are documented next to the implementation in `src/CodeMetricsToolkit.Core/Metrics/README.md`.
+- Cyclomatic tests cover every decision and non-decision point listed in ADR 0002.
 
 ## In Progress
 
@@ -35,21 +41,22 @@ Iteration 3 - Complexity and Ranking (next)
 
 ## Next Actions
 
-- Start Iteration 3 from `implementation_checklist.md`.
-- Implement shared `ControlFlowFacts`.
-- Implement `cyclomatic_complexity@1.0.0`.
-- Add formula tests for defined cyclomatic decision points.
-- Add cognitive complexity and `nesting_depth` after the shared control-flow pass exists.
+- Start Iteration 4 from `implementation_checklist.md`.
+- Count compiler, nullable, and analyzer diagnostics.
+- Emit project load and semantic model availability diagnostics.
+- Add `codemetrics validate-output <artifact-dir>`.
+- Normalize snapshots for paths, timestamps, durations, and ordering.
 
 ## Verification
 
 - `dotnet --version`: passed, returned `8.0.410`.
 - `dotnet restore CodeMetricsToolkit.sln`: passed.
 - `dotnet build CodeMetricsToolkit.sln`: passed.
-- `dotnet test CodeMetricsToolkit.sln --no-restore`: passed, 15 tests.
+- `dotnet test CodeMetricsToolkit.sln --no-restore`: passed, 37 tests.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SimpleProject --output artifacts/iteration2-simple`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/SemanticGraphProject --output artifacts/iteration2-semantic`: passed.
 - `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/PartialTypesProject --output artifacts/iteration2-partial`: passed.
+- `dotnet run --no-build --project src/CodeMetricsToolkit.Cli -- analyze tests/CodeMetricsToolkit.TestAssets/ComplexityProject --output artifacts/iteration3-complexity --top 3`: passed.
 
 ## Known Decisions
 
@@ -58,7 +65,8 @@ Iteration 3 - Complexity and Ranking (next)
 - `graph.json` and `chunks.ndjson` remain first-class product artifacts.
 - `targetIdStability` is required for metric results and chunks.
 - `graph.json` and `chunks.ndjson` are no longer placeholders after Iteration 2.
-- Do not start complexity/ranking metrics until graph/chunk context exists.
+- `cognitive_complexity` remains `0.1.0` and explicitly Sonar-inspired, not Sonar-compatible.
+- LOC is deliberately capped at low hotspot weight so it does not dominate complexity signals.
 
 ## Blockers
 

@@ -63,8 +63,8 @@ Do not add advanced metrics until these are done:
 
 - [x] `graph.json` is emitted and schema-validated.
 - [x] `chunks.ndjson` is emitted and schema-validated.
-- [ ] `summary.json` includes deterministic top-N hotspots.
-- [ ] Hotspot reasons are explainable from component metrics.
+- [x] `summary.json` includes deterministic top-N hotspots.
+- [x] Hotspot reasons are explainable from component metrics.
 - [x] Syntax fallback works when semantic loading fails.
 
 ## 3. Iteration 0 - Contract First
@@ -155,24 +155,24 @@ Acceptance:
 
 ## 6. Iteration 3 - Complexity and Ranking
 
-- [ ] Implement shared `ControlFlowFacts`.
-- [ ] Implement `cyclomatic_complexity@1.0.0`.
-- [ ] Test all defined cyclomatic decision points.
-- [ ] Implement cognitive complexity according to ADR.
-- [ ] Implement `nesting_depth`.
-- [ ] Add metric formula docs next to implementation.
-- [ ] Add `hotspot_rank` for members.
-- [ ] Add `hotspot_rank` for types.
-- [ ] Add `hotspot_rank` for files.
-- [ ] Add component reasons to `summary.json`.
-- [ ] Add deterministic ordering for ties.
+- [x] Implement shared `ControlFlowFacts`.
+- [x] Implement `cyclomatic_complexity@1.0.0`.
+- [x] Test all defined cyclomatic decision points.
+- [x] Implement cognitive complexity according to ADR.
+- [x] Implement `nesting_depth`.
+- [x] Add metric formula docs next to implementation.
+- [x] Add `hotspot_rank` for members.
+- [x] Add `hotspot_rank` for types.
+- [x] Add `hotspot_rank` for files.
+- [x] Add component reasons to `summary.json`.
+- [x] Add deterministic ordering for ties.
 
 Acceptance:
 
-- [ ] Top-N hotspots are stable on golden samples.
-- [ ] Hotspot reasons include metric values, percentiles and weights.
-- [ ] LOC does not dominate ranking by accident.
-- [ ] Complexity metrics do not re-traverse AST independently when facts already exist.
+- [x] Top-N hotspots are stable on golden samples.
+- [x] Hotspot reasons include metric values, percentiles and weights.
+- [x] LOC does not dominate ranking by accident.
+- [x] Complexity metrics do not re-traverse AST independently when facts already exist.
 
 ## 7. Iteration 4 - Diagnostics and Hardening
 

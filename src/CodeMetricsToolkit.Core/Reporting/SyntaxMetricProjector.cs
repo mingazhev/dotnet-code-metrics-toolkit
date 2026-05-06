@@ -27,6 +27,9 @@ public static class SyntaxMetricProjector
         {
             AddNumericMetric(results, "method_length", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.MethodLength, "lines");
             AddNumericMetric(results, "parameter_count", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ParameterCount, "count");
+            AddNumericMetric(results, "cyclomatic_complexity", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.CyclomaticComplexity, "count");
+            AddNumericMetric(results, "cognitive_complexity", "0.1.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.CognitiveComplexity, "count");
+            AddNumericMetric(results, "nesting_depth", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.NestingDepth, "levels");
         }
 
         return results;

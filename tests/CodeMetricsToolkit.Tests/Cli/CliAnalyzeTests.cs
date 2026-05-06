@@ -166,6 +166,53 @@ public sealed class CliAnalyzeTests
         Assert.Contains(chunks, chunk => HasPropertyValue(chunk, "targetKind", "member") && HasPropertyValue(chunk, "targetIdStability", "syntax_fallback"));
     }
 
+    [Fact]
+    public async Task AnalyzeCommandEmitsComplexityMetricsAndStableHotspots()
+    {
+        using TemporaryDirectory output = TemporaryDirectory.Create();
+        string projectPath = TestAssetPath("ComplexityProject");
+        const string scoreTargetId = "member:ComplexityProject/M:ComplexityProject.DecisionSamples.Score(ComplexityProject.Order,IReadOnlyList{System.Int32})";
+
+        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--top", "3");
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        JsonElement[] hotspots = summary.RootElement
+            .GetProperty("hotspots")
+            .EnumerateArray()
+            .Select(element => element.Clone())
+            .ToArray();
+
+        Assert.Equal(23, GetMetric(metrics, scoreTargetId, "cyclomatic_complexity").GetProperty("numericValue").GetInt32());
+        Assert.Equal(29, GetMetric(metrics, scoreTargetId, "cognitive_complexity").GetProperty("numericValue").GetInt32());
+        Assert.Equal(2, GetMetric(metrics, scoreTargetId, "nesting_depth").GetProperty("numericValue").GetInt32());
+        Assert.Contains(metrics, metric => HasPropertyValue(metric, "metricId", "hotspot_rank") && HasPropertyValue(metric, "targetKind", "member"));
+        Assert.Contains(metrics, metric => HasPropertyValue(metric, "metricId", "hotspot_rank") && HasPropertyValue(metric, "targetKind", "type"));
+        Assert.Contains(metrics, metric => HasPropertyValue(metric, "metricId", "hotspot_rank") && HasPropertyValue(metric, "targetKind", "file"));
+
+        Assert.Equal(3, hotspots.Length);
+        Assert.Equal(scoreTargetId, hotspots[0].GetProperty("targetId").GetString());
+        Assert.Equal(1, hotspots[0].GetProperty("rank").GetInt32());
+        Assert.Equal(1, hotspots[0].GetProperty("rankScore").GetDouble());
+        Assert.Contains(
+            hotspots[0].GetProperty("reasons").EnumerateArray(),
+            reason => reason.GetString() == "cyclomatic_complexity=23 p1 w0.35");
+
+        JsonElement[] components = hotspots[0]
+            .GetProperty("components")
+            .EnumerateArray()
+            .Select(element => element.Clone())
+            .ToArray();
+
+        JsonElement methodLength = Assert.Single(components, component => HasPropertyValue(component, "metricId", "method_length"));
+        JsonElement cyclomatic = Assert.Single(components, component => HasPropertyValue(component, "metricId", "cyclomatic_complexity"));
+        Assert.Equal(0.10, methodLength.GetProperty("weight").GetDouble());
+        Assert.True(cyclomatic.GetProperty("weight").GetDouble() > methodLength.GetProperty("weight").GetDouble());
+    }
+
     private static async Task<int> RunCliAsync(params string[] args)
     {
         using var output = new StringWriter();
@@ -221,6 +268,13 @@ public sealed class CliAnalyzeTests
         return element.TryGetProperty(propertyName, out JsonElement property) &&
             property.ValueKind == JsonValueKind.String &&
             string.Equals(property.GetString(), expectedValue, StringComparison.Ordinal);
+    }
+
+    private static JsonElement GetMetric(JsonElement[] metrics, string targetId, string metricId)
+    {
+        return Assert.Single(metrics, metric =>
+            HasPropertyValue(metric, "targetId", targetId) &&
+            HasPropertyValue(metric, "metricId", metricId));
     }
 
     private static void CreateGeneratedFileSample(string rootPath)

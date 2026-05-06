@@ -24,6 +24,7 @@ public static class ArtifactWriter
         string outputPath,
         SyntaxAnalysisFacts facts,
         IReadOnlyList<MetricResultLine> metrics,
+        IReadOnlyList<HotspotLine> hotspots,
         bool includeChunkText,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
@@ -32,6 +33,7 @@ public static class ArtifactWriter
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(metrics);
+        ArgumentNullException.ThrowIfNull(hotspots);
 
         Directory.CreateDirectory(outputPath);
 
@@ -42,7 +44,7 @@ public static class ArtifactWriter
 
         await WriteJsonAsync(
             Path.Combine(outputPath, ArtifactNames.Summary),
-            CreateSummary(facts, metrics),
+            CreateSummary(facts, metrics, hotspots),
             cancellationToken).ConfigureAwait(false);
 
         await WriteNdjsonAsync(
@@ -91,7 +93,10 @@ public static class ArtifactWriter
                 ArtifactNames.Diagnostics));
     }
 
-    private static SummaryArtifact CreateSummary(SyntaxAnalysisFacts facts, IReadOnlyList<MetricResultLine> metrics)
+    private static SummaryArtifact CreateSummary(
+        SyntaxAnalysisFacts facts,
+        IReadOnlyList<MetricResultLine> metrics,
+        IReadOnlyList<HotspotLine> hotspots)
     {
         return new SummaryArtifact(
             ContractVersion.Current,
@@ -102,7 +107,7 @@ public static class ArtifactWriter
             facts.Members.Count,
             metrics.Count,
             facts.Diagnostics.Count,
-            []);
+            hotspots);
     }
 
     private static DiagnosticLine ToDiagnosticLine(AnalysisDiagnostic diagnostic)
@@ -173,7 +178,7 @@ public static class ArtifactWriter
         int MemberCount,
         int MetricResultCount,
         int DiagnosticCount,
-        IReadOnlyList<object> Hotspots);
+        IReadOnlyList<HotspotLine> Hotspots);
 
     private sealed record DiagnosticLine(
         string SchemaVersion,

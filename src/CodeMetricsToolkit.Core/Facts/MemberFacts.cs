@@ -12,6 +12,7 @@ public sealed record MemberFacts
     public required int StartLine { get; init; }
     public required int EndLine { get; init; }
     public required IReadOnlyList<SourceSpanFacts> Declarations { get; init; }
+    public required ControlFlowFacts ControlFlow { get; init; }
     public required int MethodLength { get; init; }
     public required int ParameterCount { get; init; }
 }

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
+using CodeMetricsToolkit.Core.Metrics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -295,6 +296,7 @@ public static class SyntaxFactsCollector
                 startLine)
             : TargetIds.MemberSemantic(symbol.ContainingAssembly.Name, documentationCommentId);
         string targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
+        ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration);
 
         return new MemberDeclarationInfo(
             memberDeclaration,
@@ -311,6 +313,7 @@ public static class SyntaxFactsCollector
             startLine,
             endLine,
             HasBody(memberDeclaration),
+            controlFlowFacts,
             Math.Max(1, endLine - startLine + 1),
             parameterCount);
     }
@@ -350,6 +353,7 @@ public static class SyntaxFactsCollector
                                 EndLine = declaration.EndLine
                             })
                             .ToArray(),
+                        ControlFlow = primary.ControlFlow,
                         MethodLength = primary.MethodLength,
                         ParameterCount = primary.ParameterCount
                     };
@@ -841,6 +845,7 @@ public static class SyntaxFactsCollector
         int StartLine,
         int EndLine,
         bool HasBody,
+        ControlFlowFacts ControlFlow,
         int MethodLength,
         int ParameterCount);
 }
