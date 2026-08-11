@@ -15,7 +15,8 @@ public static class ArtifactWriter
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = true
+        WriteIndented = true,
+        NewLine = "\n"
     };
 
     private static readonly JsonSerializerOptions NdjsonOptions = new()
