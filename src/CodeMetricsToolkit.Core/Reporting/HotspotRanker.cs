@@ -5,7 +5,7 @@ namespace CodeMetricsToolkit.Core.Reporting;
 
 public static class HotspotRanker
 {
-    private static readonly IReadOnlyDictionary<string, int> KindOrder = new Dictionary<string, int>(StringComparer.Ordinal)
+    private static readonly Dictionary<string, int> KindOrder = new(StringComparer.Ordinal)
     {
         ["member"] = 0,
         ["type"] = 1,
@@ -17,8 +17,8 @@ public static class HotspotRanker
         ArgumentNullException.ThrowIfNull(facts);
         cancellationToken.ThrowIfCancellationRequested();
 
-        HotspotContext context = HotspotContext.Create(facts);
-        List<HotspotCandidate> candidates = CreateMemberCandidates(facts, context)
+        var context = HotspotContext.Create(facts);
+        var candidates = CreateMemberCandidates(facts, context)
             .Concat(CreateTypeCandidates(facts, context))
             .Concat(CreateFileCandidates(facts, context))
             .ToList();
@@ -50,6 +50,23 @@ public static class HotspotRanker
     {
         foreach (MemberFacts member in facts.Members)
         {
+            var components = new List<HotspotComponentValue>
+            {
+                new("cognitive_complexity", member.ControlFlow.CognitiveComplexity, 0.30),
+                new("cyclomatic_complexity", member.ControlFlow.CyclomaticComplexity, 0.25),
+                new("nesting_depth", member.ControlFlow.NestingDepth, 0.15),
+                new("method_length", member.MethodLength, 0.15),
+                new("parameter_count", member.ParameterCount, 0.05)
+            };
+            AddDiagnosticComponent(
+                components,
+                insertionIndex: 4,
+                context,
+                member.FilePath,
+                member.StartLine,
+                member.EndLine,
+                weight: 0.10);
+
             yield return new HotspotCandidate(
                 member.TargetId,
                 "member",
@@ -58,14 +75,7 @@ public static class HotspotRanker
                 member.FilePath,
                 member.StartLine,
                 member.EndLine,
-                [
-                    new HotspotComponentValue("cognitive_complexity", member.ControlFlow.CognitiveComplexity, 0.30),
-                    new HotspotComponentValue("cyclomatic_complexity", member.ControlFlow.CyclomaticComplexity, 0.25),
-                    new HotspotComponentValue("nesting_depth", member.ControlFlow.NestingDepth, 0.15),
-                    new HotspotComponentValue("method_length", member.MethodLength, 0.15),
-                    new HotspotComponentValue("diagnostic_count", context.DiagnosticCount(member.FilePath, member.StartLine, member.EndLine), 0.10),
-                    new HotspotComponentValue("parameter_count", member.ParameterCount, 0.05)
-                ]);
+                components);
         }
     }
 
@@ -74,6 +84,22 @@ public static class HotspotRanker
         foreach (TypeFacts type in facts.Types)
         {
             IReadOnlyList<MemberFacts> members = context.MembersForType(type.TargetId);
+            var components = new List<HotspotComponentValue>
+            {
+                new("max_member_cognitive_complexity", Max(members, member => member.ControlFlow.CognitiveComplexity), 0.25),
+                new("p95_member_cyclomatic_complexity", Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95), 0.20),
+                new("outgoing_type_dependency_count", context.OutgoingTypeDependencyCount(type.TargetId), 0.20),
+                new("lines_of_code", type.LinesOfCode, 0.15),
+                new("member_count", type.MemberCount, 0.10)
+            };
+            AddDiagnosticComponent(
+                components,
+                insertionIndex: 5,
+                context,
+                type.FilePath,
+                type.StartLine,
+                type.EndLine,
+                weight: 0.10);
 
             yield return new HotspotCandidate(
                 type.TargetId,
@@ -83,14 +109,7 @@ public static class HotspotRanker
                 type.FilePath,
                 type.StartLine,
                 type.EndLine,
-                [
-                    new HotspotComponentValue("max_member_cognitive_complexity", Max(members, member => member.ControlFlow.CognitiveComplexity), 0.25),
-                    new HotspotComponentValue("p95_member_cyclomatic_complexity", Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95), 0.20),
-                    new HotspotComponentValue("outgoing_type_dependency_count", context.OutgoingTypeDependencyCount(type.TargetId), 0.20),
-                    new HotspotComponentValue("lines_of_code", type.LinesOfCode, 0.15),
-                    new HotspotComponentValue("member_count", type.MemberCount, 0.10),
-                    new HotspotComponentValue("diagnostic_count", context.DiagnosticCount(type.FilePath, type.StartLine, type.EndLine), 0.10)
-                ]);
+                components);
         }
     }
 
@@ -99,6 +118,22 @@ public static class HotspotRanker
         foreach (FileFacts file in facts.Files)
         {
             IReadOnlyList<MemberFacts> members = context.MembersForFile(file.FilePath);
+            var components = new List<HotspotComponentValue>
+            {
+                new("p95_member_cognitive_complexity", Percentile(members, member => member.ControlFlow.CognitiveComplexity, 0.95), 0.25),
+                new("p95_member_cyclomatic_complexity", Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95), 0.20),
+                new("lines_of_code", file.LinesOfCode, 0.20),
+                new("type_count", context.TypeCountForFile(file.FilePath), 0.10),
+                new("member_count", members.Count, 0.10)
+            };
+            AddDiagnosticComponent(
+                components,
+                insertionIndex: 3,
+                context,
+                file.FilePath,
+                file.StartLine,
+                file.EndLine,
+                weight: 0.15);
 
             yield return new HotspotCandidate(
                 file.TargetId,
@@ -108,15 +143,30 @@ public static class HotspotRanker
                 file.FilePath,
                 file.StartLine,
                 file.EndLine,
-                [
-                    new HotspotComponentValue("p95_member_cognitive_complexity", Percentile(members, member => member.ControlFlow.CognitiveComplexity, 0.95), 0.25),
-                    new HotspotComponentValue("p95_member_cyclomatic_complexity", Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95), 0.20),
-                    new HotspotComponentValue("lines_of_code", file.LinesOfCode, 0.20),
-                    new HotspotComponentValue("diagnostic_count", context.DiagnosticCount(file.FilePath, file.StartLine, file.EndLine), 0.15),
-                    new HotspotComponentValue("type_count", context.TypeCountForFile(file.FilePath), 0.10),
-                    new HotspotComponentValue("member_count", members.Count, 0.10)
-                ]);
+                components);
         }
+    }
+
+    private static void AddDiagnosticComponent(
+        List<HotspotComponentValue> components,
+        int insertionIndex,
+        HotspotContext context,
+        string filePath,
+        int startLine,
+        int endLine,
+        double weight)
+    {
+        if (!context.IncludeDiagnostics)
+        {
+            return;
+        }
+
+        components.Insert(
+            insertionIndex,
+            new HotspotComponentValue(
+                "diagnostic_count",
+                context.DiagnosticCount(filePath, startLine, endLine),
+                weight));
     }
 
     private static Dictionary<ComponentKey, Dictionary<double, double>> CalculatePercentiles(
@@ -136,8 +186,7 @@ public static class HotspotRanker
 
     private static Dictionary<double, double> CalculatePercentiles(IReadOnlyList<double> values)
     {
-        double[] orderedValues = values
-            .Distinct()
+        var orderedValues = values
             .Order()
             .ToArray();
 
@@ -146,23 +195,19 @@ public static class HotspotRanker
             return [];
         }
 
-        if (orderedValues.Length == 1)
-        {
-            double percentile = orderedValues[0] > 0 ? 1.0 : 0.0;
+        var percentiles = new Dictionary<double, double>();
+        var cumulativeCount = 0;
 
-            return new Dictionary<double, double>
-            {
-                [orderedValues[0]] = percentile
-            };
+        foreach (IGrouping<double, double> group in orderedValues.GroupBy(value => value))
+        {
+            cumulativeCount += group.Count();
+            var value = group.Key;
+            percentiles[value] = value <= 0
+                ? 0.0
+                : cumulativeCount / (double)orderedValues.Length;
         }
 
-        return orderedValues
-            .Select((value, index) => new
-            {
-                Value = value,
-                Percentile = value <= 0 ? 0.0 : index / (double)(orderedValues.Length - 1)
-            })
-            .ToDictionary(entry => entry.Value, entry => entry.Percentile);
+        return percentiles;
     }
 
     private static RankedHotspot ApplyPercentiles(
@@ -173,7 +218,7 @@ public static class HotspotRanker
             .Select(component =>
             {
                 var key = new ComponentKey(candidate.TargetKind, component.MetricId);
-                double percentile = percentiles[key][component.Value];
+                var percentile = percentiles[key][component.Value];
 
                 return new HotspotComponentLine(
                     component.MetricId,
@@ -182,8 +227,8 @@ public static class HotspotRanker
                     component.Weight);
             })
             .ToArray();
-        double totalWeight = components.Sum(component => component.Weight);
-        double score = totalWeight <= 0
+        var totalWeight = components.Sum(component => component.Weight);
+        var score = totalWeight <= 0
             ? 0
             : components.Sum(component => component.Percentile * component.Weight) / totalWeight;
 
@@ -256,11 +301,11 @@ public static class HotspotRanker
             return 0;
         }
 
-        int[] orderedValues = members
+        var orderedValues = members
             .Select(selector)
             .Order()
             .ToArray();
-        int index = (int)Math.Ceiling(percentile * orderedValues.Length) - 1;
+        var index = (int)Math.Ceiling(percentile * orderedValues.Length) - 1;
 
         return orderedValues[Math.Clamp(index, 0, orderedValues.Length - 1)];
     }
@@ -312,20 +357,24 @@ public static class HotspotRanker
             IReadOnlyDictionary<string, IReadOnlyList<MemberFacts>> membersByFile,
             IReadOnlyDictionary<string, int> typeCountByFile,
             IReadOnlyDictionary<string, int> outgoingDependencyCountByType,
-            IReadOnlyList<AnalysisDiagnostic> diagnostics)
+            IReadOnlyList<AnalysisDiagnostic> diagnostics,
+            bool includeDiagnostics)
         {
             _membersByType = membersByType;
             _membersByFile = membersByFile;
             _typeCountByFile = typeCountByFile;
             _outgoingDependencyCountByType = outgoingDependencyCountByType;
             _diagnostics = diagnostics;
+            IncludeDiagnostics = includeDiagnostics;
         }
+
+        public bool IncludeDiagnostics { get; }
 
         public static HotspotContext Create(SyntaxAnalysisFacts facts)
         {
-            Dictionary<string, TypeFacts> typesById = facts.Types.ToDictionary(type => type.TargetId, StringComparer.Ordinal);
-            Dictionary<string, string> parentTypeByMemberId = facts.Members.ToDictionary(member => member.TargetId, member => member.ParentTypeTargetId, StringComparer.Ordinal);
-            Dictionary<string, HashSet<string>> outgoingDependencies = typesById.Keys.ToDictionary(
+            var typesById = facts.Types.ToDictionary(type => type.TargetId, StringComparer.Ordinal);
+            var parentTypeByMemberId = facts.Members.ToDictionary(member => member.TargetId, member => member.ParentTypeTargetId, StringComparer.Ordinal);
+            var outgoingDependencies = typesById.Keys.ToDictionary(
                 targetId => targetId,
                 _ => new HashSet<string>(StringComparer.Ordinal),
                 StringComparer.Ordinal);
@@ -333,7 +382,7 @@ public static class HotspotRanker
             foreach (GraphEdgeFacts edge in facts.GraphEdges)
             {
                 if (!IsTypeDependencyEdge(edge) ||
-                    !TryResolveSourceType(edge, parentTypeByMemberId, typesById, out string? sourceTypeId) ||
+                    !TryResolveSourceType(edge, parentTypeByMemberId, typesById, out var sourceTypeId) ||
                     !typesById.ContainsKey(edge.To) ||
                     string.Equals(sourceTypeId, edge.To, StringComparison.Ordinal))
                 {
@@ -354,7 +403,8 @@ public static class HotspotRanker
                     .GroupBy(type => type.FilePath, StringComparer.Ordinal)
                     .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
                 outgoingDependencies.ToDictionary(entry => entry.Key, entry => entry.Value.Count, StringComparer.Ordinal),
-                facts.Health.DiagnosticsIncludedInHotspotRank ? facts.Diagnostics : []);
+                facts.Health.DiagnosticsIncludedInHotspotRank ? facts.Diagnostics : [],
+                facts.Health.DiagnosticsIncludedInHotspotRank);
         }
 
         public IReadOnlyList<MemberFacts> MembersForType(string targetId)

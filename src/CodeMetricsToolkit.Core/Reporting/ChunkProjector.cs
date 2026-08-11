@@ -87,14 +87,14 @@ public static class ChunkProjector
 
     private static SourceSpanFacts CreateFileHeaderSpan(FileFacts file, IReadOnlyList<TypeFacts> types)
     {
-        int firstTypeLine = types
+        var firstTypeLine = types
             .SelectMany(type => type.Declarations)
             .Where(declaration => declaration.FilePath == file.FilePath)
             .Select(declaration => declaration.StartLine)
             .DefaultIfEmpty(file.EndLine + 1)
             .Min();
 
-        int endLine = firstTypeLine > file.StartLine
+        var endLine = firstTypeLine > file.StartLine
             ? firstTypeLine - 1
             : file.StartLine;
 
@@ -116,7 +116,7 @@ public static class ChunkProjector
         IReadOnlyList<string> relatedTargetIds,
         bool includeText)
     {
-        string text = ReadLineRange(rootPath, span);
+        var text = ReadLineRange(rootPath, span);
 
         return new ChunkLine
         {
@@ -138,15 +138,15 @@ public static class ChunkProjector
 
     private static string ReadLineRange(string rootPath, SourceSpanFacts span)
     {
-        string path = Path.Combine(rootPath, span.FilePath);
-        string[] lines = File.ReadAllLines(path);
+        var path = Path.Combine(rootPath, span.FilePath);
+        var lines = File.ReadAllLines(path);
         if (lines.Length == 0)
         {
             return string.Empty;
         }
 
-        int startIndex = Math.Clamp(span.StartLine - 1, 0, Math.Max(0, lines.Length - 1));
-        int endIndex = Math.Clamp(span.EndLine - 1, startIndex, Math.Max(0, lines.Length - 1));
+        var startIndex = Math.Clamp(span.StartLine - 1, 0, Math.Max(0, lines.Length - 1));
+        var endIndex = Math.Clamp(span.EndLine - 1, startIndex, Math.Max(0, lines.Length - 1));
 
         return string.Join('\n', lines[startIndex..(endIndex + 1)]);
     }

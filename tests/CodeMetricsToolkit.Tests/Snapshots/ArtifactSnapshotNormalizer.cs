@@ -41,7 +41,7 @@ internal static class ArtifactSnapshotNormalizer
 
     private static void NormalizeObject(JsonObject jsonObject)
     {
-        foreach (string propertyName in jsonObject.Select(property => property.Key).ToArray())
+        foreach (var propertyName in jsonObject.Select(property => property.Key).ToArray())
         {
             JsonNode? value = jsonObject[propertyName];
 
@@ -81,7 +81,7 @@ internal static class ArtifactSnapshotNormalizer
             return;
         }
 
-        string? sortProperty = firstObject.ContainsKey("id")
+        var sortProperty = firstObject.ContainsKey("id")
             ? "id"
             : firstObject.ContainsKey("targetId")
                 ? "targetId"

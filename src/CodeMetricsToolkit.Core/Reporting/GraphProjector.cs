@@ -1,4 +1,5 @@
 using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 
 namespace CodeMetricsToolkit.Core.Reporting;
@@ -9,9 +10,12 @@ public static class GraphProjector
     {
         ArgumentNullException.ThrowIfNull(facts);
 
-        IReadOnlyList<GraphNodeLine> nodes = facts.Files
+        GraphNodeLine[] nodes = facts.ProjectPaths
+            .Order(StringComparer.Ordinal)
+            .Select(CreateProjectNode)
+            .Concat(facts.Files
             .OrderBy(file => file.TargetId, StringComparer.Ordinal)
-            .Select(CreateFileNode)
+            .Select(CreateFileNode))
             .Concat(facts.Types
                 .OrderBy(type => type.TargetId, StringComparer.Ordinal)
                 .Select(CreateTypeNode))
@@ -20,14 +24,40 @@ public static class GraphProjector
                 .Select(CreateMemberNode))
             .ToArray();
 
-        IReadOnlyList<GraphEdgeLine> edges = facts.GraphEdges
+        GraphEdgeLine[] edges = CreateProjectFileEdges(facts)
+            .Concat(facts.GraphEdges.Select(edge =>
+                new GraphEdgeLine(edge.From, edge.To, edge.Kind, edge.Confidence)))
             .OrderBy(edge => edge.From, StringComparer.Ordinal)
             .ThenBy(edge => edge.Kind, StringComparer.Ordinal)
             .ThenBy(edge => edge.To, StringComparer.Ordinal)
-            .Select(edge => new GraphEdgeLine(edge.From, edge.To, edge.Kind, edge.Confidence))
             .ToArray();
 
         return new GraphArtifact(ContractVersion.Current, nodes, edges);
+    }
+
+    private static GraphNodeLine CreateProjectNode(string projectPath)
+    {
+        return new GraphNodeLine
+        {
+            Id = ProjectIdentity.TargetId(projectPath),
+            Kind = "project",
+            Name = Path.GetFileNameWithoutExtension(projectPath),
+            FilePath = projectPath
+        };
+    }
+
+    private static IEnumerable<GraphEdgeLine> CreateProjectFileEdges(SyntaxAnalysisFacts facts)
+    {
+        foreach (var projectPath in facts.ProjectPaths)
+        {
+            var projectKey = ProjectIdentity.Key(projectPath);
+            var projectTargetId = ProjectIdentity.TargetId(projectPath);
+
+            foreach (FileFacts file in facts.Files.Where(file => file.ProjectKey == projectKey))
+            {
+                yield return new GraphEdgeLine(projectTargetId, file.TargetId, "contains", "exact");
+            }
+        }
     }
 
     private static GraphNodeLine CreateFileNode(FileFacts file)

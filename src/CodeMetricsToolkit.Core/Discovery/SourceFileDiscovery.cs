@@ -2,6 +2,18 @@ namespace CodeMetricsToolkit.Core.Discovery;
 
 public static class SourceFileDiscovery
 {
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+
+    private static readonly EnumerationOptions EnumerationOptions = new()
+    {
+        AttributesToSkip = FileAttributes.ReparsePoint,
+        IgnoreInaccessible = false,
+        RecurseSubdirectories = false,
+        ReturnSpecialDirectories = false
+    };
+
     private static readonly string[] ExcludedDirectoryNames =
     [
         ".git",
@@ -22,11 +34,13 @@ public static class SourceFileDiscovery
         string inputPath,
         bool includeGeneratedCode,
         IReadOnlyList<string>? includePatterns = null,
-        IReadOnlyList<string>? excludePatterns = null)
+        IReadOnlyList<string>? excludePatterns = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
 
-        string rootPath = ResolveRootPath(inputPath);
+        InputSelection selection = ResolveInputSelection(inputPath);
+        var rootPath = selection.RootPath;
         var rootDirectory = new DirectoryInfo(rootPath);
         includePatterns ??= [];
         excludePatterns ??= [];
@@ -36,52 +50,298 @@ public static class SourceFileDiscovery
             throw new DirectoryNotFoundException($"Input path does not exist: {inputPath}");
         }
 
-        List<string> solutionPaths = EnumerateFiles(rootDirectory, "*.sln", includeGeneratedCode: true)
+        var solutionPaths = EnumerateFiles(
+                rootDirectory,
+                "*.sln",
+                includeGeneratedCode: true,
+                cancellationToken)
             .Select(file => ToRelativePath(rootPath, file.FullName))
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        List<string> projectPaths = EnumerateFiles(rootDirectory, "*.csproj", includeGeneratedCode: true)
+        var discoveredProjectPaths = EnumerateFiles(
+                rootDirectory,
+                "*.csproj",
+                includeGeneratedCode: true,
+                cancellationToken)
             .Select(file => ToRelativePath(rootPath, file.FullName))
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        List<DiscoveredSourceFile> sourceFiles = EnumerateFiles(rootDirectory, "*.cs", includeGeneratedCode)
+        List<string> projectPaths = SelectProjectPaths(
+            rootPath,
+            selection,
+            discoveredProjectPaths);
+
+        var sourceFiles = EnumerateFiles(
+                rootDirectory,
+                "*.cs",
+                includeGeneratedCode,
+                cancellationToken)
             .Where(file => ShouldIncludeSourceFile(rootPath, file.FullName, includePatterns, excludePatterns))
-            .Select(file => CreateSourceFile(rootPath, projectPaths, file.FullName))
+            .Select(file => CreateSourceFile(rootPath, discoveredProjectPaths, file.FullName))
+            .Where(file => IsInSelectedProjectScope(file, selection, projectPaths))
+            .Select(file => ReassignSelectedProject(file, selection))
             .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
             .ToList();
 
-        return new DiscoveredSources(rootPath, solutionPaths, projectPaths, sourceFiles);
+        return new DiscoveredSources(
+            rootPath,
+            solutionPaths,
+            projectPaths,
+            sourceFiles,
+            selection.SelectedSolutionPath,
+            selection.SelectedProjectPath);
     }
 
-    private static string ResolveRootPath(string inputPath)
+    internal static InputSelection ResolveInputSelection(string inputPath)
     {
-        string fullPath = Path.GetFullPath(inputPath);
+        var fullPath = Path.GetFullPath(inputPath);
 
         if (File.Exists(fullPath))
         {
-            return Path.GetDirectoryName(fullPath) ??
+            var rootPath = Path.GetDirectoryName(fullPath) ??
                 throw new DirectoryNotFoundException($"Could not resolve directory for {inputPath}");
+            var relativePath = Path.GetFileName(fullPath);
+
+            if (fullPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            {
+                List<string> referencedProjects = ReadSolutionProjectFullPaths(fullPath);
+                var solutionRoot = FindCommonSolutionRoot(rootPath, referencedProjects);
+                var selectedSolutionPath = ToRelativePath(solutionRoot, fullPath);
+
+                return new InputSelection(solutionRoot, selectedSolutionPath, null);
+            }
+
+            if (fullPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                return new InputSelection(rootPath, null, relativePath);
+            }
+
+            throw new ArgumentException(
+                "Input file must be a .sln or .csproj file; use its containing directory for a source tree.",
+                nameof(inputPath));
         }
 
-        return fullPath;
+        return new InputSelection(fullPath, null, null);
+    }
+
+    private static List<string> SelectProjectPaths(
+        string rootPath,
+        InputSelection selection,
+        IReadOnlyList<string> discoveredProjectPaths)
+    {
+        if (selection.SelectedProjectPath is not null)
+        {
+            return discoveredProjectPaths
+                .Where(path => string.Equals(
+                    path,
+                    selection.SelectedProjectPath,
+                    OperatingSystem.IsWindows()
+                        ? StringComparison.OrdinalIgnoreCase
+                        : StringComparison.Ordinal))
+                .ToList();
+        }
+
+        if (selection.SelectedSolutionPath is null)
+        {
+            return discoveredProjectPaths.ToList();
+        }
+
+        HashSet<string> solutionProjects = ReadSolutionProjectPaths(
+            rootPath,
+            selection.SelectedSolutionPath);
+
+        return discoveredProjectPaths
+            .Where(solutionProjects.Contains)
+            .ToList();
+    }
+
+    private static HashSet<string> ReadSolutionProjectPaths(
+        string rootPath,
+        string solutionPath)
+    {
+        var fullSolutionPath = Path.Combine(rootPath, solutionPath);
+        var projects = new HashSet<string>(PathComparer);
+
+        foreach (var projectFullPath in ReadSolutionProjectFullPaths(fullSolutionPath))
+        {
+            var relativePath = Path.GetRelativePath(rootPath, projectFullPath)
+                .Replace(Path.DirectorySeparatorChar, '/');
+
+            if (!string.Equals(relativePath, "..", StringComparison.Ordinal) &&
+                !relativePath.StartsWith("../", StringComparison.Ordinal))
+            {
+                projects.Add(relativePath);
+            }
+        }
+
+        return projects;
+    }
+
+    private static List<string> ReadSolutionProjectFullPaths(string fullSolutionPath)
+    {
+        var projectPathPattern = new System.Text.RegularExpressions.Regex(
+            "^Project\\([^)]*\\)\\s*=\\s*\"[^\"]*\",\\s*\"(?<path>[^\"]+\\.csproj)\"",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant |
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var projects = new List<string>();
+
+        foreach (var line in File.ReadLines(fullSolutionPath))
+        {
+            System.Text.RegularExpressions.Match match = projectPathPattern.Match(line);
+            if (match.Success)
+            {
+                projects.Add(Path.GetFullPath(
+                    match.Groups["path"].Value.Replace('\\', Path.DirectorySeparatorChar),
+                    Path.GetDirectoryName(fullSolutionPath)!));
+            }
+        }
+
+        return projects;
+    }
+
+    private static string FindCommonSolutionRoot(
+        string solutionDirectory,
+        List<string> projectPaths)
+    {
+        var commonRoot = Path.GetFullPath(solutionDirectory);
+
+        foreach (var projectPath in projectPaths)
+        {
+            var projectDirectory = Path.GetDirectoryName(projectPath)!;
+
+            while (!IsWithinDirectory(commonRoot, projectDirectory))
+            {
+                DirectoryInfo? parent = Directory.GetParent(commonRoot);
+                if (parent is null)
+                {
+                    throw new ArgumentException(
+                        "The solution references projects without a safe common analysis root.",
+                        nameof(projectPaths));
+                }
+
+                commonRoot = parent.FullName;
+            }
+        }
+
+        var filesystemRoot = Path.GetPathRoot(commonRoot)!;
+        if (projectPaths.Count > 0 &&
+            PathComparer.Equals(
+                Path.TrimEndingDirectorySeparator(commonRoot),
+                Path.TrimEndingDirectorySeparator(filesystemRoot)))
+        {
+            throw new ArgumentException(
+                "The solution references projects whose only common analysis root is the filesystem root.",
+                nameof(projectPaths));
+        }
+
+        if (!PathComparer.Equals(
+                Path.TrimEndingDirectorySeparator(commonRoot),
+                Path.TrimEndingDirectorySeparator(solutionDirectory)))
+        {
+            var repositoryBoundary = FindRepositoryBoundary(solutionDirectory);
+
+            if (repositoryBoundary is null || !IsWithinDirectory(repositoryBoundary, commonRoot))
+            {
+                throw new ArgumentException(
+                    "The solution references projects outside its directory without a recognized " +
+                    "repository boundary (.git, global.json, or Directory.Build.props). " +
+                    "Analyze the repository root directory instead.",
+                    nameof(projectPaths));
+            }
+        }
+
+        return commonRoot;
+    }
+
+    private static string? FindRepositoryBoundary(string startDirectory)
+    {
+        for (DirectoryInfo? directory = new(startDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, ".git")) ||
+                File.Exists(Path.Combine(directory.FullName, ".git")) ||
+                File.Exists(Path.Combine(directory.FullName, "global.json")) ||
+                File.Exists(Path.Combine(directory.FullName, "Directory.Build.props")))
+            {
+                return directory.FullName;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsWithinDirectory(string rootPath, string candidatePath)
+    {
+        var relativePath = Path.GetRelativePath(rootPath, candidatePath)
+            .Replace(Path.DirectorySeparatorChar, '/');
+
+        return !string.Equals(relativePath, "..", StringComparison.Ordinal) &&
+            !relativePath.StartsWith("../", StringComparison.Ordinal) &&
+            !Path.IsPathRooted(relativePath);
+    }
+
+    private static bool IsInSelectedProjectScope(
+        DiscoveredSourceFile sourceFile,
+        InputSelection selection,
+        IReadOnlyCollection<string> selectedProjectPaths)
+    {
+        if (selection.SelectedSolutionPath is null && selection.SelectedProjectPath is null)
+        {
+            return true;
+        }
+
+        if (selectedProjectPaths.Contains(sourceFile.ProjectPath, PathComparer))
+        {
+            return true;
+        }
+
+        return selection.SelectedProjectPath is not null &&
+            string.Equals(
+                Path.GetDirectoryName(sourceFile.ProjectPath),
+                Path.GetDirectoryName(selection.SelectedProjectPath),
+                OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal);
+    }
+
+    private static DiscoveredSourceFile ReassignSelectedProject(
+        DiscoveredSourceFile sourceFile,
+        InputSelection selection)
+    {
+        if (selection.SelectedProjectPath is null ||
+            PathComparer.Equals(sourceFile.ProjectPath, selection.SelectedProjectPath))
+        {
+            return sourceFile;
+        }
+
+        return sourceFile with
+        {
+            ProjectPath = selection.SelectedProjectPath,
+            ProjectKey = ProjectIdentity.Key(selection.SelectedProjectPath)
+        };
     }
 
     private static IEnumerable<FileInfo> EnumerateFiles(
         DirectoryInfo rootDirectory,
         string searchPattern,
-        bool includeGeneratedCode)
+        bool includeGeneratedCode,
+        CancellationToken cancellationToken)
     {
         var pending = new Stack<DirectoryInfo>();
         pending.Push(rootDirectory);
 
         while (pending.Count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             DirectoryInfo directory = pending.Pop();
 
-            foreach (DirectoryInfo childDirectory in directory.EnumerateDirectories())
+            foreach (DirectoryInfo childDirectory in directory.EnumerateDirectories("*", EnumerationOptions))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (ShouldSkipDirectory(childDirectory))
                 {
                     continue;
@@ -90,8 +350,10 @@ public static class SourceFileDiscovery
                 pending.Push(childDirectory);
             }
 
-            foreach (FileInfo file in directory.EnumerateFiles(searchPattern))
+            foreach (FileInfo file in directory.EnumerateFiles(searchPattern, EnumerationOptions))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (!includeGeneratedCode && IsGeneratedFile(file.Name))
                 {
                     continue;
@@ -119,19 +381,19 @@ public static class SourceFileDiscovery
         IReadOnlyList<string> includePatterns,
         IReadOnlyList<string> excludePatterns)
     {
-        string relativePath = ToRelativePath(rootPath, fullPath);
+        var relativePath = ToRelativePath(rootPath, fullPath);
 
-        bool included = includePatterns.Count == 0 ||
+        var included = includePatterns.Count == 0 ||
             includePatterns.Any(pattern => GlobMatches(pattern, relativePath));
-        bool excluded = excludePatterns.Any(pattern => GlobMatches(pattern, relativePath));
+        var excluded = excludePatterns.Any(pattern => GlobMatches(pattern, relativePath));
 
         return included && !excluded;
     }
 
     private static bool GlobMatches(string pattern, string relativePath)
     {
-        string normalizedPattern = pattern.Replace(Path.DirectorySeparatorChar, '/');
-        string normalizedPath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
+        var normalizedPattern = pattern.Replace(Path.DirectorySeparatorChar, '/');
+        var normalizedPath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
 
         if (GlobRegex(normalizedPattern).IsMatch(normalizedPath))
         {
@@ -151,13 +413,13 @@ public static class SourceFileDiscovery
         var builder = new System.Text.StringBuilder();
         builder.Append('^');
 
-        for (int index = 0; index < pattern.Length; index++)
+        for (var index = 0; index < pattern.Length; index++)
         {
-            char current = pattern[index];
+            var current = pattern[index];
 
             if (current == '*')
             {
-                bool isDoubleStar = index + 1 < pattern.Length && pattern[index + 1] == '*';
+                var isDoubleStar = index + 1 < pattern.Length && pattern[index + 1] == '*';
                 builder.Append(isDoubleStar ? ".*" : "[^/]*");
 
                 if (isDoubleStar)
@@ -187,29 +449,29 @@ public static class SourceFileDiscovery
         IReadOnlyList<string> projectPaths,
         string filePath)
     {
-        string relativePath = ToRelativePath(rootPath, filePath);
-        string projectPath = FindNearestProjectPath(relativePath, projectPaths) ?? rootPath;
+        var relativePath = ToRelativePath(rootPath, filePath);
+        var projectPath = FindNearestProjectPath(relativePath, projectPaths) ?? rootPath;
 
         return new DiscoveredSourceFile(
             filePath,
             relativePath,
             projectPath,
-            StableHash(projectPath));
+            ProjectIdentity.Key(projectPath));
     }
 
     private static string? FindNearestProjectPath(string relativeFilePath, IReadOnlyList<string> projectPaths)
     {
         string? bestProjectPath = null;
-        int bestLength = -1;
+        var bestLength = -1;
 
-        foreach (string projectPath in projectPaths)
+        foreach (var projectPath in projectPaths)
         {
-            string? projectDirectory = Path.GetDirectoryName(projectPath);
-            string normalizedDirectory = string.IsNullOrEmpty(projectDirectory)
+            var projectDirectory = Path.GetDirectoryName(projectPath);
+            var normalizedDirectory = string.IsNullOrEmpty(projectDirectory)
                 ? string.Empty
                 : projectDirectory.Replace(Path.DirectorySeparatorChar, '/');
 
-            bool isMatch = normalizedDirectory.Length == 0 ||
+            var isMatch = normalizedDirectory.Length == 0 ||
                 relativeFilePath.StartsWith(normalizedDirectory + "/", StringComparison.Ordinal);
 
             if (isMatch && normalizedDirectory.Length > bestLength)
@@ -228,23 +490,23 @@ public static class SourceFileDiscovery
             .Replace(Path.DirectorySeparatorChar, '/');
     }
 
-    private static string StableHash(string value)
-    {
-        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(value);
-        byte[] hash = System.Security.Cryptography.SHA256.HashData(bytes);
-
-        return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
-    }
 }
 
 public sealed record DiscoveredSources(
     string RootPath,
     IReadOnlyList<string> SolutionPaths,
     IReadOnlyList<string> ProjectPaths,
-    IReadOnlyList<DiscoveredSourceFile> SourceFiles);
+    IReadOnlyList<DiscoveredSourceFile> SourceFiles,
+    string? SelectedSolutionPath,
+    string? SelectedProjectPath);
 
 public sealed record DiscoveredSourceFile(
     string FullPath,
     string RelativePath,
     string ProjectPath,
     string ProjectKey);
+
+internal sealed record InputSelection(
+    string RootPath,
+    string? SelectedSolutionPath,
+    string? SelectedProjectPath);

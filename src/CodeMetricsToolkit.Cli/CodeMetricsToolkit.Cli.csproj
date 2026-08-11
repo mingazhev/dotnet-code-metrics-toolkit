@@ -1,16 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\CodeMetricsToolkit.Abstractions\CodeMetricsToolkit.Abstractions.csproj" />
     <ProjectReference Include="..\CodeMetricsToolkit.Core\CodeMetricsToolkit.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>codemetrics</ToolCommandName>
+    <PackageId>CodeMetricsToolkit.Tool</PackageId>
+    <Title>.NET Code Metrics Toolkit</Title>
+    <Authors>mingazhev</Authors>
+    <Description>Deterministic structural and semantic metrics for C# and .NET codebases.</Description>
+    <PackageTags>dotnet-tool;metrics;static-analysis;csharp;dotnet</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/mingazhev/dotnet-code-metrics-toolkit</RepositoryUrl>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
 </Project>

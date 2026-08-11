@@ -1,6 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
+using System.Text;
 using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Analysis;
+using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 
 namespace CodeMetricsToolkit.Core.Reporting;
@@ -20,9 +24,12 @@ public static class ArtifactWriter
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public static async Task WriteAsync(
+    public static Task WriteAsync(
         string outputPath,
         SyntaxAnalysisFacts facts,
+        string reportedRootPath,
+        AnalyzeRequest request,
+        DiscoveredSources sources,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots,
         bool includeChunkText,
@@ -31,20 +38,46 @@ public static class ArtifactWriter
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reportedRootPath);
         ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sources);
         ArgumentNullException.ThrowIfNull(metrics);
         ArgumentNullException.ThrowIfNull(hotspots);
 
-        Directory.CreateDirectory(outputPath);
+        return ArtifactDirectoryPublisher.PublishAsync(
+            outputPath,
+            (stagingPath, token) => WriteArtifactsAsync(
+                stagingPath,
+                facts,
+                reportedRootPath,
+                request,
+                sources,
+                metrics,
+                hotspots,
+                includeChunkText,
+                startedAt,
+                completedAt,
+                token),
+            cancellationToken);
+    }
 
-        await WriteJsonAsync(
-            Path.Combine(outputPath, ArtifactNames.Manifest),
-            CreateManifest(facts.RootPath, facts.Mode, startedAt, completedAt),
-            cancellationToken).ConfigureAwait(false);
-
+    private static async Task WriteArtifactsAsync(
+        string outputPath,
+        SyntaxAnalysisFacts facts,
+        string reportedRootPath,
+        AnalyzeRequest request,
+        DiscoveredSources sources,
+        IReadOnlyList<MetricResultLine> metrics,
+        IReadOnlyList<HotspotLine> hotspots,
+        bool includeChunkText,
+        DateTimeOffset startedAt,
+        DateTimeOffset completedAt,
+        CancellationToken cancellationToken)
+    {
         await WriteJsonAsync(
             Path.Combine(outputPath, ArtifactNames.Summary),
-            CreateSummary(facts, metrics, hotspots),
+            CreateSummary(facts, reportedRootPath, metrics, hotspots),
             cancellationToken).ConfigureAwait(false);
 
         await WriteNdjsonAsync(
@@ -66,25 +99,56 @@ public static class ArtifactWriter
             Path.Combine(outputPath, ArtifactNames.Diagnostics),
             facts.Diagnostics.Select(ToDiagnosticLine),
             cancellationToken).ConfigureAwait(false);
+
+        // The manifest is the completion marker and is deliberately written last.
+        await WriteJsonAsync(
+            Path.Combine(outputPath, ArtifactNames.Manifest),
+            CreateManifest(
+                reportedRootPath,
+                facts,
+                request,
+                sources,
+                startedAt,
+                completedAt),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static ManifestArtifact CreateManifest(
         string rootPath,
-        string mode,
+        SyntaxAnalysisFacts facts,
+        AnalyzeRequest request,
+        DiscoveredSources sources,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt)
     {
-        long durationMs = Math.Max(0, (long)(completedAt - startedAt).TotalMilliseconds);
+        var durationMs = Math.Max(0, (long)(completedAt - startedAt).TotalMilliseconds);
 
         return new ManifestArtifact(
             ContractVersion.Current,
-            "CodeMetricsToolkit",
-            "0.1.0",
+            ToolkitInfo.Name,
+            ToolkitInfo.Version,
             rootPath,
             startedAt,
             completedAt,
             durationMs,
-            mode,
+            facts.Mode,
+            new InputSelectionArtifact(
+                sources.SelectedSolutionPath is not null
+                    ? "solution"
+                    : sources.SelectedProjectPath is not null
+                        ? "project"
+                        : "directory",
+                sources.SelectedSolutionPath ?? sources.SelectedProjectPath,
+                SourcePopulationSha256(facts.Files),
+                new AnalysisOptionsArtifact(
+                    request.IncludePatterns.Order(StringComparer.Ordinal).ToArray(),
+                    request.ExcludePatterns.Order(StringComparer.Ordinal).ToArray(),
+                    request.IncludeGeneratedCode,
+                    request.IncludeChunkText,
+                    request.SyntaxOnly,
+                    request.NoRestore,
+                    request.IsolateInput,
+                    request.Top)),
             new ArtifactMap(
                 ArtifactNames.Summary,
                 ArtifactNames.Metrics,
@@ -93,14 +157,25 @@ public static class ArtifactWriter
                 ArtifactNames.Diagnostics));
     }
 
+    private static string SourcePopulationSha256(IReadOnlyList<FileFacts> files)
+    {
+        var population = string.Join(
+            '\n',
+            files.Select(file => file.FilePath).Order(StringComparer.Ordinal));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(population));
+
+        return "sha256:" + Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
     private static SummaryArtifact CreateSummary(
         SyntaxAnalysisFacts facts,
+        string reportedRootPath,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots)
     {
         return new SummaryArtifact(
             ContractVersion.Current,
-            facts.RootPath,
+            reportedRootPath,
             facts.ProjectPaths.Count,
             facts.Files.Count,
             facts.Types.Count,
@@ -130,9 +205,9 @@ public static class ArtifactWriter
         T value,
         CancellationToken cancellationToken)
     {
-        string json = JsonSerializer.Serialize(value, JsonOptions);
+        var json = JsonSerializer.Serialize(value, JsonOptions);
 
-        await File.WriteAllTextAsync(path, json + Environment.NewLine, cancellationToken)
+        await File.WriteAllTextAsync(path, json + "\n", cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -141,14 +216,15 @@ public static class ArtifactWriter
         IEnumerable<T> values,
         CancellationToken cancellationToken)
     {
-        await using var stream = File.Create(path);
+        await using FileStream stream = File.Create(path);
         await using var writer = new StreamWriter(stream);
+        writer.NewLine = "\n";
 
         foreach (T value in values)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string json = JsonSerializer.Serialize(value, NdjsonOptions);
+            var json = JsonSerializer.Serialize(value, NdjsonOptions);
             await writer.WriteLineAsync(json).ConfigureAwait(false);
         }
     }
@@ -162,7 +238,24 @@ public static class ArtifactWriter
         DateTimeOffset CompletedAt,
         long DurationMs,
         string Mode,
+        InputSelectionArtifact Input,
         ArtifactMap Artifacts);
+
+    private sealed record InputSelectionArtifact(
+        string Kind,
+        string? SelectedPath,
+        string SourcePopulationSha256,
+        AnalysisOptionsArtifact Options);
+
+    private sealed record AnalysisOptionsArtifact(
+        IReadOnlyList<string> IncludePatterns,
+        IReadOnlyList<string> ExcludePatterns,
+        bool IncludeGeneratedCode,
+        bool IncludeChunkText,
+        bool SyntaxOnly,
+        bool NoRestore,
+        bool IsolateInput,
+        int Top);
 
     private sealed record ArtifactMap(
         string Summary,

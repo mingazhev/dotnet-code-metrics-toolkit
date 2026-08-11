@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Optional, policy-driven scoring of CodeMetricsToolkit analysis artifacts.</Description>
+    <IsPackable>true</IsPackable>
+    <PackageId>CodeMetricsToolkit.Scoring</PackageId>
+    <Title>.NET Code Metrics Toolkit Scoring</Title>
+    <Authors>mingazhev</Authors>
+    <PackageTags>metrics;scoring;quality-gates;csharp;dotnet</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/mingazhev/dotnet-code-metrics-toolkit</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="Schemas\scoring-profile.schema.json" Pack="true" PackagePath="schemas/" />
+  </ItemGroup>
+
+</Project>

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Json.Schema;
 
@@ -6,19 +5,15 @@ namespace CodeMetricsToolkit.Tests.SchemaValidation;
 
 internal static class SchemaAssertions
 {
-    private static readonly ConcurrentDictionary<string, JsonSchema> SchemaCache = new(StringComparer.Ordinal);
-
-    private static readonly EvaluationOptions ValidationOptions = new()
-    {
-        OutputFormat = OutputFormat.List
-    };
+    private static readonly Lazy<Dictionary<string, JsonSchema>> Schemas =
+        new(LoadSchemas, LazyThreadSafetyMode.ExecutionAndPublication);
 
     public static void JsonFileValidates(string schemaFileName, string artifactPath)
     {
         JsonSchema schema = LoadSchema(schemaFileName);
         using var document = JsonDocument.Parse(File.ReadAllText(artifactPath));
 
-        EvaluationResults results = schema.Evaluate(document.RootElement, ValidationOptions);
+        EvaluationResults results = schema.Evaluate(document.RootElement, CreateValidationOptions());
 
         Assert.True(results.IsValid, FormatErrors(results));
     }
@@ -28,7 +23,7 @@ internal static class SchemaAssertions
         JsonSchema schema = LoadSchema(schemaFileName);
         using var document = JsonDocument.Parse(File.ReadAllText(artifactPath));
 
-        EvaluationResults results = schema.Evaluate(document.RootElement, ValidationOptions);
+        EvaluationResults results = schema.Evaluate(document.RootElement, CreateValidationOptions());
 
         Assert.False(results.IsValid);
     }
@@ -39,7 +34,7 @@ internal static class SchemaAssertions
 
         foreach (JsonElement line in LoadNdjsonElements(artifactPath))
         {
-            EvaluationResults results = schema.Evaluate(line, ValidationOptions);
+            EvaluationResults results = schema.Evaluate(line, CreateValidationOptions());
 
             Assert.True(results.IsValid, FormatErrors(results));
         }
@@ -50,7 +45,7 @@ internal static class SchemaAssertions
         JsonSchema schema = LoadSchema(schemaFileName);
         JsonElement instance = LoadNdjsonElements(artifactPath).Single();
 
-        EvaluationResults results = schema.Evaluate(instance, ValidationOptions);
+        EvaluationResults results = schema.Evaluate(instance, CreateValidationOptions());
 
         Assert.False(results.IsValid);
     }
@@ -84,19 +79,38 @@ internal static class SchemaAssertions
 
     private static JsonSchema LoadSchema(string fileName)
     {
-        return SchemaCache.GetOrAdd(fileName, static cachedFileName =>
-        {
-            string path = Path.Combine(RepositoryRoot(), "schemas", cachedFileName);
+        return Schemas.Value.TryGetValue(fileName, out JsonSchema? schema)
+            ? schema
+            : throw new InvalidOperationException($"Schema '{fileName}' was not found.");
+    }
 
-            return JsonSchema.FromText(File.ReadAllText(path));
-        });
+    private static Dictionary<string, JsonSchema> LoadSchemas()
+    {
+        var schemaDirectory = Path.Combine(RepositoryRoot(), "schemas");
+        var schemas = new Dictionary<string, JsonSchema>(StringComparer.Ordinal);
+        var buildOptions = new BuildOptions { SchemaRegistry = new SchemaRegistry() };
+
+        foreach (var path in Directory.EnumerateFiles(schemaDirectory, "*.schema.json")
+                     .Order(StringComparer.Ordinal))
+        {
+            var fileName = Path.GetFileName(path);
+
+            schemas.Add(fileName, JsonSchema.FromText(File.ReadAllText(path), buildOptions));
+        }
+
+        return schemas;
+    }
+
+    private static EvaluationOptions CreateValidationOptions()
+    {
+        return new EvaluationOptions { OutputFormat = OutputFormat.List };
     }
 
     private static List<JsonElement> LoadNdjsonElements(string artifactPath)
     {
         var elements = new List<JsonElement>();
 
-        foreach (string line in File.ReadLines(artifactPath))
+        foreach (var line in File.ReadLines(artifactPath))
         {
             if (string.IsNullOrWhiteSpace(line))
             {
@@ -112,7 +126,7 @@ internal static class SchemaAssertions
 
     private static string FormatErrors(EvaluationResults results)
     {
-        IReadOnlyDictionary<string, string>? errors = results.Errors;
+        Dictionary<string, string>? errors = results.Errors;
 
         if (errors is null || errors.Count == 0)
         {

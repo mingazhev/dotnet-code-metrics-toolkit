@@ -21,7 +21,8 @@ public static class SyntaxFactsCollector
         DiscoveredSources sources,
         bool useSemantic,
         bool noRestore,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? semanticInitializationFailure = null)
     {
         ArgumentNullException.ThrowIfNull(sources);
 
@@ -30,7 +31,8 @@ public static class SyntaxFactsCollector
         SemanticLoadResult semanticLoad = useSemantic
             ? await CreateSemanticContextsAsync(sources, noRestore, diagnostics, diagnosticKeys, cancellationToken)
                 .ConfigureAwait(false)
-            : SemanticLoadResult.SyntaxOnly("Syntax-only analysis was requested.");
+            : SemanticLoadResult.SyntaxOnly(
+                semanticInitializationFailure ?? "Syntax-only analysis was requested.");
         List<SourceFileContext> sourceFiles = await ParseSourceFilesAsync(
                 sources.SourceFiles,
                 semanticLoad.Contexts,
@@ -71,7 +73,7 @@ public static class SyntaxFactsCollector
         return new SyntaxAnalysisFacts
         {
             Mode = DetermineMode(typeDeclarations, memberDeclarations),
-            Health = CreateHealth(useSemantic, semanticLoad),
+            Health = CreateHealth(useSemantic, semanticLoad, semanticInitializationFailure),
             RootPath = sources.RootPath,
             ProjectPaths = sources.ProjectPaths,
             Files = files,
@@ -159,12 +161,12 @@ public static class SyntaxFactsCollector
 
         try
         {
-            using MSBuildWorkspace workspace = MSBuildWorkspace.Create(CreateWorkspaceProperties());
+            using var workspace = MSBuildWorkspace.Create(CreateWorkspaceProperties());
             workspace.SkipUnrecognizedProjects = true;
             workspace.LoadMetadataForReferencedProjects = false;
 
             var workspaceDiagnostics = new List<WorkspaceDiagnostic>();
-            workspace.WorkspaceFailed += (_, args) => workspaceDiagnostics.Add(args.Diagnostic);
+            workspace.RegisterWorkspaceFailedHandler(args => workspaceDiagnostics.Add(args.Diagnostic));
 
             Solution solution = await LoadWorkspaceSolutionAsync(sources, workspace, cancellationToken).ConfigureAwait(false);
             IReadOnlySet<string> includedSourcePaths = sources.SourceFiles
@@ -179,13 +181,41 @@ public static class SyntaxFactsCollector
                     diagnosticKeys,
                     cancellationToken)
                 .ConfigureAwait(false);
+            var coveredSourceCount = sources.SourceFiles.Count(source =>
+                contexts.TryGetValue(source.ProjectPath, out ProjectSemanticContext? context) &&
+                context.SyntaxTreesByFullPath.ContainsKey(NormalizeFullPath(source.FullPath)));
+            var externalWorkspaceSources = contexts.Values
+                .SelectMany(context => context.SyntaxTreesByFullPath.Keys)
+                .Where(path => !IsWithinRoot(sources.RootPath, path))
+                .Where(path => !IsGeneratedWorkspaceSource(path))
+                .Distinct(OperatingSystem.IsWindows()
+                    ? StringComparer.OrdinalIgnoreCase
+                    : StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var hasCompleteSemanticCoverage = coveredSourceCount == sources.SourceFiles.Count &&
+                externalWorkspaceSources.Length == 0;
+
+            if (!hasCompleteSemanticCoverage)
+            {
+                messages.Add(
+                    $"Semantic analysis covered {coveredSourceCount} of {sources.SourceFiles.Count} discovered source files; " +
+                    "compiler diagnostics and semantic metrics are not trusted for the complete input scope.");
+            }
+
+            if (externalWorkspaceSources.Length > 0)
+            {
+                messages.Add(
+                    $"MSBuildWorkspace loaded {externalWorkspaceSources.Length} authored source file(s) outside " +
+                    "the analysis root; linked external sources are not included and semantic results are not trusted.");
+            }
 
             foreach (WorkspaceDiagnostic workspaceDiagnostic in workspaceDiagnostics)
             {
                 AddDiagnostic(diagnostics, diagnosticKeys, ToWorkspaceDiagnostic(workspaceDiagnostic));
             }
 
-            bool workspaceHadFailures = workspaceDiagnostics.Any(diagnostic => diagnostic.Kind == WorkspaceDiagnosticKind.Failure);
+            var workspaceHadFailures = workspaceDiagnostics.Any(diagnostic => diagnostic.Kind == WorkspaceDiagnosticKind.Failure);
             if (workspaceHadFailures)
             {
                 AddProjectLoadFailureDiagnostics(
@@ -205,7 +235,10 @@ public static class SyntaxFactsCollector
                 contexts,
                 contexts.Count == 0 ? "not_available" : "msbuild",
                 restore.Status,
-                TrustDiagnostics: contexts.Count > 0 && !workspaceHadFailures && restore.Status != "failed",
+                TrustDiagnostics: contexts.Count > 0 &&
+                    hasCompleteSemanticCoverage &&
+                    !workspaceHadFailures &&
+                    restore.Status != "failed",
                 WorkspaceHadFailures: workspaceHadFailures,
                 messages);
         }
@@ -237,15 +270,15 @@ public static class SyntaxFactsCollector
         MSBuildWorkspace workspace,
         CancellationToken cancellationToken)
     {
-        if (sources.SolutionPaths.Count == 1)
+        if (sources.SelectedSolutionPath is not null)
         {
             return await workspace.OpenSolutionAsync(
-                    Path.Combine(sources.RootPath, sources.SolutionPaths[0]),
+                    Path.Combine(sources.RootPath, sources.SelectedSolutionPath),
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        foreach (string projectPath in sources.ProjectPaths)
+        foreach (var projectPath in sources.ProjectPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -273,7 +306,7 @@ public static class SyntaxFactsCollector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string? projectRelativePath = ToRelativeProjectPath(rootPath, project.FilePath);
+            var projectRelativePath = ToRelativeProjectPath(rootPath, project.FilePath);
             if (projectRelativePath is null)
             {
                 continue;
@@ -285,7 +318,7 @@ public static class SyntaxFactsCollector
                 continue;
             }
 
-            Dictionary<string, SyntaxTree> syntaxTreesByFullPath = csharpCompilation.SyntaxTrees
+            var syntaxTreesByFullPath = csharpCompilation.SyntaxTrees
                 .Where(tree => !string.IsNullOrWhiteSpace(tree.FilePath))
                 .GroupBy(tree => NormalizeFullPath(tree.FilePath), StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
@@ -320,15 +353,15 @@ public static class SyntaxFactsCollector
             return new RestoreResult("not_run", ["Restore was skipped because --no-restore was specified."]);
         }
 
-        IReadOnlyList<string> targetPaths = SelectRestoreTargets(sources);
-        if (targetPaths.Count == 0)
+        var targetPaths = SelectRestoreTargets(sources);
+        if (targetPaths.Length == 0)
         {
             return new RestoreResult("not_run", ["Restore was skipped because no solution or project file was discovered."]);
         }
 
         var messages = new List<string>();
 
-        foreach (string targetPath in targetPaths)
+        foreach (var targetPath in targetPaths)
         {
             ProcessResult result = await RunProcessAsync(
                     "dotnet",
@@ -351,9 +384,9 @@ public static class SyntaxFactsCollector
 
     private static string[] SelectRestoreTargets(DiscoveredSources sources)
     {
-        if (sources.SolutionPaths.Count == 1)
+        if (sources.SelectedSolutionPath is not null)
         {
-            return [Path.Combine(sources.RootPath, sources.SolutionPaths[0])];
+            return [Path.Combine(sources.RootPath, sources.SelectedSolutionPath)];
         }
 
         return sources.ProjectPaths
@@ -379,15 +412,29 @@ public static class SyntaxFactsCollector
             }
         };
 
-        foreach (string argument in arguments)
+        foreach (var argument in arguments)
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         process.Start();
-        Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        Task<string> error = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        Task<string> output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        Task<string> error = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        using CancellationTokenRegistration cancellationRegistration = cancellationToken.Register(
+            static state => TryKillProcessTree((Process)state!),
+            process);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcessTree(process);
+            await ObserveCanceledProcessAsync(process, output, error).ConfigureAwait(false);
+            throw;
+        }
 
         return new ProcessResult(
             process.ExitCode,
@@ -395,12 +442,55 @@ public static class SyntaxFactsCollector
             await error.ConfigureAwait(false));
     }
 
+    private static void TryKillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between the HasExited check and Kill.
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // Cancellation still propagates if the operating system denies the kill request.
+        }
+    }
+
+    private static async Task ObserveCanceledProcessAsync(
+        Process process,
+        Task<string> output,
+        Task<string> error)
+    {
+        try
+        {
+            await Task.WhenAll(
+                    process.WaitForExitAsync(CancellationToken.None),
+                    output,
+                    error)
+                .WaitAsync(TimeSpan.FromSeconds(5))
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is
+            IOException or
+            InvalidOperationException or
+            ObjectDisposedException or
+            TimeoutException)
+        {
+            // Best-effort cleanup must not replace the original cancellation exception.
+        }
+    }
+
     private static string TrimProcessOutput(ProcessResult result)
     {
-        string text = string.IsNullOrWhiteSpace(result.StandardError)
+        var text = string.IsNullOrWhiteSpace(result.StandardError)
             ? result.StandardOutput
             : result.StandardError;
-        string flattened = string.Join(" ", text
+        var flattened = string.Join(" ", text
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Take(4));
 
@@ -413,9 +503,9 @@ public static class SyntaxFactsCollector
 
         for (DirectoryInfo? directory = root.Parent; directory is not null; directory = directory.Parent)
         {
-            foreach (string fileName in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "NuGet.config", "nuget.config" })
+            foreach (var fileName in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "NuGet.config", "nuget.config" })
             {
-                string candidate = Path.Combine(directory.FullName, fileName);
+                var candidate = Path.Combine(directory.FullName, fileName);
                 if (File.Exists(candidate))
                 {
                     yield return $"Ambient MSBuild/NuGet file outside analyzed root may affect project evaluation: {candidate}";
@@ -430,7 +520,7 @@ public static class SyntaxFactsCollector
         HashSet<string> diagnosticKeys,
         string message)
     {
-        foreach (string projectPath in sources.ProjectPaths.DefaultIfEmpty(sources.RootPath))
+        foreach (var projectPath in sources.ProjectPaths.DefaultIfEmpty(sources.RootPath))
         {
             AddDiagnostic(diagnostics, diagnosticKeys, new AnalysisDiagnostic
             {
@@ -461,14 +551,17 @@ public static class SyntaxFactsCollector
         };
     }
 
-    private static AnalysisHealth CreateHealth(bool useSemantic, SemanticLoadResult semanticLoad)
+    private static AnalysisHealth CreateHealth(
+        bool useSemantic,
+        SemanticLoadResult semanticLoad,
+        string? semanticInitializationFailure)
     {
         if (!useSemantic)
         {
             return new AnalysisHealth
             {
-                AnalysisQuality = "syntax_only",
-                SemanticModel = "none",
+                AnalysisQuality = semanticInitializationFailure is null ? "syntax_only" : "degraded",
+                SemanticModel = semanticInitializationFailure is null ? "none" : "not_available",
                 RestoreStatus = "not_run",
                 BuildStatus = "not_run",
                 TrustedDiagnostics = false,
@@ -477,7 +570,7 @@ public static class SyntaxFactsCollector
             };
         }
 
-        bool trusted = semanticLoad.TrustDiagnostics;
+        var trusted = semanticLoad.TrustDiagnostics;
 
         return new AnalysisHealth
         {
@@ -498,16 +591,39 @@ public static class SyntaxFactsCollector
             return null;
         }
 
-        string relativePath = Path.GetRelativePath(rootPath, projectPath)
+        var relativePath = Path.GetRelativePath(rootPath, projectPath)
             .Replace(Path.DirectorySeparatorChar, '/');
 
-        return relativePath.StartsWith("..", StringComparison.Ordinal) ? null : relativePath;
+        return string.Equals(relativePath, "..", StringComparison.Ordinal) ||
+            relativePath.StartsWith("../", StringComparison.Ordinal)
+                ? null
+                : relativePath;
     }
 
     private static string NormalizeFullPath(string path)
     {
         return Path.GetFullPath(path)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool IsWithinRoot(string rootPath, string candidatePath)
+    {
+        var relativePath = Path.GetRelativePath(rootPath, candidatePath)
+            .Replace(Path.DirectorySeparatorChar, '/');
+
+        return !string.Equals(relativePath, "..", StringComparison.Ordinal) &&
+            !relativePath.StartsWith("../", StringComparison.Ordinal) &&
+            !Path.IsPathRooted(relativePath);
+    }
+
+    private static bool IsGeneratedWorkspaceSource(string path)
+    {
+        var fileName = Path.GetFileName(path);
+
+        return fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(fileName, "AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AddCompilationDiagnostics(
@@ -558,12 +674,12 @@ public static class SyntaxFactsCollector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            bool treeBelongsToCompilation = semanticContexts.TryGetValue(context.SourceFile.ProjectPath, out ProjectSemanticContext? project) &&
+            var treeBelongsToCompilation = semanticContexts.TryGetValue(context.SourceFile.ProjectPath, out ProjectSemanticContext? project) &&
                 project.SyntaxTreesByFullPath.ContainsKey(NormalizeFullPath(context.SyntaxTree.FilePath));
             SemanticModel? semanticModel = treeBelongsToCompilation
                 ? project!.Compilation.GetSemanticModel(context.SyntaxTree, ignoreAccessibility: true)
                 : null;
-            string assemblyName = project?.AssemblyName ?? ResolveAssemblyName(context.SourceFile.ProjectPath);
+            var assemblyName = project?.AssemblyName ?? ResolveAssemblyName(context.SourceFile.ProjectPath);
 
             foreach (BaseTypeDeclarationSyntax typeDeclaration in context.Root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
             {
@@ -585,14 +701,14 @@ public static class SyntaxFactsCollector
         string fallbackAssemblyName)
     {
         INamedTypeSymbol? symbol = semanticModel?.GetDeclaredSymbol(typeDeclaration);
-        string fallbackName = BuildQualifiedTypeName(typeDeclaration);
-        string name = symbol?.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) ?? fallbackName;
-        string? documentationCommentId = GetDocumentationCommentId(symbol);
-        string assemblyName = symbol?.ContainingAssembly?.Name ?? fallbackAssemblyName;
-        string targetId = documentationCommentId is null || symbol is null
+        var fallbackName = BuildQualifiedTypeName(typeDeclaration);
+        var name = symbol?.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) ?? fallbackName;
+        var documentationCommentId = GetDocumentationCommentId(symbol);
+        var assemblyName = symbol?.ContainingAssembly?.Name ?? fallbackAssemblyName;
+        var targetId = documentationCommentId is null || symbol is null
             ? TargetIds.Type(context.SourceFile.ProjectKey, fallbackName, context.SourceFile.RelativePath)
             : TargetIds.TypeSemantic(assemblyName, documentationCommentId);
-        string targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
+        var targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
         TextSpan span = typeDeclaration.Span;
         FileLinePositionSpan lineSpan = context.SyntaxTree.GetLineSpan(span);
 
@@ -656,7 +772,7 @@ public static class SyntaxFactsCollector
 
     private static List<MemberDeclarationInfo> CollectMemberDeclarations(
         IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
-        IReadOnlyDictionary<string, TypeFacts> typeFactsById,
+        Dictionary<string, TypeFacts> typeFactsById,
         CancellationToken cancellationToken)
     {
         var memberDeclarations = new List<MemberDeclarationInfo>();
@@ -689,14 +805,14 @@ public static class SyntaxFactsCollector
         CancellationToken cancellationToken)
     {
         ISymbol? symbol = GetDeclaredSymbol(memberDeclaration, semanticModel);
-        string memberName = GetMemberName(memberDeclaration);
-        int parameterCount = GetParameterCount(memberDeclaration);
+        var memberName = GetMemberName(memberDeclaration);
+        var parameterCount = GetParameterCount(memberDeclaration);
         FileLinePositionSpan lineSpan = context.SyntaxTree.GetLineSpan(memberDeclaration.Span, cancellationToken);
-        int startLine = ToOneBasedLine(lineSpan.StartLinePosition.Line);
-        int endLine = ToOneBasedLine(lineSpan.EndLinePosition.Line);
-        string? documentationCommentId = GetDocumentationCommentId(symbol);
-        string assemblyName = symbol?.ContainingAssembly?.Name ?? ResolveAssemblyName(context.SourceFile.ProjectPath);
-        string targetId = documentationCommentId is null || symbol is null
+        var startLine = ToOneBasedLine(lineSpan.StartLinePosition.Line);
+        var endLine = ToOneBasedLine(lineSpan.EndLinePosition.Line);
+        var documentationCommentId = GetDocumentationCommentId(symbol);
+        var assemblyName = symbol?.ContainingAssembly?.Name ?? ResolveAssemblyName(context.SourceFile.ProjectPath);
+        var targetId = documentationCommentId is null || symbol is null
             ? TargetIds.Member(
                 context.SourceFile.ProjectKey,
                 parentType.Name,
@@ -705,7 +821,7 @@ public static class SyntaxFactsCollector
                 context.SourceFile.RelativePath,
                 startLine)
             : TargetIds.MemberSemantic(assemblyName, documentationCommentId);
-        string targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
+        var targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
         ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration, cancellationToken);
 
         return new MemberDeclarationInfo(
@@ -774,12 +890,12 @@ public static class SyntaxFactsCollector
     private static GraphEdgeFacts[] CreateGraphEdges(
         IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
         IReadOnlyList<MemberDeclarationInfo> memberDeclarations,
-        IReadOnlyDictionary<string, MemberFacts> memberFactsById,
+        Dictionary<string, MemberFacts> memberFactsById,
         CancellationToken cancellationToken)
     {
         var edges = new List<GraphEdgeFacts>();
         var seenEdges = new HashSet<string>(StringComparer.Ordinal);
-        Dictionary<string, string> typeTargetsBySymbol = typeDeclarations
+        var typeTargetsBySymbol = typeDeclarations
             .Select(declaration => new
             {
                 Key = GetSymbolMapKey(declaration.Symbol),
@@ -788,7 +904,7 @@ public static class SyntaxFactsCollector
             .Where(entry => entry.Key is not null)
             .GroupBy(entry => entry.Key!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().TargetId, StringComparer.Ordinal);
-        Dictionary<string, string> memberTargetsBySymbol = memberDeclarations
+        var memberTargetsBySymbol = memberDeclarations
             .Select(declaration => new
             {
                 Key = GetSymbolMapKey(declaration.Symbol),
@@ -815,7 +931,7 @@ public static class SyntaxFactsCollector
                 continue;
             }
 
-            if (TryGetTypeTarget(typeDeclaration.Symbol.BaseType, typeTargetsBySymbol, out string? baseTypeTargetId) &&
+            if (TryGetTypeTarget(typeDeclaration.Symbol.BaseType, typeTargetsBySymbol, out var baseTypeTargetId) &&
                 !IsObject(typeDeclaration.Symbol.BaseType))
             {
                 AddEdge(edges, seenEdges, typeDeclaration.TargetId, baseTypeTargetId, "inherits", "exact");
@@ -823,7 +939,7 @@ public static class SyntaxFactsCollector
 
             foreach (INamedTypeSymbol interfaceSymbol in typeDeclaration.Symbol.Interfaces)
             {
-                if (TryGetTypeTarget(interfaceSymbol, typeTargetsBySymbol, out string? interfaceTargetId))
+                if (TryGetTypeTarget(interfaceSymbol, typeTargetsBySymbol, out var interfaceTargetId))
                 {
                     AddEdge(edges, seenEdges, typeDeclaration.TargetId, interfaceTargetId, "implements", "exact");
                 }
@@ -872,7 +988,7 @@ public static class SyntaxFactsCollector
             cancellationToken.ThrowIfCancellationRequested();
 
             ITypeSymbol? type = memberDeclaration.SemanticModel!.GetTypeInfo(typeSyntax, cancellationToken).Type;
-            if (TryGetTypeTarget(type, typeTargetsBySymbol, out string? typeTargetId) &&
+            if (TryGetTypeTarget(type, typeTargetsBySymbol, out var typeTargetId) &&
                 typeTargetId != member.ParentTypeTargetId)
             {
                 AddEdge(edges, seenEdges, member.TargetId, typeTargetId, "uses_type", "exact");
@@ -893,7 +1009,7 @@ public static class SyntaxFactsCollector
             cancellationToken.ThrowIfCancellationRequested();
 
             ISymbol? symbol = memberDeclaration.SemanticModel!.GetSymbolInfo(invocation, cancellationToken).Symbol;
-            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out string? targetId) && targetId != member.TargetId)
+            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId) && targetId != member.TargetId)
             {
                 AddEdge(edges, seenEdges, member.TargetId, targetId, "calls", "exact");
             }
@@ -904,7 +1020,7 @@ public static class SyntaxFactsCollector
             cancellationToken.ThrowIfCancellationRequested();
 
             ISymbol? symbol = memberDeclaration.SemanticModel!.GetSymbolInfo(objectCreation, cancellationToken).Symbol;
-            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out string? targetId) && targetId != member.TargetId)
+            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId) && targetId != member.TargetId)
             {
                 AddEdge(edges, seenEdges, member.TargetId, targetId, "calls", "exact");
             }
@@ -919,7 +1035,7 @@ public static class SyntaxFactsCollector
         string kind,
         string confidence)
     {
-        string key = $"{from}\n{to}\n{kind}\n{confidence}";
+        var key = $"{from}\n{to}\n{kind}\n{confidence}";
 
         if (seenEdges.Add(key))
         {
@@ -952,7 +1068,7 @@ public static class SyntaxFactsCollector
 
     private static PortableExecutableReference[] CreateDefaultReferences()
     {
-        string? trustedPlatformAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
+        var trustedPlatformAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
 
         if (string.IsNullOrWhiteSpace(trustedPlatformAssemblies))
         {
@@ -974,7 +1090,7 @@ public static class SyntaxFactsCollector
             return Path.GetFileNameWithoutExtension(projectPath);
         }
 
-        string directoryName = Path.GetFileName(projectPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var directoryName = Path.GetFileName(projectPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
         return string.IsNullOrWhiteSpace(directoryName) ? "CodeMetricsProject" : directoryName;
     }
@@ -1016,7 +1132,7 @@ public static class SyntaxFactsCollector
 
     private static string GetTypeName(BaseTypeDeclarationSyntax declaration)
     {
-        string name = declaration.Identifier.ValueText;
+        var name = declaration.Identifier.ValueText;
 
         if (declaration is TypeDeclarationSyntax typeDeclaration && typeDeclaration.TypeParameterList is not null)
         {
@@ -1101,7 +1217,7 @@ public static class SyntaxFactsCollector
 
     private static int CountTokenLines(TextSpan span, SyntaxNode root, SyntaxTree syntaxTree)
     {
-        HashSet<int> tokenLines = root
+        var tokenLines = root
             .DescendantTokens(span)
             .Where(token => token.Span.Length > 0)
             .Select(token => syntaxTree.GetLineSpan(token.Span).StartLinePosition.Line)
@@ -1138,7 +1254,7 @@ public static class SyntaxFactsCollector
         Diagnostic diagnostic)
     {
         FileLinePositionSpan lineSpan = diagnostic.Location.GetLineSpan();
-        string? filePath = diagnostic.Location.SourceTree?.FilePath is { Length: > 0 } fullPath
+        var filePath = diagnostic.Location.SourceTree?.FilePath is { Length: > 0 } fullPath
             ? Path.GetRelativePath(rootPath, fullPath).Replace(Path.DirectorySeparatorChar, '/')
             : null;
         int? startLine = diagnostic.Location.IsInSource
@@ -1187,7 +1303,7 @@ public static class SyntaxFactsCollector
         HashSet<string> diagnosticKeys,
         AnalysisDiagnostic diagnostic)
     {
-        string key = DiagnosticKey(diagnostic);
+        var key = DiagnosticKey(diagnostic);
 
         if (diagnosticKeys.Add(key))
         {
@@ -1195,7 +1311,7 @@ public static class SyntaxFactsCollector
             return;
         }
 
-        for (int index = 0; index < diagnostics.Count; index++)
+        for (var index = 0; index < diagnostics.Count; index++)
         {
             AnalysisDiagnostic existing = diagnostics[index];
             if (!string.Equals(DiagnosticKey(existing), key, StringComparison.Ordinal))
@@ -1203,7 +1319,7 @@ public static class SyntaxFactsCollector
                 continue;
             }
 
-            string[]? tags = MergeTags(existing.Tags, diagnostic.Tags);
+            var tags = MergeTags(existing.Tags, diagnostic.Tags);
             diagnostics[index] = existing with { Tags = tags };
             return;
         }
@@ -1218,7 +1334,7 @@ public static class SyntaxFactsCollector
 
     private static string[]? MergeTags(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
     {
-        string[] tags = (left ?? [])
+        var tags = (left ?? [])
             .Concat(right ?? [])
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
@@ -1242,9 +1358,9 @@ public static class SyntaxFactsCollector
         IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
         IReadOnlyList<MemberDeclarationInfo> memberDeclarations)
     {
-        bool hasSemanticIds = typeDeclarations.Any(declaration => declaration.TargetIdStability == SemanticStability) ||
+        var hasSemanticIds = typeDeclarations.Any(declaration => declaration.TargetIdStability == SemanticStability) ||
             memberDeclarations.Any(declaration => declaration.TargetIdStability == SemanticStability);
-        bool hasFallbackIds = typeDeclarations.Any(declaration => declaration.TargetIdStability != SemanticStability) ||
+        var hasFallbackIds = typeDeclarations.Any(declaration => declaration.TargetIdStability != SemanticStability) ||
             memberDeclarations.Any(declaration => declaration.TargetIdStability != SemanticStability);
 
         return hasSemanticIds switch
@@ -1267,8 +1383,8 @@ public static class SyntaxFactsCollector
             return null;
         }
 
-        string? documentationCommentId = GetDocumentationCommentId(symbol);
-        string? assemblyName = symbol.OriginalDefinition.ContainingAssembly?.Name;
+        var documentationCommentId = GetDocumentationCommentId(symbol);
+        var assemblyName = symbol.OriginalDefinition.ContainingAssembly?.Name;
 
         return documentationCommentId is null || assemblyName is null
             ? null
@@ -1288,7 +1404,7 @@ public static class SyntaxFactsCollector
             return false;
         }
 
-        string? key = GetSymbolMapKey(namedType.OriginalDefinition);
+        var key = GetSymbolMapKey(namedType.OriginalDefinition);
 
         return key is not null && typeTargetsBySymbol.TryGetValue(key, out targetId);
     }
@@ -1306,7 +1422,7 @@ public static class SyntaxFactsCollector
             return false;
         }
 
-        string? key = GetSymbolMapKey(symbol.OriginalDefinition);
+        var key = GetSymbolMapKey(symbol.OriginalDefinition);
 
         return key is not null && memberTargetsBySymbol.TryGetValue(key, out targetId);
     }

@@ -13,6 +13,7 @@
     "completedAt",
     "durationMs",
     "mode",
+    "input",
     "artifacts"
   ],
   "properties": {
@@ -24,6 +25,58 @@
     "completedAt": { "type": "string", "format": "date-time" },
     "durationMs": { "type": "integer", "minimum": 0 },
     "mode": { "enum": [ "syntax", "semantic", "partial_semantic" ] },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "kind", "sourcePopulationSha256", "options" ],
+      "properties": {
+        "kind": { "enum": [ "directory", "project", "solution" ] },
+        "selectedPath": { "type": "string", "minLength": 1 },
+        "sourcePopulationSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "includePatterns",
+            "excludePatterns",
+            "includeGeneratedCode",
+            "includeChunkText",
+            "syntaxOnly",
+            "noRestore",
+            "isolateInput",
+            "top"
+          ],
+          "properties": {
+            "includePatterns": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "excludePatterns": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "includeGeneratedCode": { "type": "boolean" },
+            "includeChunkText": { "type": "boolean" },
+            "syntaxOnly": { "type": "boolean" },
+            "noRestore": { "type": "boolean" },
+            "isolateInput": { "type": "boolean" },
+            "top": { "type": "integer", "minimum": 0 }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "enum": [ "project", "solution" ] } },
+            "required": [ "kind" ]
+          },
+          "then": { "required": [ "selectedPath" ] }
+        }
+      ]
+    },
     "artifacts": {
       "type": "object",
       "additionalProperties": false,

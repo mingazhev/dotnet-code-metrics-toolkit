@@ -1,8 +1,8 @@
 # MVP Limitations
 
 This document records MVP requirements that are intentionally partial or not
-implemented because implementing them correctly would require a larger product
-slice than the current autoresearch metrics contract.
+implemented because implementing them correctly would require a larger, separately
+versioned product slice.
 
 ## Semantic Loading
 
@@ -28,15 +28,11 @@ be analyzed from an isolated directory, not inside this tool's repository tree.
 Use `--isolate-input` when the input lives under a parent directory that might
 contain unrelated MSBuild or NuGet files.
 
-## Parallelism Option
+## Parallelism
 
-The CLI accepts `--max-degree-of-parallelism` as part of the MVP command
-surface, but the current analysis pipeline remains sequential for correctness
-and deterministic output ordering.
-
-Implementing real parallel analysis requires a dedicated pass over the fact
-collectors to verify Roslyn object access, shared caches, diagnostics ordering
-and snapshot stability.
+The current analysis pipeline is sequential for correctness and deterministic output
+ordering. There is no public parallelism option. Adding one requires a dedicated pass
+over Roslyn object access, shared caches, diagnostics ordering, and snapshot stability.
 
 ## Include and Exclude Patterns
 

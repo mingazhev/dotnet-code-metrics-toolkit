@@ -1,4 +1,4 @@
-namespace CodeMetricsToolkit.Abstractions;
+namespace CodeMetricsToolkit.Core.Analysis;
 
 public sealed record AnalyzeRequest
 {
@@ -11,6 +11,5 @@ public sealed record AnalyzeRequest
     public bool SyntaxOnly { get; init; }
     public bool NoRestore { get; init; }
     public bool IsolateInput { get; init; }
-    public int? MaxDegreeOfParallelism { get; init; }
     public int Top { get; init; } = 20;
 }

@@ -15,16 +15,16 @@ public static class GraphMetricProjector
     {
         ArgumentNullException.ThrowIfNull(facts);
 
-        Dictionary<string, TypeFacts> typesById = facts.Types.ToDictionary(type => type.TargetId, StringComparer.Ordinal);
-        Dictionary<string, string> parentTypeByMemberId = facts.Members.ToDictionary(
+        var typesById = facts.Types.ToDictionary(type => type.TargetId, StringComparer.Ordinal);
+        var parentTypeByMemberId = facts.Members.ToDictionary(
             member => member.TargetId,
             member => member.ParentTypeTargetId,
             StringComparer.Ordinal);
-        Dictionary<string, HashSet<string>> outgoing = typesById.Keys.ToDictionary(
+        var outgoing = typesById.Keys.ToDictionary(
             targetId => targetId,
             _ => new HashSet<string>(StringComparer.Ordinal),
             StringComparer.Ordinal);
-        Dictionary<string, HashSet<string>> incoming = typesById.Keys.ToDictionary(
+        var incoming = typesById.Keys.ToDictionary(
             targetId => targetId,
             _ => new HashSet<string>(StringComparer.Ordinal),
             StringComparer.Ordinal);
@@ -34,7 +34,7 @@ public static class GraphMetricProjector
             cancellationToken.ThrowIfCancellationRequested();
 
             if (!TypeDependencyEdgeKinds.Contains(edge.Kind) ||
-                !TryResolveSourceType(edge, parentTypeByMemberId, typesById, out string? sourceTypeId) ||
+                !TryResolveSourceType(edge, parentTypeByMemberId, typesById, out var sourceTypeId) ||
                 !typesById.ContainsKey(edge.To) ||
                 string.Equals(sourceTypeId, edge.To, StringComparison.Ordinal))
             {
@@ -101,7 +101,7 @@ public static class GraphMetricProjector
         var onStack = new HashSet<string>(StringComparer.Ordinal);
         var cyclicTypes = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (string node in outgoing.Keys.Order(StringComparer.Ordinal))
+        foreach (var node in outgoing.Keys.Order(StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -123,11 +123,11 @@ public static class GraphMetricProjector
             stack.Push(node);
             onStack.Add(node);
 
-            foreach (string target in outgoing[node].Order(StringComparer.Ordinal))
+            foreach (var target in outgoing[node].Order(StringComparer.Ordinal))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!indexes.TryGetValue(target, out int targetIndex))
+                if (!indexes.TryGetValue(target, out var targetIndex))
                 {
                     StrongConnect(target);
                     lowLinks[node] = Math.Min(lowLinks[node], lowLinks[target]);
@@ -157,7 +157,7 @@ public static class GraphMetricProjector
             if (component.Count > 1 ||
                 component.Any(componentNode => outgoing[componentNode].Contains(componentNode)))
             {
-                foreach (string cyclicNode in component)
+                foreach (var cyclicNode in component)
                 {
                     cyclicTypes.Add(cyclicNode);
                 }

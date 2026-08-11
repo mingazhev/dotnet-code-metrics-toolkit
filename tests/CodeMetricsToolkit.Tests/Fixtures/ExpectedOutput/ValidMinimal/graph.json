@@ -2,6 +2,12 @@
   "schemaVersion": "0.1.0",
   "nodes": [
     {
+      "id": "project:19b390edeb0b36a4",
+      "kind": "project",
+      "name": "SimpleProject",
+      "filePath": "tests/CodeMetricsToolkit.TestAssets/SimpleProject/SimpleProject.csproj"
+    },
+    {
       "id": "file:tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
       "kind": "file",
       "name": "Calculator.cs",
@@ -34,6 +40,12 @@
     }
   ],
   "edges": [
+    {
+      "from": "project:19b390edeb0b36a4",
+      "to": "file:tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
+      "kind": "contains",
+      "confidence": "exact"
+    },
     {
       "from": "file:tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
       "to": "type:SimpleProject/T:SimpleProject.Calculator",

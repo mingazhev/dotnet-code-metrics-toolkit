@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using CodeMetricsToolkit.Cli;
+using CodeMetricsToolkit.Core;
 using CodeMetricsToolkit.Tests.SchemaValidation;
 using CodeMetricsToolkit.Tests.Snapshots;
 
@@ -11,16 +12,17 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandWritesSchemaValidOutputForSimpleProject()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SimpleProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
         AssertMandatoryArtifactsExist(output.Path);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
+        AssertArtifactsUseCanonicalNewlines(output.Path);
 
-        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
         JsonElement root = summary.RootElement;
 
         Assert.Equal(1, root.GetProperty("fileCount").GetInt32());
@@ -30,6 +32,8 @@ public sealed class CliAnalyzeTests
         Assert.Equal("trusted", analysisHealth.GetProperty("analysisQuality").GetString());
         Assert.Equal("msbuild", analysisHealth.GetProperty("semanticModel").GetString());
         Assert.True(analysisHealth.GetProperty("trustedDiagnostics").GetBoolean());
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
+        Assert.Equal(ToolkitInfo.Version, manifest.RootElement.GetProperty("toolVersion").GetString());
         Assert.Contains(
             File.ReadLines(Path.Combine(output.Path, "metrics.ndjson")),
             line => line.Contains("\"metricId\":\"method_length\"", StringComparison.Ordinal));
@@ -54,18 +58,32 @@ public sealed class CliAnalyzeTests
         Assert.Contains(metrics, metric => HasPropertyValue(metric, "metricId", "member_count"));
     }
 
+    private static void AssertArtifactsUseCanonicalNewlines(string outputPath)
+    {
+        foreach (var artifactPath in Directory.EnumerateFiles(outputPath))
+        {
+            var bytes = File.ReadAllBytes(artifactPath);
+            Assert.DoesNotContain((byte)'\r', bytes);
+
+            if (bytes.Length > 0)
+            {
+                Assert.Equal((byte)'\n', bytes[^1]);
+            }
+        }
+    }
+
     [Fact]
     public async Task AnalyzeCommandHandlesDirectoryWithMultipleProjects()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
+        using var output = TemporaryDirectory.Create();
+        var assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
 
-        int exitCode = await RunCliAsync("analyze", assetsPath, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", assetsPath, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
-        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
         Assert.True(summary.RootElement.GetProperty("projectCount").GetInt32() > 1);
         Assert.True(summary.RootElement.GetProperty("diagnosticCount").GetInt32() > 0);
     }
@@ -73,16 +91,16 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandExcludesGeneratedFilesByDefault()
     {
-        using TemporaryDirectory input = TemporaryDirectory.Create();
-        using TemporaryDirectory output = TemporaryDirectory.Create();
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
         CreateGeneratedFileSample(input.Path);
 
-        int exitCode = await RunCliAsync("analyze", input.Path, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", input.Path, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
-        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
         Assert.Equal(1, summary.RootElement.GetProperty("fileCount").GetInt32());
         Assert.DoesNotContain(
             File.ReadLines(Path.Combine(output.Path, "metrics.ndjson")),
@@ -92,10 +110,10 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandMergesPartialTypeGraphNode()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("PartialTypesProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("PartialTypesProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
@@ -114,10 +132,10 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandEmitsSemanticRelationshipEdges()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SemanticGraphProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SemanticGraphProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
@@ -144,10 +162,10 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandCanIncludeChunkText()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SimpleProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--include-chunk-text");
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--include-chunk-text");
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
@@ -163,15 +181,20 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandCanForceSyntaxFallback()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SimpleProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--syntax-only");
+        var exitCode = await RunCliAsync(
+            "analyze",
+            projectPath,
+            "--output",
+            output.Path,
+            "--syntax-only");
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
-        using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
         JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
         JsonElement[] chunks = ReadNdjson(Path.Combine(output.Path, "chunks.ndjson"));
 
@@ -184,17 +207,17 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandEmitsComplexityMetricsAndStableHotspots()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("ComplexityProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("ComplexityProject");
         const string scoreTargetId = "member:ComplexityProject/M:ComplexityProject.DecisionSamples.Score(ComplexityProject.Order,System.Collections.Generic.IReadOnlyList{System.Int32})";
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--top", "3");
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--top", "3");
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
         JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
-        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
         JsonElement[] hotspots = summary.RootElement
             .GetProperty("hotspots")
             .EnumerateArray()
@@ -232,10 +255,10 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandDoesNotCrashOnBrokenProjectAndEmitsCompilerDiagnostics()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("BrokenProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("BrokenProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
@@ -249,10 +272,10 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandEmitsNullableDiagnostics()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("NullableDiagnosticsProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("NullableDiagnosticsProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
@@ -279,10 +302,10 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandSupportsIncludeAndExcludeGlobs()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
+        using var output = TemporaryDirectory.Create();
+        var assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
 
-        int exitCode = await RunCliAsync(
+        var exitCode = await RunCliAsync(
             "analyze",
             assetsPath,
             "--output",
@@ -295,7 +318,7 @@ public sealed class CliAnalyzeTests
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
-        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
         Assert.Equal(2, summary.RootElement.GetProperty("fileCount").GetInt32());
         Assert.DoesNotContain(
             File.ReadLines(Path.Combine(output.Path, "metrics.ndjson")),
@@ -303,45 +326,115 @@ public sealed class CliAnalyzeTests
     }
 
     [Fact]
-    public async Task AnalyzeCommandAcceptsSemanticNoRestoreAndMaxDegreeOptions()
+    public async Task AnalyzeCommandAcceptsSemanticAndNoRestoreOptions()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SimpleProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
 
-        int exitCode = await RunCliAsync(
+        var exitCode = await RunCliAsync(
             "analyze",
             projectPath,
             "--output",
             output.Path,
             "--semantic",
-            "--no-restore",
-            "--max-degree-of-parallelism",
-            "2");
+            "--no-restore");
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
-        using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
         Assert.Equal("semantic", manifest.RootElement.GetProperty("mode").GetString());
     }
 
     [Fact]
     public async Task AnalyzeCommandCanIsolateInputFromAmbientBuildFiles()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SimpleProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--isolate-input");
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path, "--isolate-input");
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
-        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
         JsonElement analysisHealth = summary.RootElement.GetProperty("analysisHealth");
         Assert.Equal("trusted", analysisHealth.GetProperty("analysisQuality").GetString());
+        Assert.Equal(Path.GetFullPath(projectPath), summary.RootElement.GetProperty("rootPath").GetString());
+        Assert.Contains(
+            analysisHealth.GetProperty("messages").EnumerateArray(),
+            message => message.GetString() == "Input was analyzed from an isolated temporary copy.");
         Assert.DoesNotContain(
             analysisHealth.GetProperty("messages").EnumerateArray(),
             message => message.GetString()!.Contains("Ambient MSBuild", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandRejectsPartialSemanticCoverageAsDegraded()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        CreatePartialCoverageSample(input.Path);
+
+        var exitCode = await RunCliAllowFailureAsync(
+            "analyze",
+            input.Path,
+            "--output",
+            output.Path,
+            "--no-restore");
+
+        Assert.Equal(CliExitCodes.AnalysisRejected, exitCode);
+        using var summary = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        JsonElement health = summary.RootElement.GetProperty("analysisHealth");
+        Assert.Equal("degraded", health.GetProperty("analysisQuality").GetString());
+        Assert.False(health.GetProperty("trustedDiagnostics").GetBoolean());
+        Assert.Contains(
+            health.GetProperty("messages").EnumerateArray(),
+            message => message.GetString()!.Contains(
+                "Semantic analysis covered 1 of 2 discovered source files",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandRejectsExternalLinkedSourceAsDegraded()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var outside = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        var linkedSourcePath = Path.Combine(outside.Path, "Linked.cs");
+        File.WriteAllText(linkedSourcePath, "internal sealed class Linked { }");
+        File.WriteAllText(Path.Combine(input.Path, "Included.cs"), "internal sealed class Included { }");
+        File.WriteAllText(
+            Path.Combine(input.Path, "LinkedSource.csproj"),
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="{linkedSourcePath}" Link="Linked.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var exitCode = await RunCliAllowFailureAsync(
+            "analyze",
+            input.Path,
+            "--output",
+            output.Path,
+            "--no-restore");
+
+        Assert.Equal(CliExitCodes.AnalysisRejected, exitCode);
+        using var summary = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        JsonElement health = summary.RootElement.GetProperty("analysisHealth");
+        Assert.False(health.GetProperty("trustedDiagnostics").GetBoolean());
+        Assert.Contains(
+            health.GetProperty("messages").EnumerateArray(),
+            message => message.GetString()!.Contains(
+                "authored source file(s) outside the analysis root",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -349,11 +442,11 @@ public sealed class CliAnalyzeTests
     {
         using var listOutput = new StringWriter();
         using var listError = new StringWriter();
-        int listExitCode = await CliApplication.RunAsync(["list-metrics"], listOutput, listError, CancellationToken.None);
+        var listExitCode = await CliApplication.RunAsync(["list-metrics"], listOutput, listError, CancellationToken.None);
 
         using var explainOutput = new StringWriter();
         using var explainError = new StringWriter();
-        int explainExitCode = await CliApplication.RunAsync(["explain", "diagnostic_count"], explainOutput, explainError, CancellationToken.None);
+        var explainExitCode = await CliApplication.RunAsync(["explain", "diagnostic_count"], explainOutput, explainError, CancellationToken.None);
 
         Assert.Equal(0, listExitCode);
         Assert.Equal(0, explainExitCode);
@@ -364,13 +457,20 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandEmitsCriticalProjectLoadDiagnostic()
     {
-        using TemporaryDirectory input = TemporaryDirectory.Create();
-        using TemporaryDirectory output = TemporaryDirectory.Create();
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
         CreateInvalidProjectSample(input.Path);
 
-        int exitCode = await RunCliAsync("analyze", input.Path, "--output", output.Path);
+        using var commandOutput = new StringWriter();
+        using var commandError = new StringWriter();
+        var exitCode = await CliApplication.RunAsync(
+            ["analyze", input.Path, "--output", output.Path],
+            commandOutput,
+            commandError,
+            CancellationToken.None);
 
-        Assert.Equal(0, exitCode);
+        Assert.Equal(CliExitCodes.AnalysisRejected, exitCode);
+        Assert.Contains("--allow-degraded", commandError.ToString(), StringComparison.Ordinal);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
 
         JsonElement[] diagnostics = ReadNdjson(Path.Combine(output.Path, "diagnostics.ndjson"));
@@ -380,22 +480,102 @@ public sealed class CliAnalyzeTests
             HasPropertyValue(diagnostic, "severity", "critical") &&
             HasTag(diagnostic, "project_load"));
 
-        using JsonDocument summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
         JsonElement analysisHealth = summary.RootElement.GetProperty("analysisHealth");
         Assert.Equal("degraded", analysisHealth.GetProperty("analysisQuality").GetString());
         Assert.False(analysisHealth.GetProperty("trustedDiagnostics").GetBoolean());
+        JsonElement[] degradedHotspots = summary.RootElement
+            .GetProperty("hotspots")
+            .EnumerateArray()
+            .Select(hotspot => hotspot.Clone())
+            .ToArray();
+
+        Assert.NotEmpty(degradedHotspots);
+        Assert.All(
+            degradedHotspots,
+            hotspot => Assert.DoesNotContain(
+                hotspot.GetProperty("components").EnumerateArray(),
+                component => HasPropertyValue(component, "metricId", "diagnostic_count")));
 
         JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
         Assert.DoesNotContain(metrics, metric => HasPropertyValue(metric, "metricId", "diagnostic_count"));
     }
 
     [Fact]
+    public async Task AnalyzeCommandRejectsEmptySourceSetUnlessExplicitlyAllowed()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var rejectedOutput = TemporaryDirectory.Create();
+        using var allowedOutput = TemporaryDirectory.Create();
+
+        using var commandOutput = new StringWriter();
+        using var commandError = new StringWriter();
+        var rejectedExitCode = await CliApplication.RunAsync(
+            ["analyze", input.Path, "--output", rejectedOutput.Path],
+            commandOutput,
+            commandError,
+            CancellationToken.None);
+        var allowedExitCode = await RunCliAsync(
+            "analyze",
+            input.Path,
+            "--output",
+            allowedOutput.Path,
+            "--allow-degraded",
+            "--allow-empty");
+
+        Assert.Equal(CliExitCodes.AnalysisRejected, rejectedExitCode);
+        Assert.Contains("--allow-empty", commandError.ToString(), StringComparison.Ordinal);
+        AssertMandatoryArtifactsExist(rejectedOutput.Path);
+        Assert.Equal(CliExitCodes.Success, allowedExitCode);
+    }
+
+    [Fact]
+    public async Task HelpAndVersionOptionsAreSuccessfulAndUseProductVersion()
+    {
+        foreach (var helpArgs in new[]
+                 {
+                     Array.Empty<string>(),
+                     new[] { "--help" },
+                     new[] { "-h" },
+                     new[] { "help" },
+                     new[] { "help", "analyze" },
+                     new[] { "analyze", "--help" }
+                 })
+        {
+            using var helpOutput = new StringWriter();
+            using var helpError = new StringWriter();
+
+            var helpExitCode = await CliApplication.RunAsync(
+                helpArgs,
+                helpOutput,
+                helpError,
+                CancellationToken.None);
+
+            Assert.Equal(CliExitCodes.Success, helpExitCode);
+            Assert.NotEmpty(helpOutput.ToString());
+            Assert.Empty(helpError.ToString());
+        }
+
+        using var versionOutput = new StringWriter();
+        using var versionError = new StringWriter();
+        var versionExitCode = await CliApplication.RunAsync(
+            ["--version"],
+            versionOutput,
+            versionError,
+            CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.Success, versionExitCode);
+        Assert.Equal(ToolkitInfo.Version + Environment.NewLine, versionOutput.ToString());
+        Assert.Empty(versionError.ToString());
+    }
+
+    [Fact]
     public async Task ValidateOutputCommandCatchesMissingRequiredArtifact()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
         File.WriteAllText(Path.Combine(output.Path, "manifest.json"), "{}");
 
-        int exitCode = await RunCliAllowFailureAsync("validate-output", output.Path);
+        var exitCode = await RunCliAllowFailureAsync("validate-output", output.Path);
 
         Assert.Equal(2, exitCode);
     }
@@ -403,11 +583,11 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task ValidateOutputCommandAcceptsGeneratedArtifacts()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SimpleProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
 
-        int analyzeExitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
-        int validateExitCode = await RunCliAsync("validate-output", output.Path);
+        var analyzeExitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        var validateExitCode = await RunCliAsync("validate-output", output.Path);
 
         Assert.Equal(0, analyzeExitCode);
         Assert.Equal(0, validateExitCode);
@@ -416,11 +596,11 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task AnalyzeCommandCompletesMediumRepoSmokeWithinThreshold()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
+        using var output = TemporaryDirectory.Create();
+        var assetsPath = Path.Combine(SchemaAssertions.RepositoryRoot(), "tests", "CodeMetricsToolkit.TestAssets");
         var stopwatch = Stopwatch.StartNew();
 
-        int exitCode = await RunCliAsync("analyze", assetsPath, "--output", output.Path, "--top", "5");
+        var exitCode = await RunCliAsync("analyze", assetsPath, "--output", output.Path, "--top", "5");
 
         stopwatch.Stop();
 
@@ -432,15 +612,15 @@ public sealed class CliAnalyzeTests
     [Fact]
     public async Task SnapshotNormalizerRemovesVolatileManifestFields()
     {
-        using TemporaryDirectory output = TemporaryDirectory.Create();
-        string projectPath = TestAssetPath("SimpleProject");
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
 
-        int exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
+        var exitCode = await RunCliAsync("analyze", projectPath, "--output", output.Path);
 
         Assert.Equal(0, exitCode);
 
-        string normalizedManifest = ArtifactSnapshotNormalizer.NormalizeJsonFile(Path.Combine(output.Path, "manifest.json"));
-        using JsonDocument normalized = JsonDocument.Parse(normalizedManifest);
+        var normalizedManifest = ArtifactSnapshotNormalizer.NormalizeJsonFile(Path.Combine(output.Path, "manifest.json"));
+        using var normalized = JsonDocument.Parse(normalizedManifest);
 
         Assert.Equal("<root>", normalized.RootElement.GetProperty("rootPath").GetString());
         Assert.Equal("<timestamp>", normalized.RootElement.GetProperty("startedAt").GetString());
@@ -452,7 +632,7 @@ public sealed class CliAnalyzeTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int exitCode = await CliApplication.RunAsync(args, output, error, CancellationToken.None);
+        var exitCode = await CliApplication.RunAsync(args, output, error, CancellationToken.None);
 
         Assert.True(exitCode == 0, error.ToString());
         return exitCode;
@@ -483,7 +663,7 @@ public sealed class CliAnalyzeTests
 
     private static JsonElement[] ReadJsonArray(string artifactPath, string propertyName)
     {
-        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(artifactPath));
+        using var document = JsonDocument.Parse(File.ReadAllText(artifactPath));
 
         return document.RootElement
             .GetProperty(propertyName)
@@ -498,7 +678,7 @@ public sealed class CliAnalyzeTests
             .Where(line => !string.IsNullOrWhiteSpace(line))
             .Select(line =>
             {
-                using JsonDocument document = JsonDocument.Parse(line);
+                using var document = JsonDocument.Parse(line);
 
                 return document.RootElement.Clone();
             })
@@ -532,7 +712,7 @@ public sealed class CliAnalyzeTests
             """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <Nullable>enable</Nullable>
               </PropertyGroup>
             </Project>
@@ -568,7 +748,7 @@ public sealed class CliAnalyzeTests
             """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
             """);
 
         File.WriteAllText(
@@ -583,6 +763,28 @@ public sealed class CliAnalyzeTests
             """);
     }
 
+    private static void CreatePartialCoverageSample(string rootPath)
+    {
+        File.WriteAllText(
+            Path.Combine(rootPath, "PartialCoverage.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Remove="Excluded.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(rootPath, "Included.cs"),
+            "internal sealed class Included { }");
+        File.WriteAllText(
+            Path.Combine(rootPath, "Excluded.cs"),
+            "internal sealed class Excluded { }");
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
         private TemporaryDirectory(string path)
@@ -594,7 +796,7 @@ public sealed class CliAnalyzeTests
 
         public static TemporaryDirectory Create()
         {
-            string path = System.IO.Path.Combine(
+            var path = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(),
                 "codemetrics-" + Guid.NewGuid().ToString("N"));
 

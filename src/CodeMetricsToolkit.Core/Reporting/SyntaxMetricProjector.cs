@@ -1,4 +1,3 @@
-using CodeMetricsToolkit.Abstractions;
 using CodeMetricsToolkit.Core.Facts;
 
 namespace CodeMetricsToolkit.Core.Reporting;
@@ -92,11 +91,11 @@ public static class SyntaxMetricProjector
             return 0;
         }
 
-        int[] ordered = members
+        var ordered = members
             .Select(selector)
             .Order()
             .ToArray();
-        int index = (int)Math.Ceiling(percentile * ordered.Length) - 1;
+        var index = (int)Math.Ceiling(percentile * ordered.Length) - 1;
 
         return ordered[Math.Clamp(index, 0, ordered.Length - 1)];
     }

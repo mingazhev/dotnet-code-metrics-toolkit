@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\src\CodeMetricsToolkit.Abstractions\CodeMetricsToolkit.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\CodeMetricsToolkit.Core\CodeMetricsToolkit.Core.csproj" />
     <ProjectReference Include="..\..\src\CodeMetricsToolkit.Cli\CodeMetricsToolkit.Cli.csproj" />
+    <ProjectReference Include="..\..\src\CodeMetricsToolkit.Scoring\CodeMetricsToolkit.Scoring.csproj" />
   </ItemGroup>
 
 </Project>

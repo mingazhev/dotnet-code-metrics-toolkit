@@ -212,7 +212,6 @@ may include `tags`, for example:
 ```text
 compiler
 nullable
-analyzer
 syntax
 project_load
 ```
@@ -227,9 +226,12 @@ environment instead of broken source code.
 
 ## hotspot_rank@1.0.0
 
-`hotspot_rank` is deterministic and explainable. Each candidate receives a rank
-score in `[0, 1]` from weighted percentiles. Higher metric values increase the
-percentile. Ties are ordered by target kind and target id.
+`hotspot_rank` is a built-in, opinionated navigation heuristic. It is deterministic
+and explainable, but it is not a policy-free fact or a universal quality objective.
+Each candidate receives a rank score in `[0, 1]` from weighted empirical CDF
+percentiles calculated over all candidates of the same target kind. Higher metric
+values increase the percentile. Ties share a percentile and final ties are ordered
+by target kind and target id.
 
 Diagnostic components are included only when
 `summary.json.analysisHealth.diagnosticsIncludedInHotspotRank` is `true`.

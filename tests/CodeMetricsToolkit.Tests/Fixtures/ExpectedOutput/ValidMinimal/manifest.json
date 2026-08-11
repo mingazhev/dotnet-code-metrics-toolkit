@@ -7,6 +7,20 @@
   "completedAt": "2026-05-06T08:00:01Z",
   "durationMs": 1000,
   "mode": "semantic",
+  "input": {
+    "kind": "directory",
+    "sourcePopulationSha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "options": {
+      "includePatterns": [],
+      "excludePatterns": [],
+      "includeGeneratedCode": false,
+      "includeChunkText": false,
+      "syntaxOnly": false,
+      "noRestore": false,
+      "isolateInput": false,
+      "top": 20
+    }
+  },
   "artifacts": {
     "summary": "summary.json",
     "metrics": "metrics.ndjson",

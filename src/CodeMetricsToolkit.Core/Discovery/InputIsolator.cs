@@ -2,6 +2,14 @@ namespace CodeMetricsToolkit.Core.Discovery;
 
 public static class InputIsolator
 {
+    private static readonly EnumerationOptions EnumerationOptions = new()
+    {
+        AttributesToSkip = FileAttributes.ReparsePoint,
+        IgnoreInaccessible = false,
+        RecurseSubdirectories = false,
+        ReturnSpecialDirectories = false
+    };
+
     private static readonly string[] ExcludedDirectoryNames =
     [
         ".git",
@@ -11,69 +19,113 @@ public static class InputIsolator
         "artifacts"
     ];
 
-    public static IsolatedInput CopyToTemporaryDirectory(string inputPath)
+    public static IsolatedInput CopyToTemporaryDirectory(
+        string inputPath,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        string sourceRoot = ResolveRootPath(inputPath);
-        string tempRoot = Path.Combine(Path.GetTempPath(), "codemetrics-input-" + Guid.NewGuid().ToString("N"));
+        InputSelection selection = SourceFileDiscovery.ResolveInputSelection(inputPath);
+        var sourceRoot = selection.RootPath;
+        var selectedRelativePath = selection.SelectedSolutionPath ?? selection.SelectedProjectPath;
+        var tempRoot = Path.Combine(Path.GetTempPath(), "codemetrics-input-" + Guid.NewGuid().ToString("N"));
 
-        Directory.CreateDirectory(tempRoot);
-        CopyDirectory(sourceRoot, tempRoot);
-
-        return new IsolatedInput(sourceRoot, tempRoot);
-    }
-
-    private static string ResolveRootPath(string inputPath)
-    {
-        string fullPath = Path.GetFullPath(inputPath);
-
-        if (File.Exists(fullPath))
+        try
         {
-            return Path.GetDirectoryName(fullPath) ??
-                throw new DirectoryNotFoundException($"Could not resolve directory for {inputPath}");
+            CreatePrivateDirectory(tempRoot);
+            CopyDirectory(sourceRoot, tempRoot, cancellationToken);
+        }
+        catch
+        {
+            _ = TryDeleteDirectory(tempRoot, out _);
+            throw;
         }
 
-        if (!Directory.Exists(fullPath))
-        {
-            throw new DirectoryNotFoundException($"Input path does not exist: {inputPath}");
-        }
+        var isolatedInputPath = selectedRelativePath is null
+            ? tempRoot
+            : Path.Combine(tempRoot, selectedRelativePath);
 
-        return fullPath;
+        return new IsolatedInput(sourceRoot, tempRoot, isolatedInputPath);
     }
 
-    private static void CopyDirectory(string sourceDirectory, string targetDirectory)
+    private static void CopyDirectory(
+        string sourceDirectory,
+        string targetDirectory,
+        CancellationToken cancellationToken)
     {
-        foreach (string directory in Directory.EnumerateDirectories(sourceDirectory))
+        foreach (var directory in Directory.EnumerateDirectories(sourceDirectory, "*", EnumerationOptions))
         {
-            string directoryName = Path.GetFileName(directory);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var directoryName = Path.GetFileName(directory);
             if (ExcludedDirectoryNames.Contains(directoryName, StringComparer.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            string targetChildDirectory = Path.Combine(targetDirectory, directoryName);
-            Directory.CreateDirectory(targetChildDirectory);
-            CopyDirectory(directory, targetChildDirectory);
+            var targetChildDirectory = Path.Combine(targetDirectory, directoryName);
+            CreatePrivateDirectory(targetChildDirectory);
+            CopyDirectory(directory, targetChildDirectory, cancellationToken);
         }
 
-        foreach (string file in Directory.EnumerateFiles(sourceDirectory))
+        foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*", EnumerationOptions))
         {
-            string targetFile = Path.Combine(targetDirectory, Path.GetFileName(file));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var targetFile = Path.Combine(targetDirectory, Path.GetFileName(file));
             File.Copy(file, targetFile);
+        }
+    }
+
+    private static void CreatePrivateDirectory(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(path);
+            return;
+        }
+
+        Directory.CreateDirectory(
+            path,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    internal static bool TryDeleteDirectory(string path, out string? failureMessage)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+
+            failureMessage = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            failureMessage = $"Could not remove isolated input directory '{path}': {exception.Message}";
+            return false;
         }
     }
 }
 
 public sealed record IsolatedInput(
     string OriginalRootPath,
-    string IsolatedRootPath) : IDisposable
+    string IsolatedRootPath,
+    string IsolatedInputPath) : IDisposable
 {
+    public bool TryDispose(out string? failureMessage)
+    {
+        return InputIsolator.TryDeleteDirectory(IsolatedRootPath, out failureMessage);
+    }
+
     public void Dispose()
     {
-        if (Directory.Exists(IsolatedRootPath))
+        if (!TryDispose(out var failureMessage))
         {
-            Directory.Delete(IsolatedRootPath, recursive: true);
+            System.Diagnostics.Trace.TraceWarning(failureMessage);
         }
     }
 }
