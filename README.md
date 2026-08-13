@@ -96,6 +96,7 @@ See:
 - [Architecture](docs/toolkit/architecture.md)
 - [Security and trust model](docs/toolkit/security.md)
 - [Metric formulas](src/CodeMetricsToolkit.Core/Metrics/README.md)
+- [Metric expansion research](docs/research/metric-expansion.md)
 - [Known limitations](docs/mvp-limitations.md)
 - [Autoresearch integration example](docs/toolkit/autoresearch-integration.md)
 
