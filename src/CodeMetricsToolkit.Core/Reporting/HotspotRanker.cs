@@ -55,7 +55,7 @@ public static class HotspotRanker
                 new("cognitive_complexity", member.ControlFlow.CognitiveComplexity, 0.30),
                 new("cyclomatic_complexity", member.ControlFlow.CyclomaticComplexity, 0.25),
                 new("nesting_depth", member.ControlFlow.NestingDepth, 0.15),
-                new("method_length", member.MethodLength, 0.15),
+                new("member_length", member.MethodLength, 0.15),
                 new("parameter_count", member.ParameterCount, 0.05)
             };
             AddDiagnosticComponent(

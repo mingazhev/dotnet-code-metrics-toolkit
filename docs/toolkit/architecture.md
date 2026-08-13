@@ -4,17 +4,13 @@ CodeMetricsToolkit separates source facts from consumer gates and objectives.
 
 ## Components
 
-### `CodeMetricsToolkit.Abstractions`
-
-Owns the shared artifact names and artifact contract version constants. The contract
-version is not the same thing as the tool package version; the JSON vocabulary itself
-is defined by the schemas.
-
 ### `CodeMetricsToolkit.Core`
 
 Discovers inputs, obtains Roslyn syntax/semantic facts, constructs stable target ids,
 projects metrics/graphs/chunks, ranks navigation hotspots, writes artifacts, and validates
-the emitted contract. The hotspot rank is a versioned, opinionated navigation heuristic;
+the emitted contract. It also owns the artifact-name and contract-version constants; the
+contract version is independent of the tool package version, while the JSON vocabulary is
+defined by the schemas. The hotspot rank is a versioned, opinionated navigation heuristic;
 Core does not know about CI, autoresearch, or a repository's pass/fail policy.
 
 ### `CodeMetricsToolkit.Cli`

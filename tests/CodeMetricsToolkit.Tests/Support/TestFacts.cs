@@ -18,6 +18,8 @@ internal static class TestFacts
         string rootPath = ".",
         IReadOnlyDictionary<string, SourceText>? sourceTextSnapshots = null)
     {
+        IReadOnlyList<FileFacts> analysisFiles = files ?? [];
+
         return new SyntaxAnalysisFacts
         {
             Mode = trusted ? "semantic" : "partial_semantic",
@@ -33,11 +35,15 @@ internal static class TestFacts
             },
             RootPath = rootPath,
             ProjectPaths = projects ?? [],
-            Files = files ?? [],
+            Files = analysisFiles,
             Types = types ?? [],
             Members = members ?? [],
             GraphEdges = edges ?? [],
             Diagnostics = diagnostics ?? [],
+            ProjectFileMemberships = analysisFiles
+                .Select(file => new ProjectFileMembershipFacts(file.ProjectKey, file.FilePath))
+                .Distinct()
+                .ToArray(),
             SourceTextSnapshots = sourceTextSnapshots ??
                 new Dictionary<string, SourceText>(StringComparer.Ordinal)
         };

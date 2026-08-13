@@ -45,6 +45,15 @@ public static class SyntaxMetricProjector
         foreach (var projectPath in facts.ProjectPaths.Order(StringComparer.Ordinal))
         {
             var projectKey = ProjectIdentity.Key(projectPath);
+            HashSet<string> projectFilePaths = facts.ProjectFileMemberships is null
+                ? facts.Files
+                    .Where(file => file.ProjectKey == projectKey)
+                    .Select(file => file.FilePath)
+                    .ToHashSet(StringComparer.Ordinal)
+                : facts.ProjectFileMemberships
+                    .Where(membership => membership.ProjectKey == projectKey)
+                    .Select(membership => membership.FilePath)
+                    .ToHashSet(StringComparer.Ordinal);
             AddLineMetrics(
                 results,
                 "project",
@@ -54,7 +63,7 @@ public static class SyntaxMetricProjector
                 1,
                 1,
                 LineAggregate.FromFiles(facts.Files
-                    .Where(file => file.ProjectKey == projectKey)
+                    .Where(file => projectFilePaths.Contains(file.FilePath))
                     .GroupBy(file => file.FilePath, StringComparer.Ordinal)
                     .Select(group => group.First())));
         }
@@ -84,7 +93,7 @@ public static class SyntaxMetricProjector
             cancellationToken.ThrowIfCancellationRequested();
 
             AddNumericMetric(results, "lines_of_code", "1.0.0", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.LinesOfCode, "lines");
-            AddNumericMetric(results, "non_comment_lines_of_code", "1.0.0", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.NonCommentLinesOfCode, "lines");
+            AddNumericMetric(results, "token_line_count", "1.0.0", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.NonCommentLinesOfCode, "lines");
             AddNumericMetric(results, "member_count", "1.0.0", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.MemberCount, "count");
             AddMemberAggregateMetrics(results, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, membersByType.GetValueOrDefault(type.TargetId, []));
         }
@@ -93,7 +102,7 @@ public static class SyntaxMetricProjector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            AddNumericMetric(results, "method_length", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.MethodLength, "lines");
+            AddNumericMetric(results, "member_length", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.MethodLength, "lines");
             AddNumericMetric(results, "parameter_count", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ParameterCount, "count");
             AddNumericMetric(results, "cyclomatic_complexity", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.CyclomaticComplexity, "count");
             AddNumericMetric(results, "decision_point_count", "1.0.0", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.DecisionPointCount, "count");
@@ -115,7 +124,7 @@ public static class SyntaxMetricProjector
         LineAggregate lines)
     {
         AddNumericMetric(results, "lines_of_code", "1.0.0", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.LinesOfCode, "lines");
-        AddNumericMetric(results, "non_comment_lines_of_code", "1.0.0", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.NonCommentLinesOfCode, "lines");
+        AddNumericMetric(results, "token_line_count", "1.0.0", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.NonCommentLinesOfCode, "lines");
         AddNumericMetric(results, "blank_line_count", "1.0.0", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.BlankLineCount, "lines");
         AddNumericMetric(results, "comment_only_line_count", "1.0.0", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.CommentOnlyLineCount, "lines");
         AddNumericMetric(results, "commented_line_count", "1.0.0", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.CommentedLineCount, "lines");

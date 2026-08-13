@@ -13,7 +13,14 @@ analysis in an isolated container/VM with restricted network, filesystem, and se
 
 `--isolate-input` protects against accidental MSBuild configuration inherited from
 parent directories. It is not a security boundary and does not make a malicious project
-safe.
+safe. The temporary copy is resource-bounded to 4 GiB total, 256 MiB per file, 250,000
+files, 50,000 directories, and 96 directory levels. These quotas limit accidental or
+hostile disk consumption; they do not constrain work performed later by MSBuild.
+
+Artifact validation and scoring also reject oversized structured inputs. JSON artifacts
+are capped at 128 MiB, NDJSON artifacts at 1 GiB with 8 Mi-character lines and at most
+1,000,000 lines/records, scoring profiles at 1 MiB, and JSON nesting at 64. Treat these
+as denial-of-service ceilings, not as validation of artifact trustworthiness.
 
 ## Sensitive output
 

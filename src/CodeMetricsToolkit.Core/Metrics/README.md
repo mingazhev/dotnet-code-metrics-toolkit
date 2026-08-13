@@ -100,12 +100,12 @@ Project and solution observations aggregate unique file paths. Never sum type LO
 obtain a repository total: nested types overlap their containing types and partial types
 span multiple files.
 
-### non_comment_lines_of_code@1.0.0
+### token_line_count@1.0.0
 
 Formula:
 
 ```text
-non_comment_lines_of_code = distinct source lines containing C# syntax tokens
+token_line_count = distinct source lines containing C# syntax tokens
 ```
 
 Target kinds: `solution`, `project`, `file`, `type`.
@@ -123,14 +123,14 @@ mixed_code_comment_line_count = lines with both a token and comment trivia
 documentation_comment_line_count = lines intersecting XML documentation trivia
 ```
 
-`commented_line_count` deliberately overlaps `non_comment_lines_of_code` on mixed lines.
+`commented_line_count` deliberately overlaps `token_line_count` on mixed lines.
 An empty-looking line inside a multiline comment is comment-only, not blank. All five
 raw metrics target `solution`, `project`, and `file`.
 
 The corresponding ratios are:
 
 ```text
-token_line_ratio = non_comment_lines_of_code / lines_of_code
+token_line_ratio = token_line_count / lines_of_code
 blank_line_ratio = blank_line_count / lines_of_code
 comment_only_line_ratio = comment_only_line_count / lines_of_code
 commented_line_ratio = commented_line_count / lines_of_code
@@ -140,12 +140,12 @@ documentation_comment_ratio = documentation_comment_line_count / lines_of_code
 Ratios use unit `ratio` and are omitted for a zero-line population. Numerators and the
 denominator are always emitted alongside a ratio.
 
-### method_length@1.0.0
+### member_length@1.0.0
 
 Formula:
 
 ```text
-method_length = inclusive source line span count for the member declaration
+member_length = inclusive source line span count for the member declaration
 ```
 
 Target kind: `member`.
@@ -227,12 +227,12 @@ incoming_type_dependency_count =
   count(distinct internal source types depending on the target type)
 ```
 
-### dependency_cycle_count@1.0.0
+### dependency_cycle_membership@1.0.0
 
 Formula:
 
 ```text
-dependency_cycle_count = 1 if target type belongs to a type dependency SCC, else 0
+dependency_cycle_membership = 1 if target type belongs to a type dependency SCC, else 0
 ```
 
 The MVP reports strongly-connected-component membership, not the exact count of
@@ -256,12 +256,12 @@ The target itself is excluded, including when it belongs to a cycle.
 ## call graph metrics
 
 ```text
-outgoing_call_count = count(distinct internal member callees)
-incoming_call_count = count(distinct internal member callers)
+distinct_outgoing_callee_count = count(distinct internal member callees)
+distinct_incoming_caller_count = count(distinct internal member callers)
 recursive_component_size = size(call SCC) when recursive, otherwise 0
 ```
 
-`outgoing_call_count` and `incoming_call_count` target members and types. A type value
+`distinct_outgoing_callee_count` and `distinct_incoming_caller_count` target members and types. A type value
 aggregates distinct member endpoints across its members. A direct self-recursive member
 has `recursive_component_size=1`; mutual recursion reports the full SCC size.
 
@@ -283,10 +283,10 @@ inheritance_depth = count(non-System.Object base classes)
 A class directly deriving from `System.Object` has depth 0. Interfaces and value types
 also report 0.
 
-### class_coupling@1.0.0
+### type_coupling@1.0.0
 
 ```text
-class_coupling = count(distinct coupled named type original definitions)
+type_coupling = count(distinct coupled named type original definitions)
 ```
 
 The population includes bases, interfaces, attributes, member signatures, constraints,
@@ -385,7 +385,7 @@ Member weights:
 cognitive_complexity  0.30
 cyclomatic_complexity 0.25
 nesting_depth         0.15
-method_length         0.15
+member_length         0.15
 diagnostic_count      0.10
 parameter_count       0.05
 ```

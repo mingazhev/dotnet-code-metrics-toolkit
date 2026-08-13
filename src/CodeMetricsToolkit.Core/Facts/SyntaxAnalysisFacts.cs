@@ -13,6 +13,7 @@ public sealed record SyntaxAnalysisFacts
     public required IReadOnlyList<MemberFacts> Members { get; init; }
     public required IReadOnlyList<GraphEdgeFacts> GraphEdges { get; init; }
     public required IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; }
+    internal IReadOnlyList<ProjectFileMembershipFacts>? ProjectFileMemberships { get; init; }
     internal IReadOnlyDictionary<string, SourceText> SourceTextSnapshots { get; init; } =
         new Dictionary<string, SourceText>(StringComparer.Ordinal);
 }

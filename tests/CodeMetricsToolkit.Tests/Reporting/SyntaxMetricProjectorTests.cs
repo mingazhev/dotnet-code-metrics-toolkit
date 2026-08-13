@@ -69,6 +69,31 @@ public sealed class SyntaxMetricProjectorTests
         Assert.Equal("number", Metric(metrics, first.TargetId, "token_line_ratio").ValueKind);
     }
 
+    [Fact]
+    public void ProjectFallsBackToFileProjectKeysForExternallyConstructedFacts()
+    {
+        const string projectPath = "External.csproj";
+        var projectKey = ProjectIdentity.Key(projectPath);
+        FileFacts file = TestFacts.File("file:external", "External.cs", projectKey, lines: 7);
+        SyntaxAnalysisFacts facts = TestFacts.Analysis(
+            files: [file],
+            projects: [projectPath]) with
+        {
+            ProjectFileMemberships = null
+        };
+
+        IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(
+            facts,
+            CancellationToken.None);
+        GraphArtifact graph = GraphProjector.Project(facts);
+
+        Assert.Equal(7, Metric(metrics, "project", "lines_of_code").NumericValue);
+        Assert.Contains(graph.Edges, edge =>
+            edge.From == ProjectIdentity.TargetId(projectPath) &&
+            edge.To == file.TargetId &&
+            edge.Kind == "contains");
+    }
+
     private static MetricResultLine Metric(
         IEnumerable<MetricResultLine> metrics,
         string targetKindOrId,

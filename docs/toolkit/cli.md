@@ -35,9 +35,32 @@ siblings.
 | `--allow-degraded` | Return success for degraded artifacts; does not make them trusted |
 | `--allow-empty` | Return success when no C# files match |
 
-Include and exclude globs are matched against normalized source paths. The manifest
+Include and exclude globs are matched against normalized root-relative source paths.
+`*` does not cross directories, `**` does, and `**/` also matches zero directories.
+For example, `*.cs` matches only root files while `**/*.cs` matches C# files at any depth.
+The manifest
 records the resolved input kind, explicit selected path, source-population hash, and all
 options that can affect output.
+
+## Resource limits
+
+The CLI fails closed when structured inputs exceed fixed safety limits. `validate-output`
+accepts at most 128 MiB for each JSON artifact and 1 GiB for each NDJSON artifact. NDJSON
+is read incrementally and is limited to 8 Mi characters per line, 1,000,000 physical
+lines, and 1,000,000 non-empty records per artifact. JSON nesting is limited to 64.
+
+`analyze --isolate-input` copies at most 4 GiB across 250,000 files and 50,000
+directories. One file may be at most 256 MiB and directory depth may be at most 96.
+Excluded `.git`, `.vs`, `bin`, `obj`, and `artifacts` trees do not consume the copy
+quota. Exceeding a quota aborts analysis and removes the temporary copy.
+
+These limits are intentionally not CLI-tunable: they are hard resource-exhaustion
+boundaries. Analyze unusually large repositories in scoped project/solution slices.
+
+The output directory may be a descendant of the analyzed root, as with the default
+`artifacts/codemetrics`. It cannot be the input root or one of its ancestors, and every
+existing parent component must be a real directory rather than a symbolic link or
+reparse point. Keep the input tree unchanged until analysis completes.
 
 ## Exit codes
 

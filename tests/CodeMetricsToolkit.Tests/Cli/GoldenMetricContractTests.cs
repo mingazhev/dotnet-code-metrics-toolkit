@@ -41,6 +41,19 @@ public sealed class GoldenMetricContractTests
             .EnumerateArray()
             .Select(element => element.Clone())
             .ToArray();
+        JsonElement[] expectedTargets = expectationsDocument.RootElement
+            .GetProperty("targets")
+            .EnumerateArray()
+            .Select(element => element.Clone())
+            .ToArray();
+        JsonElement[] scopeExpectations = expectationsDocument.RootElement
+            .GetProperty("scopeExpectations")
+            .EnumerateArray()
+            .Select(element => element.Clone())
+            .ToArray();
+        JsonElement[] graphNodes = ReadJsonArray(
+            Path.Combine(output.Path, "graph.json"),
+            "nodes");
         var catalogIds = MetricCatalog.All
             .Select(metric => metric.Id)
             .ToHashSet(StringComparer.Ordinal);
@@ -54,8 +67,21 @@ public sealed class GoldenMetricContractTests
         Assert.Equal(MetricCatalog.All.Count, expected.Length);
         Assert.Equal(catalogIds.Order(StringComparer.Ordinal), expectedIds.Order(StringComparer.Ordinal));
         Assert.Equal(catalogIds.Order(StringComparer.Ordinal), actualIds.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            expected
+                .Concat(scopeExpectations)
+                .Select(expectation => expectation.GetProperty("targetId").GetString())
+                .Distinct()
+                .Order(),
+            expectedTargets.Select(target => target.GetProperty("targetId").GetString()).Order());
+        Assert.Equal(
+            ["file", "member", "project", "solution", "type"],
+            expectedTargets
+                .Select(target => target.GetProperty("targetKind").GetString())
+                .Distinct()
+                .Order());
 
-        foreach (JsonElement expectation in expected)
+        foreach (JsonElement expectation in expected.Concat(scopeExpectations))
         {
             JsonElement metric = Assert.Single(actual, candidate =>
                 SameString(candidate, expectation, "metricId") &&
@@ -79,6 +105,40 @@ public sealed class GoldenMetricContractTests
                 metric.GetProperty("numericValue").GetDouble(),
                 12);
         }
+
+        foreach (JsonElement expectedTarget in expectedTargets)
+        {
+            var targetId = expectedTarget.GetProperty("targetId").GetString()!;
+            JsonElement graphNode = Assert.Single(
+                graphNodes,
+                candidate => candidate.GetProperty("id").GetString() == targetId);
+            AssertTargetMetadata(expectedTarget, graphNode);
+
+            JsonElement[] targetMetrics = actual
+                .Where(metric => metric.GetProperty("targetId").GetString() == targetId)
+                .ToArray();
+            Assert.NotEmpty(targetMetrics);
+            Assert.All(targetMetrics, metric => AssertTargetMetadata(expectedTarget, metric));
+        }
+    }
+
+    private static void AssertTargetMetadata(JsonElement expected, JsonElement actual)
+    {
+        Assert.Equal(
+            expected.GetProperty("targetKind").GetString(),
+            actual.GetProperty(actual.TryGetProperty("kind", out _) ? "kind" : "targetKind").GetString());
+        Assert.Equal(
+            expected.GetProperty("targetIdStability").GetString(),
+            actual.GetProperty("targetIdStability").GetString());
+        Assert.Equal(
+            expected.GetProperty("filePath").GetString(),
+            actual.GetProperty("filePath").GetString());
+        Assert.Equal(
+            expected.GetProperty("startLine").GetInt32(),
+            actual.GetProperty("startLine").GetInt32());
+        Assert.Equal(
+            expected.GetProperty("endLine").GetInt32(),
+            actual.GetProperty("endLine").GetInt32());
     }
 
     private static bool SameString(
@@ -101,6 +161,17 @@ public sealed class GoldenMetricContractTests
                 using var document = JsonDocument.Parse(line);
                 return document.RootElement.Clone();
             })
+            .ToArray();
+    }
+
+    private static JsonElement[] ReadJsonArray(string path, string propertyName)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+
+        return document.RootElement
+            .GetProperty(propertyName)
+            .EnumerateArray()
+            .Select(element => element.Clone())
             .ToArray();
     }
 

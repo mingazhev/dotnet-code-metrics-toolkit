@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace CodeMetricsToolkit.Scoring;
@@ -14,8 +15,11 @@ internal static class ScoringArtifactReader
 
     public static async Task<ScoringArtifacts> ReadAsync(
         string artifactDirectory,
+        ScoringInputLimits limits,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(limits);
+        limits.Validate();
         var manifestPath = Path.Combine(artifactDirectory, ArtifactNames.Manifest);
         var summaryPath = Path.Combine(artifactDirectory, ArtifactNames.Summary);
         var metricsPath = Path.Combine(artifactDirectory, ArtifactNames.Metrics);
@@ -29,29 +33,36 @@ internal static class ScoringArtifactReader
         var manifestBefore = await ReadSnapshotAsync(
             manifestPath,
             ArtifactNames.Manifest,
+            limits.MaxJsonArtifactBytes,
             cancellationToken).ConfigureAwait(false);
-        ArtifactManifest manifest = ParseManifest(manifestBefore);
+        ArtifactManifest manifest = ParseManifest(manifestBefore, limits.MaxJsonDepth);
         var manifestSha256 = Hash(manifestBefore);
         var summaryBytes = await ReadSnapshotAsync(
             summaryPath,
             ArtifactNames.Summary,
+            limits.MaxJsonArtifactBytes,
             cancellationToken).ConfigureAwait(false);
 
-        ArtifactSummary summary = ParseSummary(summaryBytes);
+        ArtifactSummary summary = ParseSummary(summaryBytes, limits.MaxJsonDepth);
         var summarySha256 = Hash(summaryBytes);
-        MetricsSnapshot metricsSnapshot = await ReadMetricsSnapshotAsync(metricsPath, cancellationToken)
+        MetricsSnapshot metricsSnapshot = await ReadMetricsSnapshotAsync(
+                metricsPath,
+                limits,
+                cancellationToken)
             .ConfigureAwait(false);
         IReadOnlyList<ArtifactMetric> metrics = metricsSnapshot.Metrics;
         var graphBytes = await ReadSnapshotAsync(
             graphPath,
             ArtifactNames.Graph,
+            limits.MaxJsonArtifactBytes,
             cancellationToken).ConfigureAwait(false);
 
-        ArtifactGraph graph = ParseGraph(graphBytes);
+        ArtifactGraph graph = ParseGraph(graphBytes, limits.MaxJsonDepth);
         var graphSha256 = Hash(graphBytes);
         var manifestAfter = await ReadSnapshotAsync(
             manifestPath,
             ArtifactNames.Manifest,
+            limits.MaxJsonArtifactBytes,
             cancellationToken).ConfigureAwait(false);
         if (!manifestBefore.AsSpan().SequenceEqual(manifestAfter))
         {
@@ -106,11 +117,13 @@ internal static class ScoringArtifactReader
             graphSha256);
     }
 
-    private static ArtifactManifest ParseManifest(byte[] json)
+    private static ArtifactManifest ParseManifest(byte[] json, int maxJsonDepth)
     {
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(
+                json,
+                new JsonDocumentOptions { MaxDepth = maxJsonDepth });
             JsonElement root = RequireObject(document.RootElement, "manifest.json");
 
             var schemaVersion = GetRequiredNonBlankString(root, "schemaVersion", "manifest.json");
@@ -133,11 +146,13 @@ internal static class ScoringArtifactReader
         }
     }
 
-    private static ArtifactSummary ParseSummary(byte[] json)
+    private static ArtifactSummary ParseSummary(byte[] json, int maxJsonDepth)
     {
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(
+                json,
+                new JsonDocumentOptions { MaxDepth = maxJsonDepth });
             JsonElement root = RequireObject(document.RootElement, "summary.json");
             JsonElement health = RequireObject(
                 GetRequiredProperty(root, "analysisHealth", "summary.json"),
@@ -175,11 +190,13 @@ internal static class ScoringArtifactReader
         }
     }
 
-    private static ArtifactGraph ParseGraph(byte[] json)
+    private static ArtifactGraph ParseGraph(byte[] json, int maxJsonDepth)
     {
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(
+                json,
+                new JsonDocumentOptions { MaxDepth = maxJsonDepth });
             JsonElement root = RequireObject(document.RootElement, "graph.json");
             var schemaVersion = GetRequiredNonBlankString(root, "schemaVersion", "graph.json");
             JsonElement nodes = GetRequiredProperty(root, "nodes", "graph.json");
@@ -301,12 +318,21 @@ internal static class ScoringArtifactReader
 
     private static async Task<MetricsSnapshot> ReadMetricsSnapshotAsync(
         string path,
+        ScoringInputLimits limits,
         CancellationToken cancellationToken)
     {
         var metrics = new List<ArtifactMetric>();
 
         try
         {
+            var declaredLength = new FileInfo(path).Length;
+            if (declaredLength > limits.MaxMetricsBytes)
+            {
+                throw new InvalidDataException(
+                    $"{ArtifactNames.Metrics} is {declaredLength} bytes and exceeds the maximum " +
+                    $"of {limits.MaxMetricsBytes} bytes.");
+            }
+
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             await using var stream = new FileStream(
                 path,
@@ -315,19 +341,35 @@ internal static class ScoringArtifactReader
                 FileShare.Read,
                 bufferSize: 64 * 1024,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
-            using var hashingStream = new HashingReadStream(stream, hash);
-            using var reader = new StreamReader(hashingStream);
-            var lineNumber = 0;
+            using var boundedStream = new ScoringByteLimitedReadStream(
+                stream,
+                limits.MaxMetricsBytes,
+                ArtifactNames.Metrics);
+            using var hashingStream = new HashingReadStream(boundedStream, hash);
+            var recordCount = 0;
 
-            while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
+            await foreach (BoundedInputLine boundedLine in ScoringInputReader.ReadLinesAsync(
+                hashingStream,
+                ArtifactNames.Metrics,
+                limits.MaxMetricLineCharacters,
+                limits.MaxMetricLines,
+                cancellationToken))
             {
-                lineNumber++;
+                var line = boundedLine.Text;
                 if (string.IsNullOrWhiteSpace(line))
                 {
                     continue;
                 }
 
-                metrics.Add(ParseMetric(line, lineNumber));
+                recordCount++;
+                if (recordCount > limits.MaxMetricRecords)
+                {
+                    throw new InvalidDataException(
+                        $"{ArtifactNames.Metrics} exceeds the maximum record count of " +
+                        $"{limits.MaxMetricRecords}.");
+                }
+
+                metrics.Add(ParseMetric(line, boundedLine.Number, limits.MaxJsonDepth));
             }
 
             if (!hashingStream.ReachedEnd)
@@ -343,19 +385,29 @@ internal static class ScoringArtifactReader
         {
             throw;
         }
+        catch (InvalidDataException exception)
+        {
+            throw InvalidArtifacts(exception.Message, exception);
+        }
+        catch (DecoderFallbackException exception)
+        {
+            throw InvalidArtifacts($"{ArtifactNames.Metrics} is not valid UTF-8.", exception);
+        }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             throw InvalidArtifacts($"Could not read '{ArtifactNames.Metrics}'.", exception);
         }
     }
 
-    private static ArtifactMetric ParseMetric(string json, int lineNumber)
+    private static ArtifactMetric ParseMetric(string json, int lineNumber, int maxJsonDepth)
     {
         var context = $"metrics.ndjson line {lineNumber}";
 
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(
+                json,
+                new JsonDocumentOptions { MaxDepth = maxJsonDepth });
             JsonElement root = RequireObject(document.RootElement, context);
 
             var schemaVersion = GetRequiredNonBlankString(root, "schemaVersion", context);
@@ -663,11 +715,20 @@ internal static class ScoringArtifactReader
     private static async Task<byte[]> ReadSnapshotAsync(
         string path,
         string artifactName,
+        int maxBytes,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+            return await ScoringInputReader.ReadFileBytesAsync(
+                path,
+                maxBytes,
+                artifactName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw InvalidArtifacts(exception.Message, exception);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

@@ -257,13 +257,9 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "codemetricstoolkit.abstractions": {
-        "type": "Project"
-      },
       "codemetricstoolkit.core": {
         "type": "Project",
         "dependencies": {
-          "CodeMetricsToolkit.Abstractions": "[0.1.0, )",
           "JsonSchema.Net": "[9.2.0, )",
           "Microsoft.Build.Locator": "[1.11.2, )",
           "Microsoft.CodeAnalysis.CSharp.Workspaces": "[5.6.0, )",

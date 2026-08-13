@@ -15,13 +15,39 @@ public static class ScoringEngine
         string profilePath,
         CancellationToken cancellationToken = default)
     {
+        return await EvaluateAsync(
+            artifactDirectory,
+            profilePath,
+            ScoringInputLimits.Default,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<ScoringResult> EvaluateAsync(
+        string artifactDirectory,
+        string profilePath,
+        ScoringInputLimits limits,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(profilePath);
+        ArgumentNullException.ThrowIfNull(limits);
+        limits.Validate();
 
         byte[] profileBytes;
         try
         {
-            profileBytes = await File.ReadAllBytesAsync(profilePath, cancellationToken).ConfigureAwait(false);
+            profileBytes = await ScoringInputReader.ReadFileBytesAsync(
+                profilePath,
+                limits.MaxProfileBytes,
+                "The scoring profile",
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new ScoringException(
+                ScoringFailureKind.InvalidProfile,
+                exception.Message,
+                exception);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -31,7 +57,8 @@ public static class ScoringEngine
                 exception);
         }
 
-        return await EvaluateAsync(artifactDirectory, profileBytes, cancellationToken).ConfigureAwait(false);
+        return await EvaluateAsync(artifactDirectory, profileBytes, limits, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public static async Task<ScoringResult> EvaluateAsync(
@@ -39,29 +66,61 @@ public static class ScoringEngine
         Stream profileJson,
         CancellationToken cancellationToken = default)
     {
+        return await EvaluateAsync(
+            artifactDirectory,
+            profileJson,
+            ScoringInputLimits.Default,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<ScoringResult> EvaluateAsync(
+        string artifactDirectory,
+        Stream profileJson,
+        ScoringInputLimits limits,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactDirectory);
         ArgumentNullException.ThrowIfNull(profileJson);
+        ArgumentNullException.ThrowIfNull(limits);
+        limits.Validate();
 
         if (!profileJson.CanRead)
         {
             throw new ArgumentException("The profile stream must be readable.", nameof(profileJson));
         }
 
-        await using var buffer = new MemoryStream();
-        await profileJson.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        byte[] profileBytes;
+        try
+        {
+            profileBytes = await ScoringInputReader.ReadStreamBytesAsync(
+                profileJson,
+                limits.MaxProfileBytes,
+                "The scoring profile",
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new ScoringException(
+                ScoringFailureKind.InvalidProfile,
+                exception.Message,
+                exception);
+        }
 
-        return await EvaluateAsync(artifactDirectory, buffer.ToArray(), cancellationToken).ConfigureAwait(false);
+        return await EvaluateAsync(artifactDirectory, profileBytes, limits, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task<ScoringResult> EvaluateAsync(
         string artifactDirectory,
         byte[] profileBytes,
+        ScoringInputLimits limits,
         CancellationToken cancellationToken)
     {
         var profileJson = DecodeProfile(profileBytes);
-        ParsedScoringProfile profile = ScoringProfileParser.Parse(profileJson);
+        ParsedScoringProfile profile = ScoringProfileParser.Parse(profileJson, limits.MaxJsonDepth);
         ScoringArtifacts artifacts = await ScoringArtifactReader.ReadAsync(
             artifactDirectory,
+            limits,
             cancellationToken).ConfigureAwait(false);
 
         ValidateArtifactContract(profile, artifacts.Summary);

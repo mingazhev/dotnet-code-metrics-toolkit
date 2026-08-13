@@ -27,7 +27,7 @@ public static class SemanticMetricProjector
             }
 
             AddTypeMetric(metrics, type, "inheritance_depth", type.Semantic.InheritanceDepth, "levels");
-            AddTypeMetric(metrics, type, "class_coupling", type.Semantic.ClassCoupling, "count");
+            AddTypeMetric(metrics, type, "type_coupling", type.Semantic.ClassCoupling, "count");
             AddTypeMetric(metrics, type, "public_api_count", type.Semantic.PublicApiCount, "count");
             AddTypeMetric(metrics, type, "documented_public_api_count", type.Semantic.DocumentedPublicApiCount, "count");
             if (type.Semantic.PublicApiCount > 0)

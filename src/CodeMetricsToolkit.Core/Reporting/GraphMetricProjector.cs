@@ -58,8 +58,13 @@ public static class GraphMetricProjector
             }
         }
 
-        Dictionary<string, int> dependencyComponentSizes = FindCyclicComponentSizes(
+        DirectedGraphAnalysis dependencyGraph = DirectedGraphAnalyzer.Analyze(
             typeOutgoing,
+            typeIncoming,
+            includeReachability: string.Equals(
+                facts.Health.AnalysisQuality,
+                "trusted",
+                StringComparison.Ordinal),
             cancellationToken);
         var metrics = new List<MetricResultLine>();
 
@@ -71,8 +76,9 @@ public static class GraphMetricProjector
             metrics.Add(CreateTypeMetric(type, "incoming_type_dependency_count", typeIncoming[type.TargetId].Count));
             metrics.Add(CreateTypeMetric(
                 type,
-                "dependency_cycle_count",
-                dependencyComponentSizes.GetValueOrDefault(type.TargetId) > 0 ? 1 : 0));
+                "dependency_cycle_membership",
+                dependencyGraph.GetCyclicComponentSize(type.TargetId) > 0 ? 1 : 0,
+                "flag"));
         }
 
         if (!string.Equals(facts.Health.AnalysisQuality, "trusted", StringComparison.Ordinal))
@@ -80,20 +86,22 @@ public static class GraphMetricProjector
             return metrics;
         }
 
-        Dictionary<string, int> recursiveComponentSizes = FindCyclicComponentSizes(
+        DirectedGraphAnalysis callGraph = DirectedGraphAnalyzer.Analyze(
             callOutgoing,
+            callIncoming,
+            includeReachability: false,
             cancellationToken);
 
         foreach (MemberFacts member in facts.Members.OrderBy(member => member.TargetId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            metrics.Add(CreateMemberMetric(member, "outgoing_call_count", callOutgoing[member.TargetId].Count));
-            metrics.Add(CreateMemberMetric(member, "incoming_call_count", callIncoming[member.TargetId].Count));
+            metrics.Add(CreateMemberMetric(member, "distinct_outgoing_callee_count", callOutgoing[member.TargetId].Count));
+            metrics.Add(CreateMemberMetric(member, "distinct_incoming_caller_count", callIncoming[member.TargetId].Count));
             metrics.Add(CreateMemberMetric(
                 member,
                 "recursive_component_size",
-                recursiveComponentSizes.GetValueOrDefault(member.TargetId)));
+                callGraph.GetCyclicComponentSize(member.TargetId)));
         }
 
         foreach (TypeFacts type in facts.Types.OrderBy(type => type.TargetId, StringComparer.Ordinal))
@@ -110,20 +118,20 @@ public static class GraphMetricProjector
                 .SelectMany(memberId => callIncoming[memberId])
                 .ToHashSet(StringComparer.Ordinal);
 
-            metrics.Add(CreateTypeMetric(type, "outgoing_call_count", outgoingCallees.Count));
-            metrics.Add(CreateTypeMetric(type, "incoming_call_count", incomingCallers.Count));
+            metrics.Add(CreateTypeMetric(type, "distinct_outgoing_callee_count", outgoingCallees.Count));
+            metrics.Add(CreateTypeMetric(type, "distinct_incoming_caller_count", incomingCallers.Count));
             metrics.Add(CreateTypeMetric(
                 type,
                 "dependency_component_size",
-                dependencyComponentSizes.GetValueOrDefault(type.TargetId)));
+                dependencyGraph.GetCyclicComponentSize(type.TargetId)));
             metrics.Add(CreateTypeMetric(
                 type,
                 "transitive_type_dependency_count",
-                CountReachable(type.TargetId, typeOutgoing, cancellationToken)));
+                dependencyGraph.GetTransitiveOutgoingCount(type.TargetId)));
             metrics.Add(CreateTypeMetric(
                 type,
                 "transitive_type_dependent_count",
-                CountReachable(type.TargetId, typeIncoming, cancellationToken)));
+                dependencyGraph.GetTransitiveIncomingCount(type.TargetId)));
         }
 
         return metrics;
@@ -152,7 +160,11 @@ public static class GraphMetricProjector
         return parentTypeByMemberId.TryGetValue(edge.From, out sourceTypeId!);
     }
 
-    private static MetricResultLine CreateTypeMetric(TypeFacts type, string metricId, int value)
+    private static MetricResultLine CreateTypeMetric(
+        TypeFacts type,
+        string metricId,
+        int value,
+        string unit = "count")
     {
         return MetricResultFactory.Numeric(
             metricId,
@@ -164,7 +176,7 @@ public static class GraphMetricProjector
             type.StartLine,
             type.EndLine,
             value,
-            "count");
+            unit);
     }
 
     private static MetricResultLine CreateMemberMetric(MemberFacts member, string metricId, int value)
@@ -182,107 +194,4 @@ public static class GraphMetricProjector
             "count");
     }
 
-    private static int CountReachable(
-        string start,
-        Dictionary<string, HashSet<string>> adjacency,
-        CancellationToken cancellationToken)
-    {
-        var visited = new HashSet<string>(StringComparer.Ordinal) { start };
-        var pending = new Stack<string>();
-        pending.Push(start);
-
-        while (pending.Count > 0)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var current = pending.Pop();
-
-            foreach (var target in adjacency[current])
-            {
-                if (visited.Add(target))
-                {
-                    pending.Push(target);
-                }
-            }
-        }
-
-        return visited.Count - 1;
-    }
-
-    private static Dictionary<string, int> FindCyclicComponentSizes(
-        IReadOnlyDictionary<string, HashSet<string>> outgoing,
-        CancellationToken cancellationToken)
-    {
-        var index = 0;
-        var stack = new Stack<string>();
-        var indexes = new Dictionary<string, int>(StringComparer.Ordinal);
-        var lowLinks = new Dictionary<string, int>(StringComparer.Ordinal);
-        var onStack = new HashSet<string>(StringComparer.Ordinal);
-        var componentSizes = new Dictionary<string, int>(StringComparer.Ordinal);
-
-        foreach (var node in outgoing.Keys.Order(StringComparer.Ordinal))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!indexes.ContainsKey(node))
-            {
-                StrongConnect(node);
-            }
-        }
-
-        return componentSizes;
-
-        void StrongConnect(string node)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            indexes[node] = index;
-            lowLinks[node] = index;
-            index++;
-            stack.Push(node);
-            onStack.Add(node);
-
-            foreach (var target in outgoing[node].Order(StringComparer.Ordinal))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (!indexes.TryGetValue(target, out var targetIndex))
-                {
-                    StrongConnect(target);
-                    lowLinks[node] = Math.Min(lowLinks[node], lowLinks[target]);
-                }
-                else if (onStack.Contains(target))
-                {
-                    lowLinks[node] = Math.Min(lowLinks[node], targetIndex);
-                }
-            }
-
-            if (lowLinks[node] != indexes[node])
-            {
-                return;
-            }
-
-            var component = new List<string>();
-            string current;
-
-            do
-            {
-                current = stack.Pop();
-                onStack.Remove(current);
-                component.Add(current);
-            }
-            while (!string.Equals(current, node, StringComparison.Ordinal));
-
-            var isCyclic = component.Count > 1 ||
-                component.Any(componentNode => outgoing[componentNode].Contains(componentNode));
-            if (!isCyclic)
-            {
-                return;
-            }
-
-            foreach (var cyclicNode in component)
-            {
-                componentSizes[cyclicNode] = component.Count;
-            }
-        }
-    }
 }

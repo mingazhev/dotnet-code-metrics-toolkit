@@ -41,7 +41,7 @@ A syntax-only self-analysis of commit `8e81221` produced:
 | Types | 146 |
 | Members | 710 |
 | File `lines_of_code` total | 11,802 |
-| File `non_comment_lines_of_code` total | 9,825 |
+| File `token_line_count` total | 9,825 |
 | Token-bearing line ratio | 83.25% |
 
 The total is already derivable by summing file observations, but making every consumer
@@ -54,7 +54,7 @@ different aggregation semantics.
 ### Recommended line partition
 
 Keep `lines_of_code@1.0.0` for compatibility, but document it as physical source lines.
-Keep `non_comment_lines_of_code@1.0.0` as the existing count of distinct lines containing
+Keep `token_line_count@1.0.0` as the existing count of distinct lines containing
 C# syntax tokens. Do not silently redefine either metric.
 
 Add the following raw file metrics:
@@ -85,7 +85,7 @@ denominator is zero rather than inventing a value.
 
 | Proposed metric | Formula |
 | --- | --- |
-| `token_line_ratio` | `non_comment_lines_of_code / lines_of_code` |
+| `token_line_ratio` | `token_line_count / lines_of_code` |
 | `blank_line_ratio` | `blank_line_count / lines_of_code` |
 | `comment_only_line_ratio` | `comment_only_line_count / lines_of_code` |
 | `commented_line_ratio` | `commented_line_count / lines_of_code` |
@@ -107,7 +107,7 @@ because summing cyclomatic complexity also adds a baseline of one per member.
 If a density is needed, define:
 
 ```text
-decision_density = sum(decision_point_count) / non_comment_lines_of_code
+decision_density = sum(decision_point_count) / token_line_count
 ```
 
 Emit both components. Treat the ratio as navigation context, not a target to minimize.
@@ -118,15 +118,15 @@ The current graph already contains enough information for useful raw measurement
 
 | Proposed metric | Target | Definition | Cost |
 | --- | --- | --- | --- |
-| `outgoing_call_count` | member/type | Distinct internal callees | Low |
-| `incoming_call_count` | member/type | Distinct internal callers | Low |
+| `distinct_outgoing_callee_count` | member/type | Distinct internal callees | Low |
+| `distinct_incoming_caller_count` | member/type | Distinct internal callers | Low |
 | `recursive_component_size` | member | Size of the call-graph SCC, or 0 outside a cycle | Low |
 | `dependency_component_size` | type | Size of the type-dependency SCC, or 0 outside a cycle | Low |
 | `transitive_type_dependency_count` | type | Distinct reachable internal type dependencies | Medium |
 | `transitive_type_dependent_count` | type | Distinct internal types that can reach the target | Medium |
 
-`dependency_cycle_count` currently returns only 0 or 1, despite its name. Preserve it
-for compatibility, then add component size and a stable component identifier. Counting
+`dependency_cycle_membership` returns 0 or 1 and supersedes the ambiguously named
+pre-release `dependency_cycle_count`. Add component size and a stable component identifier. Counting
 all simple cycles is not recommended: the number can grow exponentially and is rarely
 the question a maintainer needs answered.
 
@@ -166,7 +166,7 @@ they were complete.
 | --- | --- | --- |
 | `inheritance_depth` | type | Longest base-type path to the root |
 | `derived_type_count` | type | Direct internal child types |
-| `class_coupling` | type | Distinct types used across a documented set of semantic usage sites |
+| `type_coupling` | type | Distinct types used across a documented set of semantic usage sites |
 | `weighted_member_complexity` | type | Sum of member cyclomatic complexity |
 | `public_api_count` | project/type | Publicly accessible declared types and members |
 | `documented_public_api_count` | project/type | Public API symbols with XML documentation |
@@ -178,7 +178,7 @@ they were complete.
 
 The current `outgoing_type_dependency_count` is not class coupling in the Microsoft
 sense: it counts only internal types reachable through a limited set of graph edges.
-`class_coupling` needs a separate metric ID and an explicit usage table covering
+`type_coupling` needs a separate metric ID and an explicit usage table covering
 parameters, locals, return types, calls, generic instantiations, base types, interfaces,
 fields, and attributes. External/framework types must be handled deliberately rather
 than silently discarded.
@@ -219,7 +219,7 @@ short-circuit operators, pattern matching, exception edges, and local functions 
 change the result.
 
 Executable LOC should be a new metric, not a rename of
-`non_comment_lines_of_code`. A defensible implementation counts distinct source lines
+`token_line_count`. A defensible implementation counts distinct source lines
 mapped from executable operations, while documenting how synthesized, implicit, and
 multi-line operations are treated.
 

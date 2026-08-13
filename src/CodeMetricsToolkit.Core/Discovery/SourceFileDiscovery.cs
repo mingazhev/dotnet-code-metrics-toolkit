@@ -76,13 +76,16 @@ public static class SourceFileDiscovery
             ? [ProjectIdentity.SyntheticProjectPath]
             : projectPaths;
 
-        var sourceFiles = EnumerateFiles(
+        var candidateSourceFiles = EnumerateFiles(
                 rootDirectory,
                 "*.cs",
                 includeGeneratedCode,
                 cancellationToken)
             .Where(file => ShouldIncludeSourceFile(rootPath, file.FullName, includePatterns, excludePatterns))
             .Select(file => CreateSourceFile(rootPath, sourceProjectPaths, file.FullName))
+            .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
+            .ToList();
+        var sourceFiles = candidateSourceFiles
             .Where(file => IsInSelectedProjectScope(file, selection, sourceProjectPaths))
             .Select(file => ReassignSelectedProject(file, selection))
             .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
@@ -96,7 +99,10 @@ public static class SourceFileDiscovery
                 : projectPaths,
             sourceFiles,
             selection.SelectedSolutionPath,
-            selection.SelectedProjectPath);
+            selection.SelectedProjectPath)
+        {
+            CandidateSourceFiles = candidateSourceFiles
+        };
     }
 
     internal static InputSelection ResolveInputSelection(string inputPath)
@@ -395,22 +401,12 @@ public static class SourceFileDiscovery
         return included && !excluded;
     }
 
-    private static bool GlobMatches(string pattern, string relativePath)
+    internal static bool GlobMatches(string pattern, string relativePath)
     {
-        var normalizedPattern = pattern.Replace(Path.DirectorySeparatorChar, '/');
-        var normalizedPath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
+        var normalizedPattern = NormalizeGlobValue(pattern);
+        var normalizedPath = NormalizeGlobValue(relativePath);
 
-        if (GlobRegex(normalizedPattern).IsMatch(normalizedPath))
-        {
-            return true;
-        }
-
-        if (!normalizedPattern.Contains('/', StringComparison.Ordinal))
-        {
-            return GlobRegex(normalizedPattern).IsMatch(Path.GetFileName(normalizedPath));
-        }
-
-        return false;
+        return GlobRegex(normalizedPattern).IsMatch(normalizedPath);
     }
 
     private static System.Text.RegularExpressions.Regex GlobRegex(string pattern)
@@ -421,6 +417,16 @@ public static class SourceFileDiscovery
         for (var index = 0; index < pattern.Length; index++)
         {
             var current = pattern[index];
+
+            if (current == '*' &&
+                index + 2 < pattern.Length &&
+                pattern[index + 1] == '*' &&
+                pattern[index + 2] == '/')
+            {
+                builder.Append("(?:.*/)?");
+                index += 2;
+                continue;
+            }
 
             if (current == '*')
             {
@@ -447,6 +453,13 @@ public static class SourceFileDiscovery
         builder.Append('$');
 
         return new System.Text.RegularExpressions.Regex(builder.ToString(), System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    }
+
+    private static string NormalizeGlobValue(string value)
+    {
+        var normalized = value.Replace('\\', '/');
+
+        return normalized.StartsWith("./", StringComparison.Ordinal) ? normalized[2..] : normalized;
     }
 
     private static DiscoveredSourceFile CreateSourceFile(
@@ -503,7 +516,12 @@ public sealed record DiscoveredSources(
     IReadOnlyList<string> ProjectPaths,
     IReadOnlyList<DiscoveredSourceFile> SourceFiles,
     string? SelectedSolutionPath,
-    string? SelectedProjectPath);
+    string? SelectedProjectPath)
+{
+    // Selected solution/project scope is finalized from evaluated MSBuild Compile items.
+    // These candidates preserve in-root linked sources that directory proximity cannot identify.
+    internal IReadOnlyList<DiscoveredSourceFile> CandidateSourceFiles { get; init; } = SourceFiles;
+}
 
 public sealed record DiscoveredSourceFile(
     string FullPath,

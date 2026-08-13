@@ -84,8 +84,17 @@ public static class GraphProjector
         {
             var projectKey = ProjectIdentity.Key(projectPath);
             var projectTargetId = ProjectIdentity.TargetId(projectPath);
+            HashSet<string> projectFilePaths = facts.ProjectFileMemberships is null
+                ? facts.Files
+                    .Where(file => file.ProjectKey == projectKey)
+                    .Select(file => file.FilePath)
+                    .ToHashSet(StringComparer.Ordinal)
+                : facts.ProjectFileMemberships
+                    .Where(membership => membership.ProjectKey == projectKey)
+                    .Select(membership => membership.FilePath)
+                    .ToHashSet(StringComparer.Ordinal);
 
-            foreach (FileFacts file in facts.Files.Where(file => file.ProjectKey == projectKey))
+            foreach (FileFacts file in facts.Files.Where(file => projectFilePaths.Contains(file.FilePath)))
             {
                 yield return new GraphEdgeLine(projectTargetId, file.TargetId, "contains", "exact");
             }

@@ -56,7 +56,7 @@ public sealed class SemanticMetricProjectorTests
             MetricFamilies.Semantic.Order(StringComparer.Ordinal),
             metrics.Select(metric => metric.MetricId).Distinct().Order(StringComparer.Ordinal));
         AssertMetric(metrics, type.TargetId, "inheritance_depth", 2, "integer");
-        AssertMetric(metrics, type.TargetId, "class_coupling", 4, "integer");
+        AssertMetric(metrics, type.TargetId, "type_coupling", 4, "integer");
         AssertMetric(metrics, type.TargetId, "public_api_count", 3, "integer");
         AssertMetric(metrics, type.TargetId, "documented_public_api_count", 2, "integer");
         AssertMetric(metrics, type.TargetId, "public_api_documentation_ratio", 2d / 3d, "number");

@@ -23,6 +23,6 @@ Every catalog metric must pass both gates:
 | Graph/chunk artifacts | schema, invariant and CLI tests | real artifacts from all analyzed fixture projects |
 | Atomic publication and output validation | `ArtifactDirectoryPublisherTests`, `OutputValidatorTests`, schema tests | every CLI integration validates the published directory |
 | Input selection, isolation and degraded analysis | discovery and CLI tests | dedicated multi-project, broken, generated and nullable fixture scenarios |
-| Scoring profiles and provenance | `ScoringEngineTests` | scoring reads complete generated artifact directories and rejects drift/inconsistent snapshots |
+| Scoring profiles and provenance | `ScoringEngineTests` | `AnalyzerScoringIntegrationTests` runs the analyzer on `ExpandedMetricsProject`, validates the emitted artifacts, and asserts an exact score plus complete provenance |
 
 The golden file is intentionally reviewed source, not regenerated during a test. A formula or Roslyn-version change must produce an explicit expectation diff and, when semantics change, a metric version change.

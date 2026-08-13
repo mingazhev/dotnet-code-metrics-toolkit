@@ -5,8 +5,6 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{9F0CD240-552D-40EC-B4C8-DFBCCF79BD2E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeMetricsToolkit.Abstractions", "src\CodeMetricsToolkit.Abstractions\CodeMetricsToolkit.Abstractions.csproj", "{44485176-D8D0-4BA6-8899-A10630D6EFCD}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeMetricsToolkit.Core", "src\CodeMetricsToolkit.Core\CodeMetricsToolkit.Core.csproj", "{AED13660-91EE-4592-8E9A-B465BC8B8FDF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeMetricsToolkit.Cli", "src\CodeMetricsToolkit.Cli\CodeMetricsToolkit.Cli.csproj", "{0D6E8299-4803-4F0D-AAB4-869BF48F665A}"
@@ -26,10 +24,6 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{44485176-D8D0-4BA6-8899-A10630D6EFCD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{44485176-D8D0-4BA6-8899-A10630D6EFCD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{44485176-D8D0-4BA6-8899-A10630D6EFCD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{44485176-D8D0-4BA6-8899-A10630D6EFCD}.Release|Any CPU.Build.0 = Release|Any CPU
 		{AED13660-91EE-4592-8E9A-B465BC8B8FDF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{AED13660-91EE-4592-8E9A-B465BC8B8FDF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AED13660-91EE-4592-8E9A-B465BC8B8FDF}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -48,7 +42,6 @@ Global
 		{EC4D1F82-BD21-4394-A3D9-5037440DED30}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{44485176-D8D0-4BA6-8899-A10630D6EFCD} = {9F0CD240-552D-40EC-B4C8-DFBCCF79BD2E}
 		{AED13660-91EE-4592-8E9A-B465BC8B8FDF} = {9F0CD240-552D-40EC-B4C8-DFBCCF79BD2E}
 		{0D6E8299-4803-4F0D-AAB4-869BF48F665A} = {9F0CD240-552D-40EC-B4C8-DFBCCF79BD2E}
 		{20D6E34C-88E7-4FBE-BC05-E9822A37E366} = {6E1521D4-EC8B-4B9B-8AE5-A69817DB7F6A}

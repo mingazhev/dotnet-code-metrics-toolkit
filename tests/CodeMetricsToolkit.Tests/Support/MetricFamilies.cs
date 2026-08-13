@@ -5,7 +5,7 @@ internal static class MetricFamilies
     public static IReadOnlySet<string> Syntax { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "lines_of_code",
-        "non_comment_lines_of_code",
+        "token_line_count",
         "blank_line_count",
         "comment_only_line_count",
         "commented_line_count",
@@ -16,7 +16,7 @@ internal static class MetricFamilies
         "comment_only_line_ratio",
         "commented_line_ratio",
         "documentation_comment_ratio",
-        "method_length",
+        "member_length",
         "parameter_count",
         "cyclomatic_complexity",
         "decision_point_count",
@@ -35,9 +35,9 @@ internal static class MetricFamilies
     {
         "outgoing_type_dependency_count",
         "incoming_type_dependency_count",
-        "dependency_cycle_count",
-        "outgoing_call_count",
-        "incoming_call_count",
+        "dependency_cycle_membership",
+        "distinct_outgoing_callee_count",
+        "distinct_incoming_caller_count",
         "recursive_component_size",
         "dependency_component_size",
         "transitive_type_dependency_count",
@@ -47,7 +47,7 @@ internal static class MetricFamilies
     public static IReadOnlySet<string> Semantic { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "inheritance_depth",
-        "class_coupling",
+        "type_coupling",
         "public_api_count",
         "documented_public_api_count",
         "public_api_documentation_ratio",
