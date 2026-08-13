@@ -50,7 +50,9 @@ public static class SyntaxFactsCollector
             sourceFiles,
             semanticLoad.Contexts,
             cancellationToken);
-        Dictionary<string, TypeFacts> typeFactsById = CreateTypeFacts(typeDeclarations);
+        Dictionary<string, TypeFacts> typeFactsById = CreateTypeFacts(
+            typeDeclarations,
+            cancellationToken);
         IReadOnlyList<TypeFacts> types = typeFactsById.Values
             .OrderBy(type => type.TargetId, StringComparer.Ordinal)
             .ToArray();
@@ -205,9 +207,14 @@ public static class SyntaxFactsCollector
 
             if (externalWorkspaceSources.Length > 0)
             {
+                var examples = string.Join(
+                    ", ",
+                    externalWorkspaceSources
+                        .Take(3)
+                        .Select(Path.GetFileName));
                 messages.Add(
                     $"MSBuildWorkspace loaded {externalWorkspaceSources.Length} authored source file(s) outside " +
-                    "the analysis root; linked external sources are not included and semantic results are not trusted.");
+                    $"the analysis root ({examples}); linked external sources are not included and semantic results are not trusted.");
             }
 
             foreach (WorkspaceDiagnostic workspaceDiagnostic in workspaceDiagnostics)
@@ -282,8 +289,23 @@ public static class SyntaxFactsCollector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            var fullProjectPath = NormalizeFullPath(
+                Path.Combine(sources.RootPath, projectPath));
+            var alreadyLoaded = workspace.CurrentSolution.Projects.Any(project =>
+                project.FilePath is not null &&
+                string.Equals(
+                    NormalizeFullPath(project.FilePath),
+                    fullProjectPath,
+                    OperatingSystem.IsWindows()
+                        ? StringComparison.OrdinalIgnoreCase
+                        : StringComparison.Ordinal));
+            if (alreadyLoaded)
+            {
+                continue;
+            }
+
             await workspace.OpenProjectAsync(
-                    Path.Combine(sources.RootPath, projectPath),
+                    fullProjectPath,
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -623,6 +645,7 @@ public static class SyntaxFactsCollector
         return fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase) ||
+            fileName.Equals("Microsoft.NET.Test.Sdk.Program.cs", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(fileName, "AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -729,7 +752,9 @@ public static class SyntaxFactsCollector
             GetSupportedMembers(typeDeclaration).Count());
     }
 
-    private static Dictionary<string, TypeFacts> CreateTypeFacts(IReadOnlyList<TypeDeclarationInfo> typeDeclarations)
+    private static Dictionary<string, TypeFacts> CreateTypeFacts(
+        IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
+        CancellationToken cancellationToken)
     {
         return typeDeclarations
             .GroupBy(declaration => declaration.TargetId, StringComparer.Ordinal)
@@ -737,10 +762,11 @@ public static class SyntaxFactsCollector
                 group => group.Key,
                 group =>
                 {
-                    TypeDeclarationInfo first = group
+                    TypeDeclarationInfo[] declarations = group
                         .OrderBy(declaration => declaration.FilePath, StringComparer.Ordinal)
                         .ThenBy(declaration => declaration.StartLine)
-                        .First();
+                        .ToArray();
+                    TypeDeclarationInfo first = declarations[0];
 
                     return new TypeFacts
                     {
@@ -752,9 +778,7 @@ public static class SyntaxFactsCollector
                         FilePath = first.FilePath,
                         StartLine = first.StartLine,
                         EndLine = first.EndLine,
-                        Declarations = group
-                            .OrderBy(declaration => declaration.FilePath, StringComparer.Ordinal)
-                            .ThenBy(declaration => declaration.StartLine)
+                        Declarations = declarations
                             .Select(declaration => new SourceSpanFacts
                             {
                                 FilePath = declaration.FilePath,
@@ -762,12 +786,30 @@ public static class SyntaxFactsCollector
                                 EndLine = declaration.EndLine
                             })
                             .ToArray(),
-                        LinesOfCode = group.Sum(declaration => declaration.LinesOfCode),
-                        NonCommentLinesOfCode = group.Sum(declaration => declaration.NonCommentLinesOfCode),
-                        MemberCount = group.Sum(declaration => declaration.MemberCount)
+                        LinesOfCode = declarations.Sum(declaration => declaration.LinesOfCode),
+                        NonCommentLinesOfCode = declarations.Sum(declaration => declaration.NonCommentLinesOfCode),
+                        MemberCount = declarations.Sum(declaration => declaration.MemberCount),
+                        Semantic = CreateTypeSemanticFacts(declarations, cancellationToken)
                     };
                 },
                 StringComparer.Ordinal);
+    }
+
+    private static TypeSemanticFacts? CreateTypeSemanticFacts(
+        IReadOnlyList<TypeDeclarationInfo> declarations,
+        CancellationToken cancellationToken)
+    {
+        SemanticTypeDeclaration[] semanticDeclarations = declarations
+            .Where(declaration => declaration.Symbol is not null && declaration.SemanticModel is not null)
+            .Select(declaration => new SemanticTypeDeclaration(
+                declaration.Declaration,
+                declaration.SemanticModel!,
+                declaration.Symbol!))
+            .ToArray();
+
+        return TypeSemanticFactsCollector.Collect(
+            semanticDeclarations,
+            cancellationToken);
     }
 
     private static List<MemberDeclarationInfo> CollectMemberDeclarations(
@@ -823,6 +865,9 @@ public static class SyntaxFactsCollector
             : TargetIds.MemberSemantic(assemblyName, documentationCommentId);
         var targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
         ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration, cancellationToken);
+        OperationFacts? operationFacts = semanticModel is null
+            ? null
+            : OperationFactsCollector.Collect(memberDeclaration, semanticModel, cancellationToken);
 
         return new MemberDeclarationInfo(
             memberDeclaration,
@@ -840,6 +885,7 @@ public static class SyntaxFactsCollector
             endLine,
             HasBody(memberDeclaration),
             controlFlowFacts,
+            operationFacts,
             Math.Max(1, endLine - startLine + 1),
             parameterCount);
     }
@@ -880,6 +926,7 @@ public static class SyntaxFactsCollector
                             })
                             .ToArray(),
                         ControlFlow = primary.ControlFlow,
+                        Operations = primary.Operations,
                         MethodLength = primary.MethodLength,
                         ParameterCount = primary.ParameterCount
                     };
@@ -1009,7 +1056,7 @@ public static class SyntaxFactsCollector
             cancellationToken.ThrowIfCancellationRequested();
 
             ISymbol? symbol = memberDeclaration.SemanticModel!.GetSymbolInfo(invocation, cancellationToken).Symbol;
-            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId) && targetId != member.TargetId)
+            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId))
             {
                 AddEdge(edges, seenEdges, member.TargetId, targetId, "calls", "exact");
             }
@@ -1020,7 +1067,7 @@ public static class SyntaxFactsCollector
             cancellationToken.ThrowIfCancellationRequested();
 
             ISymbol? symbol = memberDeclaration.SemanticModel!.GetSymbolInfo(objectCreation, cancellationToken).Symbol;
-            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId) && targetId != member.TargetId)
+            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId))
             {
                 AddEdge(edges, seenEdges, member.TargetId, targetId, "calls", "exact");
             }
@@ -1052,6 +1099,7 @@ public static class SyntaxFactsCollector
     private static FileFacts CreateFileFacts(SourceFileContext context)
     {
         var fullSpan = new TextSpan(0, context.SourceText.Length);
+        LineCounts lineCounts = CountFileLines(context);
 
         return new FileFacts
         {
@@ -1061,9 +1109,72 @@ public static class SyntaxFactsCollector
             FilePath = context.SourceFile.RelativePath,
             StartLine = 1,
             EndLine = Math.Max(1, context.SourceText.Lines.Count),
-            LinesOfCode = CountLines(fullSpan, context.SyntaxTree),
-            NonCommentLinesOfCode = CountTokenLines(fullSpan, context.Root, context.SyntaxTree)
+            LinesOfCode = lineCounts.LinesOfCode,
+            NonCommentLinesOfCode = lineCounts.NonCommentLinesOfCode,
+            BlankLineCount = lineCounts.BlankLineCount,
+            CommentOnlyLineCount = lineCounts.CommentOnlyLineCount,
+            CommentedLineCount = lineCounts.CommentedLineCount,
+            MixedCodeCommentLineCount = lineCounts.MixedCodeCommentLineCount,
+            DocumentationCommentLineCount = lineCounts.DocumentationCommentLineCount
         };
+    }
+
+    private static LineCounts CountFileLines(SourceFileContext context)
+    {
+        var fullSpan = new TextSpan(0, context.SourceText.Length);
+        var tokenLines = context.Root
+            .DescendantTokens(fullSpan)
+            .Where(token => token.Span.Length > 0)
+            .Select(token => context.SyntaxTree.GetLineSpan(token.Span).StartLinePosition.Line)
+            .ToHashSet();
+        var commentLines = new HashSet<int>();
+        var documentationCommentLines = new HashSet<int>();
+
+        foreach (SyntaxTrivia trivia in context.Root.DescendantTrivia(descendIntoTrivia: false))
+        {
+            var isDocumentation = trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+                trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
+            var isComment = isDocumentation ||
+                trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
+                trivia.IsKind(SyntaxKind.MultiLineCommentTrivia);
+
+            if (!isComment || trivia.Span.IsEmpty)
+            {
+                continue;
+            }
+
+            FileLinePositionSpan lineSpan = context.SyntaxTree.GetLineSpan(trivia.Span);
+            var endLine = lineSpan.EndLinePosition.Line;
+            if (lineSpan.EndLinePosition.Character == 0 &&
+                endLine > lineSpan.StartLinePosition.Line)
+            {
+                endLine--;
+            }
+
+            for (var line = lineSpan.StartLinePosition.Line;
+                 line <= endLine;
+                 line++)
+            {
+                commentLines.Add(line);
+                if (isDocumentation)
+                {
+                    documentationCommentLines.Add(line);
+                }
+            }
+        }
+
+        var blankLineCount = context.SourceText.Lines.Count(line =>
+            string.IsNullOrWhiteSpace(line.ToString()) &&
+            !commentLines.Contains(line.LineNumber));
+
+        return new LineCounts(
+            CountLines(fullSpan, context.SyntaxTree),
+            tokenLines.Count,
+            blankLineCount,
+            commentLines.Count(line => !tokenLines.Contains(line)),
+            commentLines.Count,
+            commentLines.Count(tokenLines.Contains),
+            documentationCommentLines.Count);
     }
 
     private static PortableExecutableReference[] CreateDefaultReferences()
@@ -1466,6 +1577,15 @@ public static class SyntaxFactsCollector
         string StandardOutput,
         string StandardError);
 
+    private sealed record LineCounts(
+        int LinesOfCode,
+        int NonCommentLinesOfCode,
+        int BlankLineCount,
+        int CommentOnlyLineCount,
+        int CommentedLineCount,
+        int MixedCodeCommentLineCount,
+        int DocumentationCommentLineCount);
+
     private sealed record TypeDeclarationInfo(
         BaseTypeDeclarationSyntax Declaration,
         SourceFileContext Context,
@@ -1498,6 +1618,7 @@ public static class SyntaxFactsCollector
         int EndLine,
         bool HasBody,
         ControlFlowFacts ControlFlow,
+        OperationFacts? Operations,
         int MethodLength,
         int ParameterCount);
 }

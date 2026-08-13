@@ -2,6 +2,8 @@ namespace CodeMetricsToolkit.Core.Syntax;
 
 public static class TargetIds
 {
+    public const string SolutionRoot = "solution:root";
+
     public static string File(string relativePath)
     {
         return $"file:{relativePath}";

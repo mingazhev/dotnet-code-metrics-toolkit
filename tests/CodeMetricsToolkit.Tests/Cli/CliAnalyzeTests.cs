@@ -89,6 +89,55 @@ public sealed class CliAnalyzeTests
     }
 
     [Fact]
+    public async Task AnalyzeCommandDoesNotReopenAlreadyLoadedProjectReferences()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        var projectA = Path.Combine(input.Path, "ProjectA");
+        var projectB = Path.Combine(input.Path, "ProjectB");
+        Directory.CreateDirectory(projectA);
+        Directory.CreateDirectory(projectB);
+        File.WriteAllText(
+            Path.Combine(projectA, "ProjectA.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+              <ItemGroup><ProjectReference Include="../ProjectB/ProjectB.csproj" /></ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(projectB, "ProjectB.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(projectA, "A.cs"),
+            "public sealed class A { public ProjectB.B Value { get; } = new(); }");
+        File.WriteAllText(
+            Path.Combine(projectB, "B.cs"),
+            "namespace ProjectB; public sealed class B { }");
+
+        var exitCode = await RunCliAsync(
+            "analyze",
+            input.Path,
+            "--output",
+            output.Path,
+            "--no-restore");
+
+        Assert.Equal(0, exitCode);
+        using var summary = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        JsonElement health = summary.RootElement.GetProperty("analysisHealth");
+        Assert.Equal("trusted", health.GetProperty("analysisQuality").GetString());
+        Assert.Equal(2, summary.RootElement.GetProperty("projectCount").GetInt32());
+        Assert.Contains(
+            ReadNdjson(Path.Combine(output.Path, "metrics.ndjson")),
+            metric => HasPropertyValue(metric, "metricId", "class_coupling"));
+    }
+
+    [Fact]
     public async Task AnalyzeCommandExcludesGeneratedFilesByDefault()
     {
         using var input = TemporaryDirectory.Create();
@@ -202,6 +251,128 @@ public sealed class CliAnalyzeTests
         Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "type") && HasPropertyValue(node, "targetIdStability", "syntax_fallback"));
         Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "member") && HasPropertyValue(node, "targetIdStability", "syntax_fallback"));
         Assert.Contains(chunks, chunk => HasPropertyValue(chunk, "targetKind", "member") && HasPropertyValue(chunk, "targetIdStability", "syntax_fallback"));
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        Assert.DoesNotContain(metrics, metric => HasPropertyValue(metric, "metricId", "operation_count"));
+        Assert.DoesNotContain(metrics, metric => HasPropertyValue(metric, "metricId", "class_coupling"));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandClassifiesLinesAndAggregatesUniqueFileLoc()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        File.WriteAllText(
+            Path.Combine(input.Path, "LineSample.cs"),
+            string.Join(
+                '\n',
+                "// ordinary",
+                "",
+                "/// <summary>",
+                "/// Docs.",
+                "/// </summary>",
+                "public class Sample // mixed",
+                "{",
+                "    public void M() { } /* mixed */",
+                "}"));
+
+        var exitCode = await RunCliAsync(
+            "analyze",
+            input.Path,
+            "--syntax-only",
+            "--output",
+            output.Path);
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        const string fileTargetId = "file:LineSample.cs";
+
+        Assert.Equal(9, MetricInt(metrics, fileTargetId, "lines_of_code"));
+        Assert.Equal(4, MetricInt(metrics, fileTargetId, "non_comment_lines_of_code"));
+        Assert.Equal(1, MetricInt(metrics, fileTargetId, "blank_line_count"));
+        Assert.Equal(4, MetricInt(metrics, fileTargetId, "comment_only_line_count"));
+        Assert.Equal(6, MetricInt(metrics, fileTargetId, "commented_line_count"));
+        Assert.Equal(2, MetricInt(metrics, fileTargetId, "mixed_code_comment_line_count"));
+        Assert.Equal(3, MetricInt(metrics, fileTargetId, "documentation_comment_line_count"));
+        Assert.Equal(4d / 9d, MetricDouble(metrics, fileTargetId, "token_line_ratio"), 12);
+        Assert.Equal(
+            "number",
+            GetMetric(metrics, fileTargetId, "token_line_ratio")
+                .GetProperty("valueKind")
+                .GetString());
+        Assert.Equal(9, MetricInt(metrics, "solution:root", "lines_of_code"));
+        Assert.Equal(6d / 9d, MetricDouble(metrics, "solution:root", "commented_line_ratio"), 12);
+
+        JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
+        Assert.Contains(graphNodes, node =>
+            HasPropertyValue(node, "id", "solution:root") &&
+            HasPropertyValue(node, "kind", "solution"));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandEmitsTrustedSemanticGraphAndCfgMetrics()
+    {
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("ExpandedMetricsProject");
+
+        var exitCode = await RunCliAsync(
+            "analyze",
+            projectPath,
+            "--output",
+            output.Path);
+
+        Assert.Equal(0, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        const string metricsSampleId = "type:ExpandedMetricsProject/T:ExpandedMetricsProject.MetricsSample";
+        const string cycleAId = "type:ExpandedMetricsProject/T:ExpandedMetricsProject.CycleA";
+        const string methodAId = "member:ExpandedMetricsProject/M:ExpandedMetricsProject.MetricsSample.A(System.Int32)";
+        const string methodBId = "member:ExpandedMetricsProject/M:ExpandedMetricsProject.MetricsSample.B(System.Int32)";
+        const string selfMethodId = "member:ExpandedMetricsProject/M:ExpandedMetricsProject.MetricsSample.Self(System.Int32)";
+        const string computeId = "member:ExpandedMetricsProject/M:ExpandedMetricsProject.MetricsSample.ComputeAsync(System.Int32)";
+
+        Assert.Equal(1, MetricInt(metrics, metricsSampleId, "inheritance_depth"));
+        Assert.True(MetricInt(metrics, metricsSampleId, "class_coupling") >= 3);
+        Assert.Equal(4, MetricInt(metrics, metricsSampleId, "public_api_count"));
+        Assert.Equal(2, MetricInt(metrics, metricsSampleId, "documented_public_api_count"));
+        Assert.Equal(0.5, MetricDouble(metrics, metricsSampleId, "public_api_documentation_ratio"));
+
+        Assert.Equal(1, MetricInt(metrics, computeId, "allocation_count"));
+        Assert.Equal(1, MetricInt(metrics, computeId, "await_count"));
+        Assert.True(MetricInt(metrics, computeId, "operation_count") > 0);
+        Assert.True(MetricInt(metrics, computeId, "basic_block_count") > 0);
+        Assert.Equal(
+            MetricInt(metrics, computeId, "basic_block_count"),
+            MetricInt(metrics, computeId, "reachable_basic_block_count") +
+                MetricInt(metrics, computeId, "unreachable_basic_block_count"));
+        Assert.True(MetricInt(metrics, computeId, "cfg_cyclomatic_complexity") >= 1);
+
+        Assert.Equal(1, MetricInt(metrics, methodAId, "outgoing_call_count"));
+        Assert.Equal(1, MetricInt(metrics, methodAId, "incoming_call_count"));
+        Assert.Equal(2, MetricInt(metrics, methodAId, "recursive_component_size"));
+        Assert.Equal(2, MetricInt(metrics, methodBId, "recursive_component_size"));
+        Assert.Equal(1, MetricInt(metrics, selfMethodId, "outgoing_call_count"));
+        Assert.Equal(1, MetricInt(metrics, selfMethodId, "incoming_call_count"));
+        Assert.Equal(1, MetricInt(metrics, selfMethodId, "recursive_component_size"));
+        Assert.Equal(2, MetricInt(metrics, cycleAId, "dependency_component_size"));
+        Assert.Equal(1, MetricInt(metrics, cycleAId, "transitive_type_dependency_count"));
+
+        JsonElement[] fileLoc = metrics
+            .Where(metric =>
+                HasPropertyValue(metric, "metricId", "lines_of_code") &&
+                HasPropertyValue(metric, "targetKind", "file"))
+            .ToArray();
+        JsonElement projectNode = Assert.Single(
+            ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes"),
+            node => HasPropertyValue(node, "kind", "project"));
+        var projectTargetId = projectNode.GetProperty("id").GetString()!;
+        var fileLocTotal = fileLoc.Sum(metric => metric.GetProperty("numericValue").GetInt32());
+
+        Assert.Equal(fileLocTotal, MetricInt(metrics, projectTargetId, "lines_of_code"));
+        Assert.Equal(fileLocTotal, MetricInt(metrics, "solution:root", "lines_of_code"));
     }
 
     [Fact]
@@ -450,7 +621,13 @@ public sealed class CliAnalyzeTests
 
         Assert.Equal(0, listExitCode);
         Assert.Equal(0, explainExitCode);
+        Assert.Equal(
+            50,
+            listOutput.ToString().Split(
+                Environment.NewLine,
+                StringSplitOptions.RemoveEmptyEntries).Length);
         Assert.Contains("diagnostic_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("cfg_cyclomatic_complexity@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("Formula: number of diagnostics whose span overlaps the target", explainOutput.ToString(), StringComparison.Ordinal);
     }
 
@@ -703,6 +880,20 @@ public sealed class CliAnalyzeTests
         return Assert.Single(metrics, metric =>
             HasPropertyValue(metric, "targetId", targetId) &&
             HasPropertyValue(metric, "metricId", metricId));
+    }
+
+    private static int MetricInt(JsonElement[] metrics, string targetId, string metricId)
+    {
+        return GetMetric(metrics, targetId, metricId)
+            .GetProperty("numericValue")
+            .GetInt32();
+    }
+
+    private static double MetricDouble(JsonElement[] metrics, string targetId, string metricId)
+    {
+        return GetMetric(metrics, targetId, metricId)
+            .GetProperty("numericValue")
+            .GetDouble();
     }
 
     private static void CreateGeneratedFileSample(string rootPath)

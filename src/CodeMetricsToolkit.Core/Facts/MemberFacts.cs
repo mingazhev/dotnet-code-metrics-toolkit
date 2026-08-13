@@ -15,4 +15,5 @@ public sealed record MemberFacts
     public required ControlFlowFacts ControlFlow { get; init; }
     public required int MethodLength { get; init; }
     public required int ParameterCount { get; init; }
+    public OperationFacts? Operations { get; init; }
 }

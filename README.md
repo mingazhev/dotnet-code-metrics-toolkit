@@ -26,7 +26,7 @@ Each analysis writes one self-contained artifact directory:
 | `chunks.ndjson` | Stable source ranges and hashes for downstream retrieval |
 | `diagnostics.ndjson` | Syntax, compiler, nullable, workspace, and project-load diagnostics |
 
-The current catalog contains 19 raw and derived metrics. Run `codemetrics list-metrics`
+The current catalog contains 50 raw and derived metrics. Run `codemetrics list-metrics`
 for the authoritative list and `codemetrics explain <metric-id>` for a formula and its
 known limitations.
 

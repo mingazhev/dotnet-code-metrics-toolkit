@@ -1,6 +1,6 @@
 # Metric expansion research
 
-Status: initial product research, 2026-08-13.
+Status: P0-P2 core slice implemented, 2026-08-13.
 
 This document evaluates metrics that can extend the toolkit without turning the
 collector into a quality policy engine. The recommendation is deliberately narrower
@@ -28,7 +28,7 @@ file or 5,000 comment lines in a mature library.
 
 ## Current baseline
 
-The catalog currently contains 19 metrics over files, types, and members. The graph has
+The baseline catalog contained 19 metrics over files, types, and members. The graph had
 project, file, type, and member nodes, with `contains`, `declares`, `inherits`,
 `implements`, `uses_type`, and `calls` edges. Only type dependency edges currently
 produce graph metrics; call edges are collected but not measured.
@@ -274,6 +274,10 @@ the public contract.
   code with a different security and determinism boundary from parsing source.
 
 ## Delivery plan
+
+The first implementation now ships the P0 line family, existing-graph metrics,
+inheritance/coupling/public API coverage, and the first `IOperation`/CFG slice. Reference
+search, cohesion, Halstead/MI, and duplication remain deferred.
 
 ### P0: line accounting and aggregation
 
