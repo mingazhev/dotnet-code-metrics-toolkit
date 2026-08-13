@@ -111,6 +111,10 @@ The SDK is pinned by `global.json`, dependency versions are centralized in
 `Directory.Packages.props`, and warnings are treated as errors. Contributions must keep
 metric formulas and artifact schemas versioned. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## License
+
+Licensed under the [MIT License](LICENSE).
+
 ## Repository layout
 
 ```text
