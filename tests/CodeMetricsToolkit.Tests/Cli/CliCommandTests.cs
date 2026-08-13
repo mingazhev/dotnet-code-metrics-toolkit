@@ -184,7 +184,7 @@ public sealed partial class CliAnalyzeTests
 
         Assert.Equal(0, exitCode);
         SchemaAssertions.OutputDirectoryValidates(output.Path);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Analysis took {stopwatch.Elapsed}.");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(60), $"Analysis took {stopwatch.Elapsed}.");
     }
 
     [Fact]

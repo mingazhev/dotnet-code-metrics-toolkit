@@ -21,6 +21,9 @@ artifacts: manifest, summary, metrics, graph, chunks, diagnostics
 Local baseline recorded on 2026-05-06:
 
 ```text
-smoke threshold: under 30 seconds
+cross-platform CI smoke threshold: under 60 seconds
 verification: covered by CliAnalyzeTests.AnalyzeCommandCompletesMediumRepoSmokeWithinThreshold
 ```
+
+The generous ceiling detects hangs and gross regressions; it is not a comparative performance
+benchmark because shared GitHub runners have variable startup, restore, and filesystem costs.
