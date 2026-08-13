@@ -1099,7 +1099,10 @@ public static class SyntaxFactsCollector
     private static FileFacts CreateFileFacts(SourceFileContext context)
     {
         var fullSpan = new TextSpan(0, context.SourceText.Length);
-        LineCounts lineCounts = CountFileLines(context);
+        LineFacts lineCounts = LineFactsCollector.Collect(
+            context.SyntaxTree,
+            context.Root,
+            context.SourceText);
 
         return new FileFacts
         {
@@ -1117,64 +1120,6 @@ public static class SyntaxFactsCollector
             MixedCodeCommentLineCount = lineCounts.MixedCodeCommentLineCount,
             DocumentationCommentLineCount = lineCounts.DocumentationCommentLineCount
         };
-    }
-
-    private static LineCounts CountFileLines(SourceFileContext context)
-    {
-        var fullSpan = new TextSpan(0, context.SourceText.Length);
-        var tokenLines = context.Root
-            .DescendantTokens(fullSpan)
-            .Where(token => token.Span.Length > 0)
-            .Select(token => context.SyntaxTree.GetLineSpan(token.Span).StartLinePosition.Line)
-            .ToHashSet();
-        var commentLines = new HashSet<int>();
-        var documentationCommentLines = new HashSet<int>();
-
-        foreach (SyntaxTrivia trivia in context.Root.DescendantTrivia(descendIntoTrivia: false))
-        {
-            var isDocumentation = trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
-                trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
-            var isComment = isDocumentation ||
-                trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
-                trivia.IsKind(SyntaxKind.MultiLineCommentTrivia);
-
-            if (!isComment || trivia.Span.IsEmpty)
-            {
-                continue;
-            }
-
-            FileLinePositionSpan lineSpan = context.SyntaxTree.GetLineSpan(trivia.Span);
-            var endLine = lineSpan.EndLinePosition.Line;
-            if (lineSpan.EndLinePosition.Character == 0 &&
-                endLine > lineSpan.StartLinePosition.Line)
-            {
-                endLine--;
-            }
-
-            for (var line = lineSpan.StartLinePosition.Line;
-                 line <= endLine;
-                 line++)
-            {
-                commentLines.Add(line);
-                if (isDocumentation)
-                {
-                    documentationCommentLines.Add(line);
-                }
-            }
-        }
-
-        var blankLineCount = context.SourceText.Lines.Count(line =>
-            string.IsNullOrWhiteSpace(line.ToString()) &&
-            !commentLines.Contains(line.LineNumber));
-
-        return new LineCounts(
-            CountLines(fullSpan, context.SyntaxTree),
-            tokenLines.Count,
-            blankLineCount,
-            commentLines.Count(line => !tokenLines.Contains(line)),
-            commentLines.Count,
-            commentLines.Count(tokenLines.Contains),
-            documentationCommentLines.Count);
     }
 
     private static PortableExecutableReference[] CreateDefaultReferences()
@@ -1576,15 +1521,6 @@ public static class SyntaxFactsCollector
         int ExitCode,
         string StandardOutput,
         string StandardError);
-
-    private sealed record LineCounts(
-        int LinesOfCode,
-        int NonCommentLinesOfCode,
-        int BlankLineCount,
-        int CommentOnlyLineCount,
-        int CommentedLineCount,
-        int MixedCodeCommentLineCount,
-        int DocumentationCommentLineCount);
 
     private sealed record TypeDeclarationInfo(
         BaseTypeDeclarationSyntax Declaration,

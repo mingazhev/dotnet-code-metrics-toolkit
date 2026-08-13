@@ -97,6 +97,7 @@ See:
 - [Security and trust model](docs/toolkit/security.md)
 - [Metric formulas](src/CodeMetricsToolkit.Core/Metrics/README.md)
 - [Metric expansion research](docs/research/metric-expansion.md)
+- [Testing strategy and coverage map](docs/testing.md)
 - [Known limitations](docs/mvp-limitations.md)
 - [Autoresearch integration example](docs/toolkit/autoresearch-integration.md)
 
