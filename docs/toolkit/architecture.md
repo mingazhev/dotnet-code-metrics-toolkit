@@ -6,9 +6,9 @@ CodeMetricsToolkit separates source facts from consumer gates and objectives.
 
 ### `CodeMetricsToolkit.Abstractions`
 
-Owns the small public artifact-contract vocabulary: analysis mode, target kinds,
-artifact names, and artifact contract version. The contract version is not the same
-thing as the tool package version.
+Owns the shared artifact names and artifact contract version constants. The contract
+version is not the same thing as the tool package version; the JSON vocabulary itself
+is defined by the schemas.
 
 ### `CodeMetricsToolkit.Core`
 

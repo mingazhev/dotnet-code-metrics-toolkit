@@ -159,7 +159,10 @@ public static class OutputValidator
         long recordCount = 0;
         var lineNumber = 0;
         var targetReferences = new List<ArtifactTargetReference>();
-        var seenTargetReferences = new HashSet<(string TargetId, string TargetKind)>();
+        var seenTargetReferences = new HashSet<(
+            string TargetId,
+            string TargetKind,
+            string TargetIdStability)>();
 
         try
         {
@@ -216,7 +219,7 @@ public static class OutputValidator
         string artifactName,
         int lineNumber,
         List<ArtifactTargetReference> targetReferences,
-        HashSet<(string TargetId, string TargetKind)> seenTargetReferences)
+        HashSet<(string TargetId, string TargetKind, string TargetIdStability)> seenTargetReferences)
     {
         if (!string.Equals(artifactName, ArtifactNames.Metrics, StringComparison.Ordinal) &&
             !string.Equals(artifactName, ArtifactNames.Chunks, StringComparison.Ordinal))
@@ -226,15 +229,23 @@ public static class OutputValidator
 
         var targetId = ArtifactContractInvariants.ReadStringProperty(record, "targetId");
         var targetKind = ArtifactContractInvariants.ReadStringProperty(record, "targetKind");
+        var targetIdStability = ArtifactContractInvariants.ReadStringProperty(
+            record,
+            "targetIdStability");
 
         if (targetId is null ||
             targetKind is null ||
-            !seenTargetReferences.Add((targetId, targetKind)))
+            targetIdStability is null ||
+            !seenTargetReferences.Add((targetId, targetKind, targetIdStability)))
         {
             return;
         }
 
-        targetReferences.Add(new ArtifactTargetReference(lineNumber, targetId, targetKind));
+        targetReferences.Add(new ArtifactTargetReference(
+            lineNumber,
+            targetId,
+            targetKind,
+            targetIdStability));
     }
 
     private static void ValidateAgainstSchema(

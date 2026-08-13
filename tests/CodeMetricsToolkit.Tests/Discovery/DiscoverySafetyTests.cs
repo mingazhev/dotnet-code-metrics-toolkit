@@ -1,4 +1,7 @@
 using CodeMetricsToolkit.Core.Discovery;
+using CodeMetricsToolkit.Core.Facts;
+using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Tests.Discovery;
 
@@ -105,6 +108,48 @@ public sealed class DiscoverySafetyTests
                 input,
                 includeGeneratedCode: false,
                 cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public async Task DirectoryWithoutProjectUsesRelocatableSyntheticProjectAndConnectedGraph()
+    {
+        using var fixture = new TemporaryDirectory();
+        var firstRoot = fixture.CreateDirectory("first");
+        var secondRoot = fixture.CreateDirectory("second");
+        const string source = "namespace Sample; internal sealed class Relocatable { public void Run() { } }";
+        File.WriteAllText(Path.Combine(firstRoot, "Relocatable.cs"), source);
+        File.WriteAllText(Path.Combine(secondRoot, "Relocatable.cs"), source);
+
+        DiscoveredSources firstSources = SourceFileDiscovery.Discover(firstRoot, includeGeneratedCode: false);
+        DiscoveredSources secondSources = SourceFileDiscovery.Discover(secondRoot, includeGeneratedCode: false);
+        SyntaxAnalysisFacts firstFacts = await SyntaxFactsCollector.CollectAsync(
+            firstSources,
+            useSemantic: false,
+            noRestore: true,
+            CancellationToken.None);
+        SyntaxAnalysisFacts secondFacts = await SyntaxFactsCollector.CollectAsync(
+            secondSources,
+            useSemantic: false,
+            noRestore: true,
+            CancellationToken.None);
+
+        Assert.Equal(["."], firstSources.ProjectPaths);
+        Assert.Equal(
+            firstFacts.Types.Select(type => type.TargetId),
+            secondFacts.Types.Select(type => type.TargetId));
+        Assert.Equal(
+            firstFacts.Members.Select(member => member.TargetId),
+            secondFacts.Members.Select(member => member.TargetId));
+
+        GraphArtifact graph = GraphProjector.Project(firstFacts);
+        GraphNodeLine project = Assert.Single(graph.Nodes, node => node.Kind == "project");
+        GraphNodeLine file = Assert.Single(graph.Nodes, node => node.Kind == "file");
+        Assert.Equal(".", project.FilePath);
+        Assert.Equal("source-tree", project.Name);
+        Assert.Contains(graph.Edges, edge =>
+            edge.From == "solution:root" && edge.To == project.Id && edge.Kind == "contains");
+        Assert.Contains(graph.Edges, edge =>
+            edge.From == project.Id && edge.To == file.Id && edge.Kind == "contains");
     }
 
     [Fact]

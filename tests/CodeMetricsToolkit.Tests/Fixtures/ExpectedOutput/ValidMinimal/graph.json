@@ -5,12 +5,14 @@
       "id": "project:19b390edeb0b36a4",
       "kind": "project",
       "name": "SimpleProject",
+      "targetIdStability": "syntax_fallback",
       "filePath": "tests/CodeMetricsToolkit.TestAssets/SimpleProject/SimpleProject.csproj"
     },
     {
       "id": "file:tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs",
       "kind": "file",
       "name": "Calculator.cs",
+      "targetIdStability": "syntax_fallback",
       "filePath": "tests/CodeMetricsToolkit.TestAssets/SimpleProject/Calculator.cs"
     },
     {

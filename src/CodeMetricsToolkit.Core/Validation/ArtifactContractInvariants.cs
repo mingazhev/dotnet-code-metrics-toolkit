@@ -6,7 +6,8 @@ namespace CodeMetricsToolkit.Core.Validation;
 internal sealed record ArtifactTargetReference(
     int LineNumber,
     string TargetId,
-    string TargetKind);
+    string TargetKind,
+    string TargetIdStability);
 
 internal sealed record NdjsonArtifactMetadata(
     long RecordCount,
@@ -257,7 +258,7 @@ internal static class ArtifactContractInvariants
         }
 
         var nodeIds = new HashSet<string>(StringComparer.Ordinal);
-        var nodeKinds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nodeMetadata = new Dictionary<string, GraphNodeMetadata>(StringComparer.Ordinal);
         var nodeKindCounts = new Dictionary<string, long>(StringComparer.Ordinal);
         var nodeIndex = 0;
 
@@ -265,15 +266,16 @@ internal static class ArtifactContractInvariants
         {
             var nodeId = ReadStringProperty(node, "id");
             var nodeKind = ReadStringProperty(node, "kind");
+            var targetIdStability = ReadStringProperty(node, "targetIdStability");
 
             if (nodeId is not null && !nodeIds.Add(nodeId))
             {
                 errors.Add($"graph.nodes[{nodeIndex}].id duplicates node id '{nodeId}'.");
             }
 
-            if (nodeId is not null && nodeKind is not null)
+            if (nodeId is not null && nodeKind is not null && targetIdStability is not null)
             {
-                nodeKinds.TryAdd(nodeId, nodeKind);
+                nodeMetadata.TryAdd(nodeId, new GraphNodeMetadata(nodeKind, targetIdStability));
             }
 
             if (nodeKind is not null)
@@ -287,7 +289,7 @@ internal static class ArtifactContractInvariants
         if (!graph.TryGetProperty("edges", out JsonElement edges) ||
             edges.ValueKind != JsonValueKind.Array)
         {
-            return new GraphMetadata(nodeKinds, nodeKindCounts);
+            return new GraphMetadata(nodeMetadata, nodeKindCounts);
         }
 
         var edgeIndex = 0;
@@ -299,7 +301,7 @@ internal static class ArtifactContractInvariants
             edgeIndex++;
         }
 
-        return new GraphMetadata(nodeKinds, nodeKindCounts);
+        return new GraphMetadata(nodeMetadata, nodeKindCounts);
     }
 
     private static void ValidateTargetReferences(
@@ -327,8 +329,10 @@ internal static class ArtifactContractInvariants
                     continue;
                 }
 
-                if (!graphMetadata.NodeKinds.TryGetValue(reference.TargetId, out var graphNodeKind) ||
-                    graphNodeKind is null)
+                if (!graphMetadata.NodeMetadata.TryGetValue(
+                        reference.TargetId,
+                        out GraphNodeMetadata? graphNode) ||
+                    graphNode is null)
                 {
                     errors.Add(
                         $"{artifactName}:{reference.LineNumber} targetId '{reference.TargetId}' " +
@@ -336,12 +340,24 @@ internal static class ArtifactContractInvariants
                     continue;
                 }
 
-                if (!string.Equals(reference.TargetKind, graphNodeKind, StringComparison.Ordinal))
+                if (!string.Equals(reference.TargetKind, graphNode.TargetKind, StringComparison.Ordinal))
                 {
                     errors.Add(
                         $"{artifactName}:{reference.LineNumber} targetKind '{reference.TargetKind}' " +
-                        $"does not match graph node kind '{graphNodeKind}' for targetId " +
+                        $"does not match graph node kind '{graphNode.TargetKind}' for targetId " +
                         $"'{reference.TargetId}'.");
+                    continue;
+                }
+
+                if (!string.Equals(
+                        reference.TargetIdStability,
+                        graphNode.TargetIdStability,
+                        StringComparison.Ordinal))
+                {
+                    errors.Add(
+                        $"{artifactName}:{reference.LineNumber} targetIdStability " +
+                        $"'{reference.TargetIdStability}' does not match graph node targetIdStability " +
+                        $"'{graphNode.TargetIdStability}' for targetId '{reference.TargetId}'.");
                 }
             }
         }
@@ -368,7 +384,11 @@ internal static class ArtifactContractInvariants
         }
     }
 
+    private sealed record GraphNodeMetadata(
+        string TargetKind,
+        string TargetIdStability);
+
     private sealed record GraphMetadata(
-        IReadOnlyDictionary<string, string> NodeKinds,
+        IReadOnlyDictionary<string, GraphNodeMetadata> NodeMetadata,
         IReadOnlyDictionary<string, long> NodeKindCounts);
 }

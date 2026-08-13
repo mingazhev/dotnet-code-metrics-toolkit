@@ -5,6 +5,14 @@ namespace CodeMetricsToolkit.Core.Discovery;
 
 internal static class ProjectIdentity
 {
+    public const string SyntheticProjectPath = ".";
+    public const string SyntheticProjectName = "source-tree";
+
+    public static bool IsSynthetic(string projectPath)
+    {
+        return string.Equals(projectPath, SyntheticProjectPath, StringComparison.Ordinal);
+    }
+
     public static string Key(string projectPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);

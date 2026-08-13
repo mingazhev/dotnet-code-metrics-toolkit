@@ -141,6 +141,14 @@ public sealed class ScoringEngineTests
                 "\"targetIdStability\":\"semantic\"",
                 "\"targetIdStability\":\"syntax_fallback\"",
                 StringComparison.Ordinal));
+        artifacts.WriteGraph(
+            "0.1.0",
+            new GraphFixtureTarget(
+                "member:a",
+                "member",
+                "src/A.cs",
+                ["src/A.cs"],
+                TargetIdStability: "syntax_fallback"));
         await using Stream profile = ProfileStream(ValidProfile());
 
         ScoringException exception = await Assert.ThrowsAsync<ScoringException>(
@@ -148,6 +156,32 @@ public sealed class ScoringEngineTests
 
         Assert.Equal(ScoringFailureKind.PreconditionsNotMet, exception.FailureKind);
         Assert.Contains("syntax_fallback", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsMetricWhoseTargetStabilityDiffersFromGraph()
+    {
+        using var artifacts = TestArtifacts.Create(
+            analysisQuality: "trusted",
+            Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 15),
+            Metric("member:a", "src/A.cs", "method_length", "1.0.0", 55));
+        var metricsPath = System.IO.Path.Combine(artifacts.Path, "metrics.ndjson");
+        File.WriteAllText(
+            metricsPath,
+            File.ReadAllText(metricsPath).Replace(
+                "\"targetIdStability\":\"semantic\"",
+                "\"targetIdStability\":\"syntax_fallback\"",
+                StringComparison.Ordinal));
+        await using Stream profile = ProfileStream(ValidProfile());
+
+        ScoringException exception = await Assert.ThrowsAsync<ScoringException>(
+            () => ScoringEngine.EvaluateAsync(artifacts.Path, profile));
+
+        Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
+        Assert.Contains(
+            "targetIdStability 'syntax_fallback', but its graph node uses 'semantic'",
+            exception.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -893,6 +927,7 @@ public sealed class ScoringEngineTests
                     id = target.TargetId,
                     kind = target.TargetKind,
                     name = target.TargetId,
+                    targetIdStability = target.TargetIdStability,
                     filePath = target.PrimaryFilePath,
                     startLine = 1,
                     endLine = 1,
@@ -922,5 +957,6 @@ public sealed class ScoringEngineTests
         string TargetKind,
         string PrimaryFilePath,
         IReadOnlyList<string> FilePaths,
-        bool HasCompleteDeclarationPaths = true);
+        bool HasCompleteDeclarationPaths = true,
+        string TargetIdStability = "semantic");
 }

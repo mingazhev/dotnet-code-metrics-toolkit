@@ -1,4 +1,5 @@
 using CodeMetricsToolkit.Core.Facts;
+using Microsoft.CodeAnalysis.Text;
 
 namespace CodeMetricsToolkit.Tests.Support;
 
@@ -14,7 +15,8 @@ internal static class TestFacts
         bool trusted = true,
         bool trustedDiagnostics = true,
         bool diagnosticsInHotspots = true,
-        string rootPath = ".")
+        string rootPath = ".",
+        IReadOnlyDictionary<string, SourceText>? sourceTextSnapshots = null)
     {
         return new SyntaxAnalysisFacts
         {
@@ -35,7 +37,9 @@ internal static class TestFacts
             Types = types ?? [],
             Members = members ?? [],
             GraphEdges = edges ?? [],
-            Diagnostics = diagnostics ?? []
+            Diagnostics = diagnostics ?? [],
+            SourceTextSnapshots = sourceTextSnapshots ??
+                new Dictionary<string, SourceText>(StringComparer.Ordinal)
         };
     }
 

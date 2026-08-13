@@ -58,7 +58,9 @@ public static class GraphProjector
         {
             Id = ProjectIdentity.TargetId(projectPath),
             Kind = "project",
-            Name = Path.GetFileNameWithoutExtension(projectPath),
+            Name = ProjectIdentity.IsSynthetic(projectPath)
+                ? ProjectIdentity.SyntheticProjectName
+                : Path.GetFileNameWithoutExtension(projectPath),
             TargetIdStability = "syntax_fallback",
             FilePath = projectPath,
             StartLine = 1,

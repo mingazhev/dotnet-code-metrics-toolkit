@@ -28,6 +28,7 @@ internal sealed record ArtifactGraph(
 internal sealed record ArtifactTargetPaths(
     string TargetId,
     string TargetKind,
+    string TargetIdStability,
     IReadOnlyList<string> FilePaths,
     bool HasCompleteDeclarationPaths);
 

@@ -82,6 +82,10 @@ public static class SyntaxFactsCollector
             Types = types,
             Members = members,
             GraphEdges = graphEdges,
+            SourceTextSnapshots = sourceFiles.ToDictionary(
+                context => context.SourceFile.RelativePath,
+                context => context.SourceText,
+                StringComparer.Ordinal),
             Diagnostics = diagnostics
                 .OrderBy(diagnostic => diagnostic.FilePath, StringComparer.Ordinal)
                 .ThenBy(diagnostic => diagnostic.StartLine)
@@ -155,7 +159,8 @@ public static class SyntaxFactsCollector
             messages.Add("Compiler diagnostics were suppressed because restore failed; emitted diagnostics are not treated as code-quality metrics.");
         }
 
-        if (sources.ProjectPaths.Count == 0)
+        if (sources.ProjectPaths.Count == 0 ||
+            sources.ProjectPaths.All(ProjectIdentity.IsSynthetic))
         {
             messages.Add("No C# project files were discovered; semantic analysis fell back to syntax-only parsing.");
             return new SemanticLoadResult(new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal), "not_available", restore.Status, TrustDiagnostics: false, WorkspaceHadFailures: true, messages);
@@ -412,6 +417,7 @@ public static class SyntaxFactsCollector
         }
 
         return sources.ProjectPaths
+            .Where(projectPath => !ProjectIdentity.IsSynthetic(projectPath))
             .Select(projectPath => Path.Combine(sources.RootPath, projectPath))
             .ToArray();
     }

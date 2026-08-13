@@ -212,6 +212,46 @@ public sealed class OutputValidatorTests
                 StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("metrics.ndjson")]
+    [InlineData("chunks.ndjson")]
+    public void ArtifactTargetStabilityThatDiffersFromGraphIsRejected(string artifactName)
+    {
+        using var output = TemporaryOutput.Create();
+        UpdateFirstNdjsonRecord(
+            output.File(artifactName),
+            root => root["targetIdStability"] = "syntax_fallback");
+
+        OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.StartsWith(
+                $"{artifactName}:1 targetIdStability 'syntax_fallback' does not match " +
+                "graph node targetIdStability 'semantic'",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GraphNodeWithoutTargetStabilityIsRejected()
+    {
+        using var output = TemporaryOutput.Create();
+        UpdateJson(output.File("graph.json"), root =>
+        {
+            JsonObject firstNode = root["nodes"]!.AsArray()[0]!.AsObject();
+            Assert.True(firstNode.Remove("targetIdStability"));
+        });
+
+        OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("graph.json does not conform", StringComparison.Ordinal) &&
+                error.Contains("targetIdStability", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void GraphEdgeWithMissingEndpointIsRejected()
     {

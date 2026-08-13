@@ -30,7 +30,7 @@
     "node": {
       "type": "object",
       "additionalProperties": false,
-      "required": [ "id", "kind", "name" ],
+      "required": [ "id", "kind", "name", "targetIdStability" ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "kind": { "enum": [ "solution", "project", "file", "type", "member" ] },

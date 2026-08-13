@@ -72,6 +72,9 @@ public static class SourceFileDiscovery
             rootPath,
             selection,
             discoveredProjectPaths);
+        IReadOnlyList<string> sourceProjectPaths = projectPaths.Count == 0
+            ? [ProjectIdentity.SyntheticProjectPath]
+            : projectPaths;
 
         var sourceFiles = EnumerateFiles(
                 rootDirectory,
@@ -79,8 +82,8 @@ public static class SourceFileDiscovery
                 includeGeneratedCode,
                 cancellationToken)
             .Where(file => ShouldIncludeSourceFile(rootPath, file.FullName, includePatterns, excludePatterns))
-            .Select(file => CreateSourceFile(rootPath, discoveredProjectPaths, file.FullName))
-            .Where(file => IsInSelectedProjectScope(file, selection, projectPaths))
+            .Select(file => CreateSourceFile(rootPath, sourceProjectPaths, file.FullName))
+            .Where(file => IsInSelectedProjectScope(file, selection, sourceProjectPaths))
             .Select(file => ReassignSelectedProject(file, selection))
             .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
             .ToList();
@@ -88,7 +91,9 @@ public static class SourceFileDiscovery
         return new DiscoveredSources(
             rootPath,
             solutionPaths,
-            projectPaths,
+            projectPaths.Count == 0 && sourceFiles.Count > 0
+                ? [ProjectIdentity.SyntheticProjectPath]
+                : projectPaths,
             sourceFiles,
             selection.SelectedSolutionPath,
             selection.SelectedProjectPath);

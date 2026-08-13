@@ -197,10 +197,20 @@ internal static class ScoringArtifactReader
                 JsonElement node = RequireObject(nodeElement, context);
                 var targetId = GetRequiredNonBlankString(node, "id", context);
                 var targetKind = GetRequiredNonBlankString(node, "kind", context);
+                var targetIdStability = GetRequiredNonBlankString(
+                    node,
+                    "targetIdStability",
+                    context);
 
                 if (!TargetKinds.Contains(targetKind))
                 {
                     throw InvalidArtifacts($"{context}.kind '{targetKind}' is not supported.");
+                }
+
+                if (!TargetIdStabilities.Contains(targetIdStability))
+                {
+                    throw InvalidArtifacts(
+                        $"{context}.targetIdStability '{targetIdStability}' is not supported.");
                 }
 
                 ParsedGraphFilePaths filePaths = ParseGraphFilePaths(node, targetKind, context);
@@ -209,6 +219,7 @@ internal static class ScoringArtifactReader
                         new ArtifactTargetPaths(
                             targetId,
                             targetKind,
+                            targetIdStability,
                             filePaths.FilePaths,
                             filePaths.HasCompleteDeclarationPaths)))
                 {
@@ -427,8 +438,7 @@ internal static class ScoringArtifactReader
         IReadOnlyList<ArtifactMetric> metrics,
         ArtifactGraph graph)
     {
-        foreach (ArtifactMetric metric in metrics.Where(metric =>
-                     metric.TargetKind is "file" or "type" or "member"))
+        foreach (ArtifactMetric metric in metrics)
         {
             if (!graph.Targets.TryGetValue(metric.TargetId, out ArtifactTargetPaths? target))
             {
@@ -441,6 +451,17 @@ internal static class ScoringArtifactReader
                 throw InvalidArtifacts(
                     $"Metric target '{metric.TargetId}' has targetKind '{metric.TargetKind}', but its " +
                     $"graph node uses kind '{target.TargetKind}'.");
+            }
+
+            if (!string.Equals(
+                    target.TargetIdStability,
+                    metric.TargetIdStability,
+                    StringComparison.Ordinal))
+            {
+                throw InvalidArtifacts(
+                    $"Metric target '{metric.TargetId}' has targetIdStability " +
+                    $"'{metric.TargetIdStability}', but its graph node uses " +
+                    $"'{target.TargetIdStability}'.");
             }
 
             if (metric.FilePath is not null &&
