@@ -51,7 +51,7 @@ Partial types produce one logical type node with multiple declaration spans. Mem
 
 ```text
 type:GenericsAndOverloadsProject/T:GenericsAndOverloadsProject.Repository`1
-member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.Repository`1.Find``1(System.String)
+member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.Repository`1.Find``1(``0,System.Func{`0,``0})
 member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.OverloadService.Format(System.Int32)
 member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.OverloadService.Format(System.String)
 member:ComplexityProject/M:ComplexityProject.DecisionSamples.#ctor(System.Int32)

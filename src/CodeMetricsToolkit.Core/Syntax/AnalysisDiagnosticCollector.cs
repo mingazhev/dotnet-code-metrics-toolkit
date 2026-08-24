@@ -1,6 +1,7 @@
 using System.Globalization;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
+using CodeMetricsToolkit.Core.Validation;
 using Microsoft.CodeAnalysis;
 
 namespace CodeMetricsToolkit.Core.Syntax;
@@ -64,6 +65,12 @@ internal static class AnalysisDiagnosticCollector
 
         if (diagnosticKeys.Add(key))
         {
+            if (diagnostics.Count >= ValidationInputLimits.DefaultMaxNdjsonRecords)
+            {
+                throw new InvalidDataException(
+                    $"Analysis produced more than {ValidationInputLimits.DefaultMaxNdjsonRecords} diagnostics.");
+            }
+
             diagnostics.Add(diagnostic);
             return;
         }

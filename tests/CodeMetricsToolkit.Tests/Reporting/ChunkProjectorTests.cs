@@ -3,7 +3,6 @@ using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Reporting;
 using CodeMetricsToolkit.Core.Syntax;
 using CodeMetricsToolkit.Tests.Support;
-using Microsoft.CodeAnalysis.Text;
 
 namespace CodeMetricsToolkit.Tests.Reporting;
 
@@ -61,9 +60,9 @@ public sealed class ChunkProjectorTests
             types: [type],
             members: members,
             rootPath: Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}"),
-            sourceTextSnapshots: new Dictionary<string, SourceText>(StringComparer.Ordinal)
+            sourceTextSnapshots: new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [path] = SourceText.From(source)
+                [path] = source
             });
 
         IReadOnlyList<ChunkLine> chunks = ChunkProjector.Project(facts, includeText: true);

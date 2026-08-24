@@ -11,9 +11,9 @@ public sealed class DotnetRestoreRunnerTests
     public async Task RunProcessAsyncDrainsStandardOutputAndErrorBeforeReturning()
     {
         DotnetRestoreRunner.ProcessResult result = await DotnetRestoreRunner.RunProcessAsync(
-            "dotnet",
+            DotnetMuxer.Resolve(),
             [typeof(CliApplication).Assembly.Location, "list-metrics"],
-            SchemaAssertions.RepositoryRoot(),
+            Path.GetTempPath(),
             CancellationToken.None);
 
         Assert.Equal(0, result.ExitCode);
@@ -36,9 +36,9 @@ public sealed class DotnetRestoreRunnerTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             DotnetRestoreRunner.RunProcessAsync(
-                "dotnet",
+                DotnetMuxer.Resolve(),
                 ["run", "--project", projectPath],
-                SchemaAssertions.RepositoryRoot(),
+                Path.GetTempPath(),
                 cancellation.Token));
 
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10));

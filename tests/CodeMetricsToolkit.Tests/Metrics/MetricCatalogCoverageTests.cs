@@ -14,5 +14,8 @@ public sealed class MetricCatalogCoverageTests
 
         Assert.Equal(catalogIds.Order(StringComparer.Ordinal), MetricFamilies.All.Order(StringComparer.Ordinal));
         Assert.Equal(MetricCatalog.All.Count, catalogIds.Count);
+        Assert.All(
+            MetricCatalog.All,
+            metric => Assert.False(string.IsNullOrWhiteSpace(metric.Formula)));
     }
 }

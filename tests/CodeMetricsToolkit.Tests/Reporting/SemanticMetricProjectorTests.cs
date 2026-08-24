@@ -94,6 +94,33 @@ public sealed class SemanticMetricProjectorTests
         Assert.Empty(metrics);
     }
 
+    [Fact]
+    public void ProjectOmitsDocumentationRatioWhenPublicApiCountIsZero()
+    {
+        const string projectPath = "EmptyApi.csproj";
+        var projectKey = ProjectIdentity.Key(projectPath);
+        TypeFacts type = TestFacts.Type(
+            "type:empty",
+            "file:a",
+            "A.cs",
+            projectKey,
+            semantic: new TypeSemanticFacts
+            {
+                InheritanceDepth = 0,
+                ClassCoupling = 0,
+                PublicApiCount = 0,
+                DocumentedPublicApiCount = 0
+            });
+        SyntaxAnalysisFacts facts = TestFacts.Analysis(types: [type], projects: [projectPath]);
+
+        IReadOnlyList<MetricResultLine> metrics = SemanticMetricProjector.Project(
+            facts,
+            CancellationToken.None);
+
+        Assert.DoesNotContain(metrics, metric => metric.MetricId == "public_api_documentation_ratio");
+        AssertMetric(metrics, type.TargetId, "public_api_count", 0, "integer");
+    }
+
     private static void AssertMetric(
         IEnumerable<MetricResultLine> metrics,
         string targetId,

@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis.Text;
-
 namespace CodeMetricsToolkit.Core.Facts;
 
 public sealed record SyntaxAnalysisFacts
@@ -14,6 +12,6 @@ public sealed record SyntaxAnalysisFacts
     public required IReadOnlyList<GraphEdgeFacts> GraphEdges { get; init; }
     public required IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; }
     internal IReadOnlyList<ProjectFileMembershipFacts>? ProjectFileMemberships { get; init; }
-    internal IReadOnlyDictionary<string, SourceText> SourceTextSnapshots { get; init; } =
-        new Dictionary<string, SourceText>(StringComparer.Ordinal);
+    internal IReadOnlyDictionary<string, string> SourceTextSnapshots { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 }

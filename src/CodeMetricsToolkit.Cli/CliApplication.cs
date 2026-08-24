@@ -548,6 +548,9 @@ public static class CliApplication
               --allow-empty             Return success when no C# source files match.
               -h, --help                Show this help.
 
+            Semantic analysis registers one MSBuild SDK per process. Analyze a different
+            SDK in a fresh process.
+
             Artifacts are preserved when trust or empty-input gates return exit code 3.
             """);
     }

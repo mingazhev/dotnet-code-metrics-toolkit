@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Metrics;
+using CodeMetricsToolkit.Core.Validation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -98,12 +99,14 @@ public static class SyntaxFactsCollector
                 .GroupBy(context => context.SourceFile.RelativePath, StringComparer.Ordinal)
                 .ToDictionary(
                     group => group.Key,
-                    group => group.First().SourceText,
+                    group => group.First().SourceText.ToString(),
                     StringComparer.Ordinal),
             Diagnostics = diagnostics
-                .OrderBy(diagnostic => diagnostic.FilePath, StringComparer.Ordinal)
-                .ThenBy(diagnostic => diagnostic.StartLine)
+                .OrderBy(diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(diagnostic => diagnostic.StartLine ?? int.MaxValue)
                 .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
+                .ThenBy(diagnostic => diagnostic.ProjectPath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(diagnostic => diagnostic.Message, StringComparer.Ordinal)
                 .ToArray()
         };
     }
@@ -563,6 +566,12 @@ public static class SyntaxFactsCollector
 
         if (seenEdges.Add(key))
         {
+            if (edges.Count >= ValidationInputLimits.DefaultMaxNdjsonRecords)
+            {
+                throw new InvalidDataException(
+                    $"Analysis produced more than {ValidationInputLimits.DefaultMaxNdjsonRecords} graph edges.");
+            }
+
             edges.Add(new GraphEdgeFacts
             {
                 From = from,
