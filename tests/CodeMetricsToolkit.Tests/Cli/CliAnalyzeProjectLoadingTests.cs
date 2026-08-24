@@ -236,4 +236,69 @@ public sealed partial class CliAnalyzeTests
                 "authored source file(s) outside the analysis root",
                 StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task IsolateInputQuotaFailuresUseInputErrorExitCode()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(input.Path, "Included.cs"), "internal sealed class Included { }");
+        Assert.Equal(0, MkFifo(Path.Combine(input.Path, "named-pipe"), Convert.ToInt32("644", 8)));
+
+        var exitCode = await RunCliAllowFailureAsync(
+            "analyze",
+            input.Path,
+            "--output",
+            output.Path,
+            "--syntax-only",
+            "--isolate-input",
+            "--allow-empty");
+
+        Assert.Equal(CliExitCodes.InputError, exitCode);
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandWarnsAboutAmbientBuildFilesWithoutIsolation()
+    {
+        using var parent = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        File.WriteAllText(
+            Path.Combine(parent.Path, "Directory.Build.props"),
+            "<Project />");
+        var child = Path.Combine(parent.Path, "child");
+        Directory.CreateDirectory(child);
+        File.WriteAllText(
+            Path.Combine(child, "Child.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(child, "Child.cs"), "internal sealed class Child { }");
+
+        var exitCode = await RunCliAllowFailureAsync(
+            "analyze",
+            child,
+            "--output",
+            output.Path,
+            "--no-restore",
+            "--allow-degraded");
+
+        Assert.True(exitCode is 0 or 3, $"unexpected exit {exitCode}");
+        using var summary = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        Assert.Contains(
+            summary.RootElement.GetProperty("analysisHealth").GetProperty("messages").EnumerateArray(),
+            message => message.GetString()!.Contains("Ambient MSBuild/NuGet file", StringComparison.Ordinal));
+    }
+
+    [System.Runtime.InteropServices.DllImport("libc", SetLastError = true, EntryPoint = "mkfifo", CharSet = System.Runtime.InteropServices.CharSet.Ansi, BestFitMapping = false)]
+    private static extern int MkFifo(string path, int mode);
 }

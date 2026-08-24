@@ -18,7 +18,7 @@ public static class CodeMetricsAnalyzer
         ArgumentNullException.ThrowIfNull(request);
 
         InputSelection originalInput = SourceFileDiscovery.ResolveInputSelection(request.InputPath);
-        var outputPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.OutputPath));
+        var outputPath = NormalizePath(request.OutputPath);
         ValidateOutputLocation(outputPath, originalInput.RootPath);
 
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
@@ -111,11 +111,32 @@ public static class CodeMetricsAnalyzer
                 }
             };
         }
-        finally
+        catch (Exception exception)
         {
             if (isolatedInput is not null && !isolatedInput.TryDispose(out var cleanupFailure))
             {
-                System.Diagnostics.Trace.TraceWarning(cleanupFailure);
+                isolatedInput = null;
+                if (exception is OperationCanceledException canceled)
+                {
+                    throw new OperationCanceledException(
+                        $"{canceled.Message} Isolated input cleanup also failed. {cleanupFailure}",
+                        canceled,
+                        canceled.CancellationToken);
+                }
+
+                throw new AggregateException(
+                    $"Analysis failed, and isolated input cleanup also failed: {cleanupFailure}",
+                    exception,
+                    new IOException(cleanupFailure));
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (isolatedInput is not null)
+            {
+                _ = isolatedInput.TryDispose(out _);
             }
         }
     }
@@ -152,14 +173,66 @@ public static class CodeMetricsAnalyzer
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var fullPath = Path.GetFullPath(path);
+        var fullPath = ResolveReparseComponents(Path.GetFullPath(path));
 
         if (OperatingSystem.IsMacOS())
         {
             fullPath = ResolveMacOsRootAlias(fullPath);
         }
 
-        return Path.TrimEndingDirectorySeparator(fullPath);
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(fullPath));
+    }
+
+    private static string ResolveReparseComponents(string fullPath)
+    {
+        var root = Path.GetPathRoot(fullPath);
+        if (string.IsNullOrEmpty(root))
+        {
+            return fullPath;
+        }
+
+        var current = Path.TrimEndingDirectorySeparator(root);
+        if (current.Length == 0)
+        {
+            current = root;
+        }
+
+        var relative = fullPath[root.Length..];
+        foreach (var segment in relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = ResolveIfReparse(Path.Combine(current, segment));
+        }
+
+        return current;
+    }
+
+    private static string ResolveIfReparse(string path)
+    {
+        try
+        {
+            if (!Path.Exists(path))
+            {
+                return path;
+            }
+
+            FileAttributes attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReparsePoint) == 0)
+            {
+                return path;
+            }
+
+            FileSystemInfo info = (attributes & FileAttributes.Directory) != 0
+                ? new DirectoryInfo(path)
+                : new FileInfo(path);
+            FileSystemInfo? target = info.ResolveLinkTarget(returnFinalTarget: true);
+            return target?.FullName ?? path;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return path;
+        }
     }
 
     private static string ResolveMacOsRootAlias(string fullPath)

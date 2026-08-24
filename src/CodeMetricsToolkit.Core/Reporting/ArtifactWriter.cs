@@ -88,12 +88,12 @@ public static class ArtifactWriter
 
         await WriteJsonAsync(
             Path.Combine(outputPath, ArtifactNames.Graph),
-            GraphProjector.Project(facts),
+            GraphProjector.Project(facts, cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
         await WriteNdjsonAsync(
             Path.Combine(outputPath, ArtifactNames.Chunks),
-            ChunkProjector.Project(facts, includeChunkText),
+            ChunkProjector.Project(facts, includeChunkText, cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
         await WriteNdjsonAsync(

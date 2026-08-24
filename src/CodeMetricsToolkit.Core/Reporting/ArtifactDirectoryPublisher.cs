@@ -189,7 +189,19 @@ public static class ArtifactDirectoryPublisher
 
         try
         {
-            using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            if ((File.GetAttributes(manifestPath) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new IOException(
+                    $"Artifact output manifest is a symbolic link or reparse point and cannot be used: " +
+                    manifestPath);
+            }
+
+            var manifestBytes = ValidationInputReader.ReadJsonBytes(
+                manifestPath,
+                ValidationInputLimits.DefaultMaxJsonArtifactBytes);
+            using var manifest = JsonDocument.Parse(
+                manifestBytes,
+                new JsonDocumentOptions { MaxDepth = ValidationInputLimits.DefaultMaxJsonDepth });
             JsonElement root = manifest.RootElement;
 
             if (root.ValueKind != JsonValueKind.Object ||
@@ -200,7 +212,10 @@ public static class ArtifactDirectoryPublisher
                 throw UnrecognizedOutputDirectory(outputPath);
             }
         }
-        catch (Exception exception) when (exception is JsonException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is
+            JsonException or
+            UnauthorizedAccessException or
+            InvalidDataException)
         {
             throw new IOException(
                 $"Artifact output directory has an unreadable manifest and cannot be replaced: " +

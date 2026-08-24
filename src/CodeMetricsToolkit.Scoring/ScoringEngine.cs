@@ -125,12 +125,12 @@ public static class ScoringEngine
 
         ValidateArtifactContract(profile, artifacts.Summary);
         ValidateAnalysisHealth(profile, artifacts.Summary);
-        ValidateModeAndTargetIdStability(profile, artifacts);
 
         IReadOnlyList<ArtifactMetric> selectedMetrics = ApplyFileSelectors(
             artifacts.Metrics,
             artifacts.Graph,
             profile.Selectors);
+        ValidateModeAndTargetIdStability(profile, artifacts, selectedMetrics);
         var values = new Dictionary<string, double>(StringComparer.Ordinal);
         var operationProvenance = new List<ScoringOperationProvenance>(profile.Operations.Count);
 
@@ -220,7 +220,8 @@ public static class ScoringEngine
 
     private static void ValidateModeAndTargetIdStability(
         ParsedScoringProfile profile,
-        ScoringArtifacts artifacts)
+        ScoringArtifacts artifacts,
+        IReadOnlyList<ArtifactMetric> selectedMetrics)
     {
         if (!profile.AllowedAnalysisModes.Contains(artifacts.AnalysisMode, StringComparer.Ordinal))
         {
@@ -228,7 +229,13 @@ public static class ScoringEngine
                 $"manifest.json mode '{artifacts.AnalysisMode}' is not allowed by the scoring profile.");
         }
 
-        var unexpectedStabilities = artifacts.Metrics
+        var scoredKinds = profile.Operations
+            .OfType<ThresholdDebtOperation>()
+            .Select(operation => operation.TargetKind)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var unexpectedStabilities = selectedMetrics
+            .Where(metric => scoredKinds.Contains(metric.TargetKind))
             .Select(metric => metric.TargetIdStability)
             .Distinct(StringComparer.Ordinal)
             .Where(stability => !profile.AllowedTargetIdStabilities.Contains(

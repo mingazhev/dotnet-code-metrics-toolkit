@@ -58,7 +58,7 @@ public sealed class AnalyzerScoringIntegrationTests
         Assert.Equal("semantic", provenance.AnalysisMode);
         Assert.Equal(["semantic", "syntax_fallback"], provenance.TargetIdStabilities);
         Assert.Equal(["semantic"], provenance.AllowedAnalysisModes);
-        Assert.Equal(["semantic", "syntax_fallback"], provenance.AllowedTargetIdStabilities);
+        Assert.Equal(["semantic"], provenance.AllowedTargetIdStabilities);
         Assert.Equal("trusted", provenance.AnalysisQuality);
         Assert.True(provenance.TrustedDiagnostics);
         Assert.Equal(["**/*.cs"], provenance.Selection.IncludeFilePaths);

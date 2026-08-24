@@ -8,6 +8,18 @@ namespace CodeMetricsToolkit.Tests.Metrics;
 
 public sealed class ControlFlowFactsCollectorTests
 {
+    [Fact]
+    public void CollectorIsInternalAndDoesNotLeakRoslynOnThePublicCoreSurface()
+    {
+        Assert.False(typeof(ControlFlowFactsCollector).IsPublic);
+        Assert.Contains(
+            typeof(ControlFlowFactsCollector).GetMethod(nameof(ControlFlowFactsCollector.Collect))!
+                .GetParameters()
+                .Select(parameter => parameter.ParameterType.Assembly.GetName().Name),
+            assemblyName => assemblyName is not null &&
+                assemblyName.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("if (value > 0) { }", 2)]
     [InlineData("if (value > 0) { } else if (value < 0) { }", 3)]

@@ -177,4 +177,29 @@ public sealed partial class ScoringEngineTests
         Assert.Equal("metrics.ndjson is not valid UTF-8.", exception.Message);
     }
 
+    [Fact]
+    public async Task RejectsSymlinkedRequiredArtifacts()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var artifacts = TestArtifacts.Create(
+            analysisQuality: "trusted",
+            Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 1),
+            Metric("member:a", "src/A.cs", "member_length", "1.0.0", 1));
+        var summaryPath = System.IO.Path.Combine(artifacts.Path, "summary.json");
+        var moved = summaryPath + ".real";
+        File.Move(summaryPath, moved);
+        File.CreateSymbolicLink(summaryPath, moved);
+        await using Stream profile = ProfileStream(ValidProfile());
+
+        ScoringException exception = await Assert.ThrowsAsync<ScoringException>(() =>
+            ScoringEngine.EvaluateAsync(artifacts.Path, profile, CancellationToken.None));
+
+        Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
+        Assert.Contains("symbolic link or reparse point: summary.json", exception.Message, StringComparison.Ordinal);
+    }
+
 }

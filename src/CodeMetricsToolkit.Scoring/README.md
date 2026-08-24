@@ -9,8 +9,10 @@ The engine supports a deliberately small, deterministic profile language:
 Profiles must pin the artifact contract and every metric version they consume.
 
 They must also state which analysis modes and target-id stability classes are accepted.
-That requirement prevents a profile calibrated on semantic symbols from silently scoring
-syntax-fallback targets.
+`allowedTargetIdStabilities` is applied to the targets each `thresholdDebt` operation will
+score after file selectors, not to structural solution/project rows that Core always
+emits as `syntax_fallback`. That requirement prevents a profile calibrated on semantic
+symbols from silently scoring syntax-fallback members or types.
 
 ```json
 {
@@ -77,7 +79,8 @@ consistency do not satisfy the profile.
 
 Scoring also enforces hard resource limits before or while reading inputs: 1 MiB for a
 profile, 128 MiB each for `manifest.json`, `summary.json`, and `graph.json`, and 1 GiB
-for `metrics.ndjson`. Metrics are streamed with limits of 8 Mi characters per line,
+for `metrics.ndjson`. Required artifacts must be regular files; symbolic links and
+reparse points are rejected. Metrics are streamed with limits of 8 Mi characters per line,
 1,000,000 physical lines, and 1,000,000 non-empty metric records. JSON nesting is
 limited to 64. Inputs beyond these limits fail with `InvalidProfile` or
 `InvalidArtifacts`; data is never silently truncated.

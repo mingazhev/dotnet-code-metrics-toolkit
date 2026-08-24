@@ -67,6 +67,20 @@ public sealed class GoldenMetricContractTests
         Assert.Equal(MetricCatalog.All.Count, expected.Length);
         Assert.Equal(catalogIds.Order(StringComparer.Ordinal), expectedIds.Order(StringComparer.Ordinal));
         Assert.Equal(catalogIds.Order(StringComparer.Ordinal), actualIds.Order(StringComparer.Ordinal));
+        foreach (MetricDescriptor metric in MetricCatalog.All)
+        {
+            JsonElement catalogExpectation = Assert.Single(
+                expected,
+                expectation => string.Equals(
+                    expectation.GetProperty("metricId").GetString(),
+                    metric.Id,
+                    StringComparison.Ordinal));
+            Assert.Equal(metric.Version, catalogExpectation.GetProperty("metricVersion").GetString());
+            Assert.Equal(metric.Unit, catalogExpectation.GetProperty("unit").GetString());
+            Assert.Contains(
+                catalogExpectation.GetProperty("targetKind").GetString(),
+                metric.TargetKinds);
+        }
         Assert.Equal(
             expected
                 .Concat(scopeExpectations)

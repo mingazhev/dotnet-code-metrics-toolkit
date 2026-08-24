@@ -37,7 +37,26 @@ public static class SourceFileDiscovery
         IReadOnlyList<string>? excludePatterns = null,
         CancellationToken cancellationToken = default)
     {
+        return Discover(
+            inputPath,
+            includeGeneratedCode,
+            includePatterns,
+            excludePatterns,
+            InputIsolationLimits.Default,
+            cancellationToken);
+    }
+
+    internal static DiscoveredSources Discover(
+        string inputPath,
+        bool includeGeneratedCode,
+        IReadOnlyList<string>? includePatterns,
+        IReadOnlyList<string>? excludePatterns,
+        InputIsolationLimits limits,
+        CancellationToken cancellationToken)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        ArgumentNullException.ThrowIfNull(limits);
+        limits.Validate();
 
         InputSelection selection = ResolveInputSelection(inputPath);
         var rootPath = selection.RootPath;
@@ -54,6 +73,7 @@ public static class SourceFileDiscovery
                 rootDirectory,
                 "*.sln",
                 includeGeneratedCode: true,
+                limits,
                 cancellationToken)
             .Select(file => ToRelativePath(rootPath, file.FullName))
             .Order(StringComparer.Ordinal)
@@ -63,6 +83,7 @@ public static class SourceFileDiscovery
                 rootDirectory,
                 "*.csproj",
                 includeGeneratedCode: true,
+                limits,
                 cancellationToken)
             .Select(file => ToRelativePath(rootPath, file.FullName))
             .Order(StringComparer.Ordinal)
@@ -80,6 +101,7 @@ public static class SourceFileDiscovery
                 rootDirectory,
                 "*.cs",
                 includeGeneratedCode,
+                limits,
                 cancellationToken)
             .Where(file => ShouldIncludeSourceFile(rootPath, file.FullName, includePatterns, excludePatterns))
             .Select(file => CreateSourceFile(rootPath, sourceProjectPaths, file.FullName))
@@ -339,15 +361,18 @@ public static class SourceFileDiscovery
         DirectoryInfo rootDirectory,
         string searchPattern,
         bool includeGeneratedCode,
+        InputIsolationLimits limits,
         CancellationToken cancellationToken)
     {
-        var pending = new Stack<DirectoryInfo>();
-        pending.Push(rootDirectory);
+        var pending = new Stack<(DirectoryInfo Directory, int Depth)>();
+        pending.Push((rootDirectory, 0));
+        var fileCount = 0;
+        var directoryCount = 1;
 
         while (pending.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            DirectoryInfo directory = pending.Pop();
+            (DirectoryInfo directory, var depth) = pending.Pop();
 
             foreach (DirectoryInfo childDirectory in directory.EnumerateDirectories("*", EnumerationOptions))
             {
@@ -358,7 +383,25 @@ public static class SourceFileDiscovery
                     continue;
                 }
 
-                pending.Push(childDirectory);
+                var childDepth = depth + 1;
+                if (childDepth > limits.MaxDepth)
+                {
+                    throw DiscoveryLimitExceeded(
+                        rootDirectory.FullName,
+                        childDirectory.FullName,
+                        $"directory depth exceeds {limits.MaxDepth}");
+                }
+
+                if (directoryCount >= limits.MaxDirectoryCount)
+                {
+                    throw DiscoveryLimitExceeded(
+                        rootDirectory.FullName,
+                        childDirectory.FullName,
+                        $"directory count exceeds {limits.MaxDirectoryCount}");
+                }
+
+                directoryCount++;
+                pending.Push((childDirectory, childDepth));
             }
 
             foreach (FileInfo file in directory.EnumerateFiles(searchPattern, EnumerationOptions))
@@ -370,9 +413,46 @@ public static class SourceFileDiscovery
                     continue;
                 }
 
+                if (!FileKind.IsRegularFile(file.FullName))
+                {
+                    throw DiscoveryLimitExceeded(
+                        rootDirectory.FullName,
+                        file.FullName,
+                        "path is not a regular file");
+                }
+
+                if (file.Length > limits.MaxFileBytes)
+                {
+                    throw DiscoveryLimitExceeded(
+                        rootDirectory.FullName,
+                        file.FullName,
+                        $"file size {file.Length} bytes exceeds {limits.MaxFileBytes} bytes");
+                }
+
+                if (fileCount >= limits.MaxFileCount)
+                {
+                    throw DiscoveryLimitExceeded(
+                        rootDirectory.FullName,
+                        file.FullName,
+                        $"file count exceeds {limits.MaxFileCount}");
+                }
+
+                fileCount++;
                 yield return file;
             }
         }
+    }
+
+    private static InvalidDataException DiscoveryLimitExceeded(
+        string rootPath,
+        string path,
+        string detail)
+    {
+        var relativePath = Path.GetRelativePath(rootPath, path)
+            .Replace(Path.DirectorySeparatorChar, '/');
+
+        return new InvalidDataException(
+            $"Input discovery limit exceeded at '{relativePath}': {detail}.");
     }
 
     private static bool ShouldSkipDirectory(DirectoryInfo directory)

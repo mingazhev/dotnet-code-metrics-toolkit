@@ -59,7 +59,7 @@ public sealed class OutputPathSafetyTests
             outputPath,
             isolateInput: false);
 
-        Assert.Equal(Path.GetFullPath(outputPath), result.OutputPath);
+        Assert.True(File.Exists(Path.Combine(result.OutputPath, ArtifactNames.Manifest)));
         Assert.True(File.Exists(Path.Combine(outputPath, ArtifactNames.Manifest)));
         Assert.Equal("internal sealed class Allowed { }", File.ReadAllText(sourcePath));
     }
@@ -124,6 +124,28 @@ public sealed class OutputPathSafetyTests
         {
             Directory.Delete(physicalInput, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task NestedDirectorySymlinkCannotBypassInputOutputOverlapCheck()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = new TemporaryWorkspace();
+        var realInput = workspace.CreateDirectory("real-input");
+        var sourcePath = Path.Combine(realInput, "Protected.cs");
+        File.WriteAllText(sourcePath, "internal sealed class Protected { }");
+        WriteForgedManifest(realInput);
+        var linkInput = Path.Combine(workspace.RootPath, "link-input");
+        Directory.CreateSymbolicLink(linkInput, realInput);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            AnalyzeAsync(linkInput, realInput, isolateInput: false));
+
+        Assert.Equal("internal sealed class Protected { }", File.ReadAllText(sourcePath));
     }
 
     private static Task<AnalysisRunResult> AnalyzeAsync(

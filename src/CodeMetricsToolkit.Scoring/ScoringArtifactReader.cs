@@ -20,6 +20,7 @@ internal static class ScoringArtifactReader
     {
         ArgumentNullException.ThrowIfNull(limits);
         limits.Validate();
+        EnsureRegularDirectory(artifactDirectory);
         var manifestPath = Path.Combine(artifactDirectory, ArtifactNames.Manifest);
         var summaryPath = Path.Combine(artifactDirectory, ArtifactNames.Summary);
         var metricsPath = Path.Combine(artifactDirectory, ArtifactNames.Metrics);
@@ -704,11 +705,31 @@ internal static class ScoringArtifactReader
         return checkedDigits == requiredTrailingZeros;
     }
 
+    private static void EnsureRegularDirectory(string artifactDirectory)
+    {
+        if (!Directory.Exists(artifactDirectory))
+        {
+            return;
+        }
+
+        if ((File.GetAttributes(artifactDirectory) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw InvalidArtifacts(
+                "The artifact directory must be a regular directory, not a symbolic link or reparse point.");
+        }
+    }
+
     private static void EnsureFileExists(string path, string artifactName)
     {
         if (!File.Exists(path))
         {
             throw InvalidArtifacts($"Required artifact '{artifactName}' does not exist.");
+        }
+
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw InvalidArtifacts(
+                $"Required artifact must be a regular file, not a symbolic link or reparse point: {artifactName}");
         }
     }
 

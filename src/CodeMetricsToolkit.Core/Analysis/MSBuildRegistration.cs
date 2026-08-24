@@ -39,7 +39,9 @@ internal static class MSBuildRegistration
     {
         if (MSBuildLocator.IsRegistered)
         {
-            return RegistrationResult.Available;
+            return RegistrationResult.Unavailable(
+                "MSBuild is already registered by another component in this process. " +
+                "Run semantic analysis in a fresh process.");
         }
 
         if (!MSBuildLocator.CanRegister)

@@ -264,9 +264,15 @@ public static class CliApplication
                 ? CliExitCodes.AnalysisRejected
                 : CliExitCodes.Success;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
             await error.WriteLineAsync("Analysis canceled.").ConfigureAwait(false);
+            if (!string.Equals(exception.Message, "The operation was canceled.", StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(exception.Message))
+            {
+                await error.WriteLineAsync(exception.Message).ConfigureAwait(false);
+            }
+
             return CliExitCodes.Canceled;
         }
         catch (DirectoryNotFoundException exception)
@@ -288,6 +294,13 @@ public static class CliApplication
         {
             await error.WriteLineAsync(exception.Message).ConfigureAwait(false);
             return CliExitCodes.InputError;
+        }
+        catch (InvalidDataException exception)
+        {
+            await error.WriteLineAsync(exception.Message).ConfigureAwait(false);
+            return exception.Message.StartsWith("Staged artifact set is invalid", StringComparison.Ordinal)
+                ? CliExitCodes.InvalidArtifacts
+                : CliExitCodes.InputError;
         }
     }
 
