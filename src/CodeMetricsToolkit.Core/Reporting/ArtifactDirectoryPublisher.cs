@@ -67,11 +67,10 @@ public static class ArtifactDirectoryPublisher
             outputDirectoryName,
             "staging");
 
-        CreateStagingDirectory(stagingPath, normalizedOutputPath);
-
         var warnings = new List<string>();
         try
         {
+            CreateStagingDirectory(stagingPath, normalizedOutputPath);
             await writeArtifactsAsync(stagingPath, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 

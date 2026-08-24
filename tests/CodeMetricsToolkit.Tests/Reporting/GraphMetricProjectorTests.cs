@@ -6,13 +6,6 @@ namespace CodeMetricsToolkit.Tests.Reporting;
 
 public sealed class GraphMetricProjectorTests
 {
-    private static readonly string[] DegradedMetricIds =
-    [
-        "dependency_cycle_membership",
-        "incoming_type_dependency_count",
-        "outgoing_type_dependency_count"
-    ];
-
     [Fact]
     public void ProjectComputesCallDependencyTransitiveAndSccMetricsExactly()
     {
@@ -126,9 +119,7 @@ public sealed class GraphMetricProjectorTests
             facts,
             CancellationToken.None);
 
-        Assert.Equal(
-            DegradedMetricIds,
-            metrics.Select(metric => metric.MetricId).Order(StringComparer.Ordinal));
+        Assert.Empty(metrics);
     }
 
     private static void AssertMetric(

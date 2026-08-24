@@ -166,7 +166,7 @@ internal static class OperationFactsCollector
         {
             return null;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException exception) when (exception is not ObjectDisposedException)
         {
             return null;
         }

@@ -1,5 +1,4 @@
 using CodeMetricsToolkit.Core.Facts;
-using Microsoft.CodeAnalysis.Text;
 
 namespace CodeMetricsToolkit.Tests.Support;
 
@@ -16,7 +15,7 @@ internal static class TestFacts
         bool trustedDiagnostics = true,
         bool diagnosticsInHotspots = true,
         string rootPath = ".",
-        IReadOnlyDictionary<string, SourceText>? sourceTextSnapshots = null)
+        IReadOnlyDictionary<string, string>? sourceTextSnapshots = null)
     {
         IReadOnlyList<FileFacts> analysisFiles = files ?? [];
 
@@ -45,7 +44,7 @@ internal static class TestFacts
                 .Distinct()
                 .ToArray(),
             SourceTextSnapshots = sourceTextSnapshots ??
-                new Dictionary<string, SourceText>(StringComparer.Ordinal)
+                new Dictionary<string, string>(StringComparer.Ordinal)
         };
     }
 

@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Metrics;
+using CodeMetricsToolkit.Core.Validation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -13,6 +14,7 @@ public static class SyntaxFactsCollector
 {
     private const string SemanticStability = "semantic";
     private const string SyntaxFallbackStability = "syntax_fallback";
+    private const string LineFallbackStability = "line_fallback";
 
     public static async Task<SyntaxAnalysisFacts> CollectAsync(
         DiscoveredSources sources,
@@ -77,7 +79,7 @@ public static class SyntaxFactsCollector
 
         return new SyntaxAnalysisFacts
         {
-            Mode = DetermineMode(typeDeclarations, memberDeclarations),
+            Mode = DetermineMode(useSemantic, semanticLoad, typeDeclarations, memberDeclarations),
             Health = SemanticWorkspaceLoader.CreateHealth(useSemantic, semanticLoad, semanticInitializationFailure),
             RootPath = sources.RootPath,
             ProjectPaths = sources.ProjectPaths,
@@ -97,12 +99,14 @@ public static class SyntaxFactsCollector
                 .GroupBy(context => context.SourceFile.RelativePath, StringComparer.Ordinal)
                 .ToDictionary(
                     group => group.Key,
-                    group => group.First().SourceText,
+                    group => group.First().SourceText.ToString(),
                     StringComparer.Ordinal),
             Diagnostics = diagnostics
-                .OrderBy(diagnostic => diagnostic.FilePath, StringComparer.Ordinal)
-                .ThenBy(diagnostic => diagnostic.StartLine)
+                .OrderBy(diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(diagnostic => diagnostic.StartLine ?? int.MaxValue)
                 .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
+                .ThenBy(diagnostic => diagnostic.ProjectPath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(diagnostic => diagnostic.Message, StringComparer.Ordinal)
                 .ToArray()
         };
     }
@@ -339,7 +343,7 @@ public static class SyntaxFactsCollector
                 context.SourceFile.RelativePath,
                 startLine)
             : TargetIds.MemberSemantic(assemblyName, documentationCommentId);
-        var targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
+        var targetIdStability = documentationCommentId is null ? LineFallbackStability : SemanticStability;
         ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration, cancellationToken);
         OperationFacts? operationFacts = semanticModel is null
             ? null
@@ -562,6 +566,12 @@ public static class SyntaxFactsCollector
 
         if (seenEdges.Add(key))
         {
+            if (edges.Count >= ValidationInputLimits.DefaultMaxNdjsonRecords)
+            {
+                throw new InvalidDataException(
+                    $"Analysis produced more than {ValidationInputLimits.DefaultMaxNdjsonRecords} graph edges.");
+            }
+
             edges.Add(new GraphEdgeFacts
             {
                 From = from,
@@ -770,20 +780,38 @@ public static class SyntaxFactsCollector
     }
 
     private static string DetermineMode(
+        bool useSemantic,
+        SemanticLoadResult semanticLoad,
         IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
         IReadOnlyList<MemberDeclarationInfo> memberDeclarations)
     {
+        if (!useSemantic)
+        {
+            return "syntax";
+        }
+
         var hasSemanticIds = typeDeclarations.Any(declaration => declaration.TargetIdStability == SemanticStability) ||
             memberDeclarations.Any(declaration => declaration.TargetIdStability == SemanticStability);
         var hasFallbackIds = typeDeclarations.Any(declaration => declaration.TargetIdStability != SemanticStability) ||
             memberDeclarations.Any(declaration => declaration.TargetIdStability != SemanticStability);
+        var semanticPipelineRan = string.Equals(semanticLoad.SemanticModel, "msbuild", StringComparison.Ordinal);
 
-        return hasSemanticIds switch
+        if (hasSemanticIds && hasFallbackIds)
         {
-            true when hasFallbackIds => "partial_semantic",
-            true => "semantic",
-            _ => "syntax"
-        };
+            return "partial_semantic";
+        }
+
+        if (hasSemanticIds || (semanticPipelineRan && !hasFallbackIds))
+        {
+            return "semantic";
+        }
+
+        if (semanticPipelineRan)
+        {
+            return "partial_semantic";
+        }
+
+        return "syntax";
     }
 
     private static string? GetDocumentationCommentId(ISymbol? symbol)

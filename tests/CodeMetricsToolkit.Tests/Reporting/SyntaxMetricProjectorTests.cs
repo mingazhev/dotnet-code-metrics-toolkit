@@ -67,6 +67,35 @@ public sealed class SyntaxMetricProjectorTests
         Assert.Equal(3, Metric(metrics, "type", "max_member_nesting_depth").NumericValue);
         Assert.Equal(5d / 10d, Metric(metrics, first.TargetId, "token_line_ratio").NumericValue, 12);
         Assert.Equal("number", Metric(metrics, first.TargetId, "token_line_ratio").ValueKind);
+        Assert.Equal(1, Metric(metrics, "member:simple", "parameter_count").NumericValue);
+    }
+
+    [Fact]
+    public void ProjectOmitsRatiosForZeroLocAndReportsZeroMemberAggregates()
+    {
+        FileFacts empty = TestFacts.File(
+            "file:empty",
+            "Empty.cs",
+            lines: 0,
+            tokenLines: 0,
+            blanks: 0,
+            commentOnly: 0,
+            commented: 0,
+            mixed: 0,
+            documentation: 0);
+        TypeFacts type = TestFacts.Type("type:empty", empty.TargetId, empty.FilePath, memberCount: 0);
+        SyntaxAnalysisFacts facts = TestFacts.Analysis(files: [empty], types: [type], members: []);
+
+        IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(
+            facts,
+            CancellationToken.None);
+
+        Assert.DoesNotContain(metrics, metric => metric.MetricId.EndsWith("_ratio", StringComparison.Ordinal));
+        Assert.Equal(0, Metric(metrics, empty.TargetId, "max_member_cyclomatic_complexity").NumericValue);
+        Assert.Equal(0, Metric(metrics, empty.TargetId, "p95_member_cyclomatic_complexity").NumericValue);
+        Assert.Equal(0, Metric(metrics, type.TargetId, "max_member_cognitive_complexity").NumericValue);
+        Assert.Equal(0, Metric(metrics, type.TargetId, "p95_member_cognitive_complexity").NumericValue);
+        Assert.Equal(0, Metric(metrics, type.TargetId, "max_member_nesting_depth").NumericValue);
     }
 
     [Fact]

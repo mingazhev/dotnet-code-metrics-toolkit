@@ -54,6 +54,12 @@ internal static class ScoringInputReader
         string displayName,
         CancellationToken cancellationToken)
     {
+        if (!RegularFile.IsRegularFile(path))
+        {
+            throw new InvalidDataException(
+                $"{displayName} must be a regular file, not a symbolic link, reparse point, or special file.");
+        }
+
         var declaredLength = new FileInfo(path).Length;
         if (declaredLength > maxBytes)
         {

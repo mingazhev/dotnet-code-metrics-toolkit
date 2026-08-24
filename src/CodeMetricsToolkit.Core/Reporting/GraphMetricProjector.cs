@@ -58,13 +58,15 @@ public static class GraphMetricProjector
             }
         }
 
+        if (!string.Equals(facts.Health.AnalysisQuality, "trusted", StringComparison.Ordinal))
+        {
+            return [];
+        }
+
         DirectedGraphAnalysis dependencyGraph = DirectedGraphAnalyzer.Analyze(
             typeOutgoing,
             typeIncoming,
-            includeReachability: string.Equals(
-                facts.Health.AnalysisQuality,
-                "trusted",
-                StringComparison.Ordinal),
+            includeReachability: true,
             cancellationToken);
         var metrics = new List<MetricResultLine>();
 
@@ -79,11 +81,6 @@ public static class GraphMetricProjector
                 "dependency_cycle_membership",
                 dependencyGraph.GetCyclicComponentSize(type.TargetId) > 0 ? 1 : 0,
                 "flag"));
-        }
-
-        if (!string.Equals(facts.Health.AnalysisQuality, "trusted", StringComparison.Ordinal))
-        {
-            return metrics;
         }
 
         DirectedGraphAnalysis callGraph = DirectedGraphAnalyzer.Analyze(

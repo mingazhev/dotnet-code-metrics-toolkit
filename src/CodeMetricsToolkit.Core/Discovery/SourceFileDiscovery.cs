@@ -69,11 +69,14 @@ public static class SourceFileDiscovery
             throw new DirectoryNotFoundException($"Input path does not exist: {inputPath}");
         }
 
+        var quota = new DiscoveryQuota();
+        var globCache = new Dictionary<string, System.Text.RegularExpressions.Regex>(StringComparer.Ordinal);
         var solutionPaths = EnumerateFiles(
                 rootDirectory,
                 "*.sln",
                 includeGeneratedCode: true,
                 limits,
+                quota,
                 cancellationToken)
             .Select(file => ToRelativePath(rootPath, file.FullName))
             .Order(StringComparer.Ordinal)
@@ -84,6 +87,7 @@ public static class SourceFileDiscovery
                 "*.csproj",
                 includeGeneratedCode: true,
                 limits,
+                quota,
                 cancellationToken)
             .Select(file => ToRelativePath(rootPath, file.FullName))
             .Order(StringComparer.Ordinal)
@@ -102,8 +106,14 @@ public static class SourceFileDiscovery
                 "*.cs",
                 includeGeneratedCode,
                 limits,
+                quota,
                 cancellationToken)
-            .Where(file => ShouldIncludeSourceFile(rootPath, file.FullName, includePatterns, excludePatterns))
+            .Where(file => ShouldIncludeSourceFile(
+                rootPath,
+                file.FullName,
+                includePatterns,
+                excludePatterns,
+                globCache))
             .Select(file => CreateSourceFile(rootPath, sourceProjectPaths, file.FullName))
             .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
             .ToList();
@@ -133,6 +143,7 @@ public static class SourceFileDiscovery
 
         if (File.Exists(fullPath))
         {
+            EnsureSelectedInputFile(fullPath);
             var rootPath = Path.GetDirectoryName(fullPath) ??
                 throw new DirectoryNotFoundException($"Could not resolve directory for {inputPath}");
             var relativePath = Path.GetFileName(fullPath);
@@ -157,6 +168,18 @@ public static class SourceFileDiscovery
         }
 
         return new InputSelection(fullPath, null, null);
+    }
+
+    private static void EnsureSelectedInputFile(string path)
+    {
+        FileKind.EnsureRegularFile(path, Path.GetFileName(path));
+        var length = new FileInfo(path).Length;
+        if (length > InputIsolator.MaxIsolatedFileBytes)
+        {
+            throw new InvalidDataException(
+                $"{Path.GetFileName(path)} is {length} bytes and exceeds the maximum of " +
+                $"{InputIsolator.MaxIsolatedFileBytes} bytes.");
+        }
     }
 
     private static List<string> SelectProjectPaths(
@@ -362,11 +385,11 @@ public static class SourceFileDiscovery
         string searchPattern,
         bool includeGeneratedCode,
         InputIsolationLimits limits,
+        DiscoveryQuota quota,
         CancellationToken cancellationToken)
     {
         var pending = new Stack<(DirectoryInfo Directory, int Depth)>();
         pending.Push((rootDirectory, 0));
-        var fileCount = 0;
         var directoryCount = 1;
 
         while (pending.Count > 0)
@@ -429,7 +452,15 @@ public static class SourceFileDiscovery
                         $"file size {file.Length} bytes exceeds {limits.MaxFileBytes} bytes");
                 }
 
-                if (fileCount >= limits.MaxFileCount)
+                if (file.Length > limits.MaxTotalBytes - quota.TotalBytes)
+                {
+                    throw DiscoveryLimitExceeded(
+                        rootDirectory.FullName,
+                        file.FullName,
+                        $"total size exceeds {limits.MaxTotalBytes} bytes");
+                }
+
+                if (quota.FileCount >= limits.MaxFileCount)
                 {
                     throw DiscoveryLimitExceeded(
                         rootDirectory.FullName,
@@ -437,7 +468,8 @@ public static class SourceFileDiscovery
                         $"file count exceeds {limits.MaxFileCount}");
                 }
 
-                fileCount++;
+                quota.FileCount++;
+                quota.TotalBytes += file.Length;
                 yield return file;
             }
         }
@@ -470,23 +502,40 @@ public static class SourceFileDiscovery
         string rootPath,
         string fullPath,
         IReadOnlyList<string> includePatterns,
-        IReadOnlyList<string> excludePatterns)
+        IReadOnlyList<string> excludePatterns,
+        Dictionary<string, System.Text.RegularExpressions.Regex> globCache)
     {
         var relativePath = ToRelativePath(rootPath, fullPath);
 
         var included = includePatterns.Count == 0 ||
-            includePatterns.Any(pattern => GlobMatches(pattern, relativePath));
-        var excluded = excludePatterns.Any(pattern => GlobMatches(pattern, relativePath));
+            includePatterns.Any(pattern => GlobMatches(pattern, relativePath, globCache));
+        var excluded = excludePatterns.Any(pattern => GlobMatches(pattern, relativePath, globCache));
 
         return included && !excluded;
     }
 
     internal static bool GlobMatches(string pattern, string relativePath)
     {
+        return GlobMatches(
+            pattern,
+            relativePath,
+            new Dictionary<string, System.Text.RegularExpressions.Regex>(StringComparer.Ordinal));
+    }
+
+    private static bool GlobMatches(
+        string pattern,
+        string relativePath,
+        Dictionary<string, System.Text.RegularExpressions.Regex> globCache)
+    {
         var normalizedPattern = NormalizeGlobValue(pattern);
         var normalizedPath = NormalizeGlobValue(relativePath);
+        if (!globCache.TryGetValue(normalizedPattern, out System.Text.RegularExpressions.Regex? regex))
+        {
+            regex = GlobRegex(normalizedPattern);
+            globCache[normalizedPattern] = regex;
+        }
 
-        return GlobRegex(normalizedPattern).IsMatch(normalizedPath);
+        return regex.IsMatch(normalizedPath);
     }
 
     private static System.Text.RegularExpressions.Regex GlobRegex(string pattern)
@@ -532,7 +581,11 @@ public static class SourceFileDiscovery
 
         builder.Append('$');
 
-        return new System.Text.RegularExpressions.Regex(builder.ToString(), System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return new System.Text.RegularExpressions.Regex(
+            builder.ToString(),
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant |
+            System.Text.RegularExpressions.RegexOptions.NonBacktracking,
+            TimeSpan.FromSeconds(1));
     }
 
     private static string NormalizeGlobValue(string value)
@@ -613,3 +666,9 @@ internal sealed record InputSelection(
     string RootPath,
     string? SelectedSolutionPath,
     string? SelectedProjectPath);
+
+internal sealed class DiscoveryQuota
+{
+    public int FileCount { get; set; }
+    public long TotalBytes { get; set; }
+}

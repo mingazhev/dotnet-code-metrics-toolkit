@@ -190,6 +190,9 @@ public sealed partial class CliAnalyzeTests
                 .GetProperty("analysisHealth")
                 .GetProperty("analysisQuality")
                 .GetString());
+        using var manifest = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
+        Assert.Equal("semantic", manifest.RootElement.GetProperty("mode").GetString());
         Assert.DoesNotContain(
             ReadNdjson(Path.Combine(output.Path, "metrics.ndjson")),
             metric => metric.TryGetProperty("filePath", out JsonElement filePath) &&
@@ -235,6 +238,60 @@ public sealed partial class CliAnalyzeTests
             message => message.GetString()!.Contains(
                 "authored source file(s) outside the analysis root",
                 StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AnalyzeCommandEmitsAdr0001SemanticTargetIdsForGenericsAndOverloads()
+    {
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("GenericsAndOverloadsProject");
+
+        var exitCode = await RunCliAsync(
+            "analyze",
+            projectPath,
+            "--output",
+            output.Path,
+            "--isolate-input");
+
+        Assert.Equal(0, exitCode);
+        JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
+        var ids = graphNodes
+            .Select(node => node.GetProperty("id").GetString()!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("type:GenericsAndOverloadsProject/T:GenericsAndOverloadsProject.Repository`1", ids);
+        Assert.Contains(
+            "member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.Repository`1.Find``1(``0,System.Func{`0,``0})",
+            ids);
+        Assert.Contains(
+            "member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.OverloadService.Format(System.Int32)",
+            ids);
+        Assert.Contains(
+            "member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.OverloadService.Format(System.String)",
+            ids);
+        Assert.Contains(
+            "member:GenericsAndOverloadsProject/P:GenericsAndOverloadsProject.OverloadService.Name",
+            ids);
+        Assert.Contains(
+            "member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.OverloadService.#ctor(System.String)",
+            ids);
+    }
+
+    [Fact]
+    public async Task EmptyIncludeGlobIsAnInputError()
+    {
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
+
+        var exitCode = await RunCliAllowFailureAsync(
+            "analyze",
+            projectPath,
+            "--output",
+            output.Path,
+            "--include",
+            "");
+
+        Assert.Equal(CliExitCodes.InputError, exitCode);
     }
 
     [Fact]

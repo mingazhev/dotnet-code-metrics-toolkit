@@ -16,7 +16,7 @@ public static class ChunkProjector
         ArgumentNullException.ThrowIfNull(facts);
 
         var chunks = new List<ChunkLine>();
-        IReadOnlyDictionary<string, SourceText> sourceSnapshots = facts.SourceTextSnapshots;
+        IReadOnlyDictionary<string, string> sourceSnapshots = facts.SourceTextSnapshots;
         var typesByFile = facts.Types
             .SelectMany(type => type.Declarations.Select(declaration => (declaration.FilePath, Type: type)))
             .GroupBy(entry => entry.FilePath, StringComparer.Ordinal)
@@ -128,7 +128,7 @@ public static class ChunkProjector
     }
 
     private static ChunkLine CreateChunk(
-        IReadOnlyDictionary<string, SourceText> sourceSnapshots,
+        IReadOnlyDictionary<string, string> sourceSnapshots,
         string targetId,
         string targetKind,
         string targetIdStability,
@@ -158,15 +158,16 @@ public static class ChunkProjector
     }
 
     private static string ReadLineRange(
-        IReadOnlyDictionary<string, SourceText> sourceSnapshots,
+        IReadOnlyDictionary<string, string> sourceSnapshots,
         SourceSpanFacts span)
     {
-        if (!sourceSnapshots.TryGetValue(span.FilePath, out SourceText? sourceText))
+        if (!sourceSnapshots.TryGetValue(span.FilePath, out var snapshot))
         {
             throw new InvalidOperationException(
                 $"No collected source snapshot exists for '{span.FilePath}'.");
         }
 
+        var sourceText = SourceText.From(snapshot);
         if (sourceText.Length == 0)
         {
             return string.Empty;

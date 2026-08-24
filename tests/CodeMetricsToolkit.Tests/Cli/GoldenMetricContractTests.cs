@@ -22,7 +22,7 @@ public sealed class GoldenMetricContractTests
         using var standardError = new StringWriter();
 
         var exitCode = await CliApplication.RunAsync(
-            ["analyze", projectPath, "--output", output.Path],
+            ["analyze", projectPath, "--output", output.Path, "--isolate-input"],
             standardOutput,
             standardError,
             CancellationToken.None);

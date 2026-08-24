@@ -46,6 +46,19 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
   and depth ceilings as `validate-output`, and refuses a reparse-point manifest.
 - Canceled restore no longer leaves unbounded stdout/stderr drains, and leftover isolated
   input cleanup failures are attached to the thrown exception.
+- Trusted semantic runs with no type or member declarations now emit `manifest.mode=semantic`
+  instead of `syntax`.
+- Member fallback identities that embed a line are tagged `line_fallback`.
+- Scoring identity-stability pins apply to type/member rows, so a semantic pin can still
+  score structural file metrics.
+- Default discovery now enforces the 4 GiB aggregate ceiling and rejects non-regular
+  `.sln`/`.csproj` inputs before parsing.
+- `validate-output` and scoring reject FIFOs and devices, not only reparse points.
+- Failed restore process text is no longer copied into `summary.json`.
+- Semantic graph metrics are omitted for degraded analysis instead of publishing
+  untrusted type-dependency counts under the same metric ids.
+- Source snapshots stored on analysis facts are plain text, not Roslyn `SourceText`.
+- Diagnostic and graph-edge collection fail closed at the 1,000,000-record consumer ceiling.
 
 ## [0.1.0] - Unreleased
 

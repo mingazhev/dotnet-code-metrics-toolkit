@@ -9,10 +9,9 @@ The engine supports a deliberately small, deterministic profile language:
 Profiles must pin the artifact contract and every metric version they consume.
 
 They must also state which analysis modes and target-id stability classes are accepted.
-`allowedTargetIdStabilities` is applied to the targets each `thresholdDebt` operation will
-score after file selectors, not to structural solution/project rows that Core always
-emits as `syntax_fallback`. That requirement prevents a profile calibrated on semantic
-symbols from silently scoring syntax-fallback members or types.
+`allowedTargetIdStabilities` is applied to selected `type` and `member` rows after file
+selectors. File, project, and solution rows are structural (`syntax_fallback`) and do
+not relax the identity pin, so a semantic-only profile can still score files.
 
 ```json
 {

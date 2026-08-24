@@ -199,7 +199,8 @@ public sealed partial class ScoringEngineTests
             ScoringEngine.EvaluateAsync(artifacts.Path, profile, CancellationToken.None));
 
         Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
-        Assert.Contains("symbolic link or reparse point: summary.json", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("regular file", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("summary.json", exception.Message, StringComparison.Ordinal);
     }
 
 }

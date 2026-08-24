@@ -26,9 +26,9 @@ chunk:<target-id>#<chunk-kind>
 For `type` and `member`, `<xml-doc-id>` is `ISymbol.GetDocumentationCommentId()`. The assembly name is included because XML doc ids are only unique inside an assembly.
 
 `solution:root` is the artifact-local singleton root. Project ids hash the
-repository-relative project path. These structural targets currently report
-`targetIdStability=syntax_fallback` because the public stability enum predates a
-separate structural category; neither id depends on line positions.
+repository-relative project path. These structural targets report
+`targetIdStability=syntax_fallback`; neither id depends on line positions.
+Member fallback identities that embed `:start-line` report `line_fallback`.
 
 Fallback ids are allowed only when semantic loading is unavailable:
 
@@ -51,7 +51,7 @@ Partial types produce one logical type node with multiple declaration spans. Mem
 
 ```text
 type:GenericsAndOverloadsProject/T:GenericsAndOverloadsProject.Repository`1
-member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.Repository`1.Find``1(System.String)
+member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.Repository`1.Find``1(``0,System.Func{`0,``0})
 member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.OverloadService.Format(System.Int32)
 member:GenericsAndOverloadsProject/M:GenericsAndOverloadsProject.OverloadService.Format(System.String)
 member:ComplexityProject/M:ComplexityProject.DecisionSamples.#ctor(System.Int32)

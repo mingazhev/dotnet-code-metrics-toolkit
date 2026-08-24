@@ -21,7 +21,7 @@ public sealed class AnalyzerScoringIntegrationTests
         using var standardError = new StringWriter();
 
         var exitCode = await CliApplication.RunAsync(
-            ["analyze", projectPath, "--output", output.Path, "--no-restore"],
+            ["analyze", projectPath, "--output", output.Path, "--isolate-input"],
             standardOutput,
             standardError,
             CancellationToken.None);
