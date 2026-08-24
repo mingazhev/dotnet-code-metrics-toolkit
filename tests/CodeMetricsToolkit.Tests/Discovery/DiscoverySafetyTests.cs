@@ -196,6 +196,101 @@ public sealed class DiscoverySafetyTests
     }
 
     [Fact]
+    public void IsolatedCopyRejectsNonRegularFilesWithoutHanging()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("input");
+        File.WriteAllText(Path.Combine(input, "Included.cs"), "internal sealed class Included { }");
+        var fifoPath = Path.Combine(input, "named-pipe");
+        Assert.Equal(0, MkFifo(fifoPath, Convert.ToInt32("644", 8)));
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
+            InputIsolator.CopyToTemporaryDirectory(input, CancellationToken.None));
+
+        Assert.Contains("path is not a regular file", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SourceDiscoveryRejectsFileAndDepthQuotas()
+    {
+        using var fixture = new TemporaryDirectory();
+        var fileRoot = fixture.CreateDirectory("files");
+        File.WriteAllText(Path.Combine(fileRoot, "A.cs"), "a");
+        File.WriteAllText(Path.Combine(fileRoot, "B.cs"), "b");
+
+        InvalidDataException files = Assert.Throws<InvalidDataException>(() =>
+            SourceFileDiscovery.Discover(
+                fileRoot,
+                includeGeneratedCode: false,
+                includePatterns: null,
+                excludePatterns: null,
+                Limits(fileCount: 1),
+                CancellationToken.None));
+        Assert.Contains("file count exceeds 1", files.Message, StringComparison.Ordinal);
+
+        var depthRoot = fixture.CreateDirectory("depth");
+        Directory.CreateDirectory(Path.Combine(depthRoot, "one", "two"));
+        File.WriteAllText(Path.Combine(depthRoot, "one", "two", "Deep.cs"), "internal sealed class Deep { }");
+
+        InvalidDataException depth = Assert.Throws<InvalidDataException>(() =>
+            SourceFileDiscovery.Discover(
+                depthRoot,
+                includeGeneratedCode: false,
+                includePatterns: null,
+                excludePatterns: null,
+                Limits(depth: 1),
+                CancellationToken.None));
+        Assert.Contains("directory depth exceeds 1", depth.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SourceDiscoveryRejectsNonRegularSourceFiles()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("input");
+        File.WriteAllText(Path.Combine(input, "Included.cs"), "internal sealed class Included { }");
+        Assert.Equal(0, MkFifo(Path.Combine(input, "Pipe.cs"), Convert.ToInt32("644", 8)));
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
+            SourceFileDiscovery.Discover(input, includeGeneratedCode: false));
+
+        Assert.Contains("path is not a regular file", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExplicitProjectScopesDiscoveryToThatProject()
+    {
+        using var fixture = new TemporaryDirectory();
+        var root = fixture.CreateDirectory("input");
+        var projectA = Path.Combine(root, "A");
+        var projectB = Path.Combine(root, "B");
+        Directory.CreateDirectory(projectA);
+        Directory.CreateDirectory(projectB);
+        File.WriteAllText(Path.Combine(projectA, "A.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        File.WriteAllText(Path.Combine(projectA, "A.cs"), "internal sealed class A { }");
+        File.WriteAllText(Path.Combine(projectB, "B.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        File.WriteAllText(Path.Combine(projectB, "B.cs"), "internal sealed class B { }");
+
+        DiscoveredSources discovered = SourceFileDiscovery.Discover(
+            Path.Combine(projectA, "A.csproj"),
+            includeGeneratedCode: false);
+
+        Assert.Equal(["A.csproj"], discovered.ProjectPaths);
+        Assert.Equal(["A.cs"], discovered.SourceFiles.Select(file => file.RelativePath));
+        Assert.Equal("A.csproj", discovered.SelectedProjectPath);
+    }
+
+    [Fact]
     public void SourceDiscoveryHonorsPreCanceledToken()
     {
         using var fixture = new TemporaryDirectory();
@@ -351,6 +446,9 @@ public sealed class DiscoverySafetyTests
 
         Assert.Contains("outside its directory", exception.Message, StringComparison.Ordinal);
     }
+
+    [System.Runtime.InteropServices.DllImport("libc", SetLastError = true, EntryPoint = "mkfifo", CharSet = System.Runtime.InteropServices.CharSet.Ansi, BestFitMapping = false)]
+    private static extern int MkFifo(string path, int mode);
 
     private sealed class TemporaryDirectory : IDisposable
     {

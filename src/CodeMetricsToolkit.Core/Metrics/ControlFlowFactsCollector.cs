@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace CodeMetricsToolkit.Core.Metrics;
 
-public static class ControlFlowFactsCollector
+internal static class ControlFlowFactsCollector
 {
     public static ControlFlowFacts Collect(SyntaxNode declaration, CancellationToken cancellationToken)
     {

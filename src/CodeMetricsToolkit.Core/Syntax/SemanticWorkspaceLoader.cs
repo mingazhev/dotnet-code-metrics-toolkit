@@ -111,12 +111,18 @@ internal static class SemanticWorkspaceLoader
                 WorkspaceHadFailures: workspaceHadFailures,
                 messages);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        catch (Exception exception) when (IsOperationalWorkspaceException(exception))
         {
             messages.Add($"MSBuildWorkspace failed: {exception.Message}");
             AddProjectLoadFailureDiagnostics(sources, diagnostics, diagnosticKeys, exception.Message);
             return Unavailable(restore.Status, messages);
         }
+    }
+
+    internal static bool IsOperationalWorkspaceException(Exception exception)
+    {
+        return exception is IOException or UnauthorizedAccessException
+            or (InvalidOperationException and not ObjectDisposedException);
     }
 
     public static AnalysisHealth CreateHealth(

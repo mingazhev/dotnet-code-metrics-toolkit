@@ -49,10 +49,12 @@ accepts at most 128 MiB for each JSON artifact and 1 GiB for each NDJSON artifac
 is read incrementally and is limited to 8 Mi characters per line, 1,000,000 physical
 lines, and 1,000,000 non-empty records per artifact. JSON nesting is limited to 64.
 
-`analyze --isolate-input` copies at most 4 GiB across 250,000 files and 50,000
-directories. One file may be at most 256 MiB and directory depth may be at most 96.
-Excluded `.git`, `.vs`, `bin`, `obj`, and `artifacts` trees do not consume the copy
-quota. Exceeding a quota aborts analysis and removes the temporary copy.
+`analyze` applies the same tree ceilings whether or not `--isolate-input` is used: at most
+4 GiB across 250,000 files and 50,000 directories, 256 MiB per file, and 96 directory
+levels. Non-regular files (FIFOs, devices, sockets, and reparse points) are rejected.
+`--isolate-input` copies at those same limits and removes the temporary copy when a quota
+is exceeded. Excluded `.git`, `.vs`, `bin`, `obj`, and `artifacts` trees do not consume
+the copy quota.
 
 These limits are intentionally not CLI-tunable: they are hard resource-exhaustion
 boundaries. Analyze unusually large repositories in scoped project/solution slices.

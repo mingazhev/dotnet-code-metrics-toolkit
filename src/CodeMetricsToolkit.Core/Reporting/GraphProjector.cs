@@ -7,9 +7,12 @@ namespace CodeMetricsToolkit.Core.Reporting;
 
 public static class GraphProjector
 {
-    public static GraphArtifact Project(SyntaxAnalysisFacts facts)
+    public static GraphArtifact Project(
+        SyntaxAnalysisFacts facts,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(facts);
+        cancellationToken.ThrowIfCancellationRequested();
 
         GraphNodeLine[] nodes = new[] { CreateSolutionNode() }
             .Concat(facts.ProjectPaths

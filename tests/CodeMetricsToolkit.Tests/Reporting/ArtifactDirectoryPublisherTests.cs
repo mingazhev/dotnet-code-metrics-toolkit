@@ -1,3 +1,4 @@
+using CodeMetricsToolkit.Core;
 using CodeMetricsToolkit.Core.Reporting;
 using CodeMetricsToolkit.Core.Validation;
 using CodeMetricsToolkit.Tests.SchemaValidation;
@@ -246,6 +247,37 @@ public sealed class ArtifactDirectoryPublisherTests
 
         Assert.Equal("previous output", File.ReadAllText(markerPath));
         AssertOnlyPublishedOutputRemains(workspace);
+    }
+
+    [Fact]
+    public async Task ExistingManifestSymlinkCannotBeUsedToReplaceOutput()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = new TemporaryWorkspace();
+        Directory.CreateDirectory(workspace.OutputPath);
+        File.WriteAllText(Path.Combine(workspace.OutputPath, "keep.txt"), "keep");
+        var realManifest = Path.Combine(workspace.RootPath, "outside-manifest.json");
+        File.WriteAllText(realManifest, $$"""{"tool":"{{ToolkitInfo.Name}}"}""");
+        File.CreateSymbolicLink(Path.Combine(workspace.OutputPath, "manifest.json"), realManifest);
+        var writerCalled = false;
+
+        IOException exception = await Assert.ThrowsAsync<IOException>(() =>
+            ArtifactDirectoryPublisher.PublishAsync(
+                workspace.OutputPath,
+                (_, _) =>
+                {
+                    writerCalled = true;
+                    return Task.CompletedTask;
+                },
+                CancellationToken.None));
+
+        Assert.Contains("symbolic link or reparse point", exception.Message, StringComparison.Ordinal);
+        Assert.False(writerCalled);
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(workspace.OutputPath, "keep.txt")));
     }
 
     [Fact]

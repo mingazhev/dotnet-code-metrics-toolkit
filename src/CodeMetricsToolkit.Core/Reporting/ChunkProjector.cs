@@ -8,22 +8,36 @@ namespace CodeMetricsToolkit.Core.Reporting;
 
 public static class ChunkProjector
 {
-    public static IReadOnlyList<ChunkLine> Project(SyntaxAnalysisFacts facts, bool includeText)
+    public static IReadOnlyList<ChunkLine> Project(
+        SyntaxAnalysisFacts facts,
+        bool includeText,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(facts);
 
         var chunks = new List<ChunkLine>();
         IReadOnlyDictionary<string, SourceText> sourceSnapshots = facts.SourceTextSnapshots;
+        var typesByFile = facts.Types
+            .SelectMany(type => type.Declarations.Select(declaration => (declaration.FilePath, Type: type)))
+            .GroupBy(entry => entry.FilePath, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(entry => entry.Type).Distinct().ToArray(),
+                StringComparer.Ordinal);
+        var membersByType = facts.Members
+            .GroupBy(member => member.ParentTypeTargetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var edgesByFrom = facts.GraphEdges
+            .GroupBy(edge => edge.From, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         foreach (FileFacts file in facts.Files.OrderBy(file => file.FilePath, StringComparer.Ordinal))
         {
-            SourceSpanFacts span = CreateFileHeaderSpan(file, facts.Types);
-            IReadOnlyList<string> relatedTargetIds = facts.Types
-                .Where(type => type.Declarations.Any(declaration => declaration.FilePath == file.FilePath))
-                .Select(type => type.TargetId)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal)
-                .ToArray();
+            cancellationToken.ThrowIfCancellationRequested();
+            SourceSpanFacts span = CreateFileHeaderSpan(file, typesByFile);
+            IReadOnlyList<string> relatedTargetIds = typesByFile.TryGetValue(file.FilePath, out TypeFacts[]? types)
+                ? types.Select(type => type.TargetId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
+                : [];
 
             chunks.Add(CreateChunk(
                 sourceSnapshots,
@@ -38,9 +52,10 @@ public static class ChunkProjector
 
         foreach (TypeFacts type in facts.Types.OrderBy(type => type.TargetId, StringComparer.Ordinal))
         {
-            IReadOnlyList<string> relatedTargetIds = facts.Members
-                .Where(member => member.ParentTypeTargetId == type.TargetId)
-                .Select(member => member.TargetId)
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<string> relatedTargetIds = (membersByType.TryGetValue(type.TargetId, out MemberFacts[]? members)
+                    ? members.Select(member => member.TargetId)
+                    : [])
                 .Append(type.ParentFileTargetId)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
@@ -62,9 +77,10 @@ public static class ChunkProjector
 
         foreach (MemberFacts member in facts.Members.OrderBy(member => member.TargetId, StringComparer.Ordinal))
         {
-            IReadOnlyList<string> relatedTargetIds = facts.GraphEdges
-                .Where(edge => edge.From == member.TargetId)
-                .Select(edge => edge.To)
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<string> relatedTargetIds = (edgesByFrom.TryGetValue(member.TargetId, out GraphEdgeFacts[]? edges)
+                    ? edges.Select(edge => edge.To)
+                    : [])
                 .Append(member.ParentTypeTargetId)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
@@ -87,10 +103,13 @@ public static class ChunkProjector
         return chunks;
     }
 
-    private static SourceSpanFacts CreateFileHeaderSpan(FileFacts file, IReadOnlyList<TypeFacts> types)
+    private static SourceSpanFacts CreateFileHeaderSpan(
+        FileFacts file,
+        Dictionary<string, TypeFacts[]> typesByFile)
     {
-        var firstTypeLine = types
-            .SelectMany(type => type.Declarations)
+        var firstTypeLine = (typesByFile.TryGetValue(file.FilePath, out TypeFacts[]? types)
+                ? types.SelectMany(type => type.Declarations)
+                : [])
             .Where(declaration => declaration.FilePath == file.FilePath)
             .Select(declaration => declaration.StartLine)
             .DefaultIfEmpty(file.EndLine + 1)

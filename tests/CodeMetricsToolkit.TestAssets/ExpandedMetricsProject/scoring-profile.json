@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "artifactContractVersion": "0.1.0",
   "allowedAnalysisModes": ["semantic"],
-  "allowedTargetIdStabilities": ["semantic", "syntax_fallback"],
+  "allowedTargetIdStabilities": ["semantic"],
   "selectors": {
     "includeFilePaths": ["**/*.cs"],
     "excludeFilePaths": [],

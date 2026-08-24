@@ -133,7 +133,12 @@ public static class SyntaxFactsCollector
             }
             else
             {
-                sourceText = SourceText.From(await File.ReadAllTextAsync(sourceFile.FullPath, cancellationToken).ConfigureAwait(false));
+                sourceText = SourceText.From(
+                    await FileKind.ReadAllTextAsync(
+                            sourceFile.FullPath,
+                            InputIsolator.MaxIsolatedFileBytes,
+                            cancellationToken)
+                        .ConfigureAwait(false));
                 syntaxTree = CSharpSyntaxTree.ParseText(
                     sourceText,
                     CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp12),

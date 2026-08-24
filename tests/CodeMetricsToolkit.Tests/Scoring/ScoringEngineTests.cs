@@ -127,6 +127,29 @@ public sealed partial class ScoringEngineTests
     }
 
     [Fact]
+    public async Task AllowsSemanticPinWhenUnscoredStructuralRowsUseSyntaxFallback()
+    {
+        using var artifacts = TestArtifacts.Create(
+            analysisQuality: "trusted",
+            Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 15),
+            Metric("member:a", "src/A.cs", "member_length", "1.0.0", 55),
+            MetricForTarget(
+                "solution",
+                "solution:root",
+                ".",
+                "lines_of_code",
+                "1.0.0",
+                10,
+                stability: "syntax_fallback"));
+        await using Stream profile = ProfileStream(ValidProfile());
+
+        ScoringResult result = await ScoringEngine.EvaluateAsync(artifacts.Path, profile);
+
+        Assert.Equal(15, result.Values["debt"]);
+        Assert.Equal(["semantic"], result.Provenance.AllowedTargetIdStabilities);
+    }
+
+    [Fact]
     public async Task RejectsTargetIdStabilityNotPinnedByProfile()
     {
         using var artifacts = TestArtifacts.Create(
@@ -589,7 +612,7 @@ public sealed partial class ScoringEngineTests
             metricId,
             metricVersion,
             value,
-            tags);
+            tags: tags);
     }
 
     private static string MetricForTarget(
@@ -599,6 +622,7 @@ public sealed partial class ScoringEngineTests
         string metricId,
         string metricVersion,
         double value,
+        string stability = "semantic",
         params string[] tags)
     {
         var tagsJson = tags.Length == 0
@@ -606,7 +630,7 @@ public sealed partial class ScoringEngineTests
             : $",\"tags\":{JsonSerializer.Serialize(tags)}";
 
         return $$"""
-            {"schemaVersion":"0.1.0","metricId":"{{metricId}}","metricVersion":"{{metricVersion}}","targetId":"{{targetId}}","targetKind":"{{targetKind}}","targetIdStability":"semantic","valueKind":"integer","numericValue":{{value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}},"filePath":"{{filePath}}"{{tagsJson}}}
+            {"schemaVersion":"0.1.0","metricId":"{{metricId}}","metricVersion":"{{metricVersion}}","targetId":"{{targetId}}","targetKind":"{{targetKind}}","targetIdStability":"{{stability}}","valueKind":"integer","numericValue":{{value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}},"filePath":"{{filePath}}"{{tagsJson}}}
             """;
     }
 
@@ -669,9 +693,15 @@ public sealed partial class ScoringEngineTests
                 var targetId = root.GetProperty("targetId").GetString()!;
                 var targetKind = root.GetProperty("targetKind").GetString()!;
                 var filePath = root.GetProperty("filePath").GetString()!;
+                var targetIdStability = root.GetProperty("targetIdStability").GetString()!;
                 targets.TryAdd(
                     targetId,
-                    new GraphFixtureTarget(targetId, targetKind, filePath, [filePath]));
+                    new GraphFixtureTarget(
+                        targetId,
+                        targetKind,
+                        filePath,
+                        [filePath],
+                        TargetIdStability: targetIdStability));
             }
 
             WriteGraphFile(path, artifactSchemaVersion, targets.Values);

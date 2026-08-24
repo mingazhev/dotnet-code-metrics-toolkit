@@ -33,6 +33,19 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 - Explicit project/solution selection no longer widens silently to sibling projects.
 - Artifact validation now enforces schemas, typed metric values, cross-file references,
   and required-file ownership at runtime.
+- Semantic restore now launches an absolute `dotnet` muxer path instead of searching the
+  process current directory.
+- Isolation copy, source discovery, and syntax-only source reads reject non-regular files
+  and apply the documented file-count, depth, and per-file size ceilings.
+- Output-versus-input overlap now compares fully resolved symlink paths.
+- Scoring rejects artifact directories and required artifacts that are symbolic links,
+  and applies `allowedTargetIdStabilities` only to selected scored targets.
+- Isolation quota failures and other `InvalidDataException` analyze failures map to CLI
+  exit 1 instead of internal error 70.
+- Publication replace-vs-refuse reads existing `manifest.json` through the same JSON size
+  and depth ceilings as `validate-output`, and refuses a reparse-point manifest.
+- Canceled restore no longer leaves unbounded stdout/stderr drains, and leftover isolated
+  input cleanup failures are attached to the thrown exception.
 
 ## [0.1.0] - Unreleased
 

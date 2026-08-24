@@ -23,10 +23,21 @@ internal static class DotnetRestoreRunner
 
         var messages = new List<string>();
 
+        string muxerPath;
+        try
+        {
+            muxerPath = DotnetMuxer.Resolve();
+        }
+        catch (InvalidOperationException exception)
+        {
+            messages.Add(exception.Message);
+            return new RestoreResult("failed", messages);
+        }
+
         foreach (var targetPath in targetPaths)
         {
             ProcessResult result = await RunProcessAsync(
-                    "dotnet",
+                    muxerPath,
                     ["restore", targetPath],
                     sources.RootPath,
                     cancellationToken)
@@ -93,13 +104,24 @@ internal static class DotnetRestoreRunner
         try
         {
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            await Task.WhenAll(output, error).ConfigureAwait(false);
+            await Task.WhenAll(output, error)
+                .WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None)
+                .ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
         {
             TryKillProcessTree(process);
             await ObserveCanceledProcessAsync(process, output, error).ConfigureAwait(false);
-            throw;
+            if (exception is OperationCanceledException canceled)
+            {
+                throw canceled;
+            }
+
+            throw new TimeoutException("Timed out draining restore process output.", exception);
+        }
+        finally
+        {
+            TryKillProcessTree(process);
         }
 
         return new ProcessResult(
@@ -146,7 +168,31 @@ internal static class DotnetRestoreRunner
             InvalidOperationException or
             TimeoutException)
         {
-            // Best-effort cleanup must not replace the original cancellation exception.
+            TryKillProcessTree(process);
+            try
+            {
+                process.StandardOutput.Close();
+                process.StandardError.Close();
+            }
+            catch (Exception closeException) when (closeException is IOException or ObjectDisposedException)
+            {
+                // Closing redirected readers unblocks abandoned drains.
+            }
+
+            try
+            {
+                await Task.WhenAll(output, error)
+                    .WaitAsync(TimeSpan.FromSeconds(1))
+                    .ConfigureAwait(false);
+            }
+            catch (Exception drainException) when (drainException is
+                IOException or
+                InvalidOperationException or
+                ObjectDisposedException or
+                TimeoutException)
+            {
+                // Abandoned drains must not replace the original cancellation exception.
+            }
         }
     }
 

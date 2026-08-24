@@ -16,9 +16,14 @@ Therefore:
 
 `--isolate-input` copies input to a temporary directory to avoid accidental parent-level
 `Directory.Build.*`, `Directory.Packages.props`, or NuGet configuration. It does not
-neutralize malicious files inside the input. Isolation aborts above 4 GiB total,
-256 MiB per file, 250,000 files, 50,000 directories, or 96 directory levels and cleans
-up the partial temporary copy.
+neutralize malicious files inside the input. Isolation copies only regular files, aborts
+above 4 GiB total, 256 MiB per file, 250,000 files, 50,000 directories, or 96 directory
+levels, and cleans up the partial temporary copy. Source discovery and syntax-only file
+reads use the same ceilings even when isolation is off.
+
+Semantic restore resolves an absolute `dotnet` host (`DOTNET_HOST_PATH`, a muxer
+`ProcessPath`, `DOTNET_ROOT`, or the runtime layout). It does not search the process
+current directory or the analyzed tree for `dotnet`.
 
 Keep the input tree immutable for the complete analysis run. Discovery and later file
 reads are separate operations; portable handle-relative, no-follow traversal is not yet
@@ -51,8 +56,11 @@ Use a single writer for each output path and start readers only after analysis c
 Publication is rollback-safe for ordinary exceptions, but a process crash during a
 directory swap can leave a hidden backup generation that requires operator cleanup.
 The output may be inside the analyzed root, including the default
-`artifacts/codemetrics`, but it cannot equal the input root or contain it. Existing
-symbolic links or reparse points in the output's parent path are rejected.
+`artifacts/codemetrics`, but it cannot equal the input root or contain it after symlink
+and reparse resolution. Existing symbolic links or reparse points in the output's parent
+path are rejected. An existing output directory is replaced only when it is empty or
+contains a regular `manifest.json` that parses under the same JSON size and depth
+ceilings as `validate-output`.
 
 Structured artifact consumers fail closed at fixed resource ceilings: 128 MiB per JSON
 artifact, 1 GiB per NDJSON artifact, 8 Mi characters per NDJSON line, 1,000,000

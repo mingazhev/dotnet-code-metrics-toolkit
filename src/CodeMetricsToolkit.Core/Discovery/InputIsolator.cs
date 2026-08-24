@@ -120,6 +120,14 @@ public static class InputIsolator
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (!FileKind.IsRegularFile(file))
+            {
+                throw LimitExceeded(
+                    state,
+                    file,
+                    "path is not a regular file");
+            }
+
             CopyFile(
                 file,
                 Path.Combine(targetDirectory, Path.GetFileName(file)),

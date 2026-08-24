@@ -14,23 +14,26 @@ public static class DiagnosticMetricProjector
         }
 
         var metrics = new List<MetricResultLine>();
+        var diagnosticsByFile = facts.Diagnostics
+            .GroupBy(diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         foreach (FileFacts file in facts.Files.OrderBy(file => file.TargetId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            AddDiagnosticMetrics(metrics, facts.Diagnostics, "file", file.TargetId, file.TargetIdStability, file.FilePath, file.StartLine, file.EndLine);
+            AddDiagnosticMetrics(metrics, diagnosticsByFile, "file", file.TargetId, file.TargetIdStability, file.FilePath, file.StartLine, file.EndLine);
         }
 
         foreach (TypeFacts type in facts.Types.OrderBy(type => type.TargetId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            AddDiagnosticMetrics(metrics, facts.Diagnostics, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine);
+            AddDiagnosticMetrics(metrics, diagnosticsByFile, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine);
         }
 
         foreach (MemberFacts member in facts.Members.OrderBy(member => member.TargetId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            AddDiagnosticMetrics(metrics, facts.Diagnostics, "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine);
+            AddDiagnosticMetrics(metrics, diagnosticsByFile, "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine);
         }
 
         return metrics;
@@ -38,7 +41,7 @@ public static class DiagnosticMetricProjector
 
     private static void AddDiagnosticMetrics(
         List<MetricResultLine> metrics,
-        IReadOnlyList<AnalysisDiagnostic> diagnostics,
+        Dictionary<string, AnalysisDiagnostic[]> diagnosticsByFile,
         string targetKind,
         string targetId,
         string targetIdStability,
@@ -46,9 +49,11 @@ public static class DiagnosticMetricProjector
         int startLine,
         int endLine)
     {
-        AnalysisDiagnostic[] matchingDiagnostics = diagnostics
-            .Where(diagnostic => OverlapsTarget(diagnostic, filePath, startLine, endLine))
-            .ToArray();
+        AnalysisDiagnostic[] matchingDiagnostics = diagnosticsByFile.TryGetValue(
+                filePath,
+                out AnalysisDiagnostic[]? candidates)
+            ? candidates.Where(diagnostic => OverlapsTarget(diagnostic, filePath, startLine, endLine)).ToArray()
+            : [];
 
         metrics.Add(CreateMetric(targetKind, targetId, targetIdStability, filePath, startLine, endLine, matchingDiagnostics.Length, null));
 
