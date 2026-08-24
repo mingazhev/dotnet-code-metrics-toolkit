@@ -13,6 +13,7 @@ public static class SyntaxFactsCollector
 {
     private const string SemanticStability = "semantic";
     private const string SyntaxFallbackStability = "syntax_fallback";
+    private const string LineFallbackStability = "line_fallback";
 
     public static async Task<SyntaxAnalysisFacts> CollectAsync(
         DiscoveredSources sources,
@@ -77,7 +78,7 @@ public static class SyntaxFactsCollector
 
         return new SyntaxAnalysisFacts
         {
-            Mode = DetermineMode(typeDeclarations, memberDeclarations),
+            Mode = DetermineMode(useSemantic, semanticLoad, typeDeclarations, memberDeclarations),
             Health = SemanticWorkspaceLoader.CreateHealth(useSemantic, semanticLoad, semanticInitializationFailure),
             RootPath = sources.RootPath,
             ProjectPaths = sources.ProjectPaths,
@@ -339,7 +340,7 @@ public static class SyntaxFactsCollector
                 context.SourceFile.RelativePath,
                 startLine)
             : TargetIds.MemberSemantic(assemblyName, documentationCommentId);
-        var targetIdStability = documentationCommentId is null ? SyntaxFallbackStability : SemanticStability;
+        var targetIdStability = documentationCommentId is null ? LineFallbackStability : SemanticStability;
         ControlFlowFacts controlFlowFacts = ControlFlowFactsCollector.Collect(memberDeclaration, cancellationToken);
         OperationFacts? operationFacts = semanticModel is null
             ? null
@@ -770,20 +771,38 @@ public static class SyntaxFactsCollector
     }
 
     private static string DetermineMode(
+        bool useSemantic,
+        SemanticLoadResult semanticLoad,
         IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
         IReadOnlyList<MemberDeclarationInfo> memberDeclarations)
     {
+        if (!useSemantic)
+        {
+            return "syntax";
+        }
+
         var hasSemanticIds = typeDeclarations.Any(declaration => declaration.TargetIdStability == SemanticStability) ||
             memberDeclarations.Any(declaration => declaration.TargetIdStability == SemanticStability);
         var hasFallbackIds = typeDeclarations.Any(declaration => declaration.TargetIdStability != SemanticStability) ||
             memberDeclarations.Any(declaration => declaration.TargetIdStability != SemanticStability);
+        var semanticPipelineRan = string.Equals(semanticLoad.SemanticModel, "msbuild", StringComparison.Ordinal);
 
-        return hasSemanticIds switch
+        if (hasSemanticIds && hasFallbackIds)
         {
-            true when hasFallbackIds => "partial_semantic",
-            true => "semantic",
-            _ => "syntax"
-        };
+            return "partial_semantic";
+        }
+
+        if (hasSemanticIds || (semanticPipelineRan && !hasFallbackIds))
+        {
+            return "semantic";
+        }
+
+        if (semanticPipelineRan)
+        {
+            return "partial_semantic";
+        }
+
+        return "syntax";
     }
 
     private static string? GetDocumentationCommentId(ISymbol? symbol)

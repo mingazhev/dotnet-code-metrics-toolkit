@@ -159,7 +159,7 @@ public sealed class OutputValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Contains(
-            "Required artifact must be a regular file, not a symbolic link or reparse point: metrics.ndjson",
+            "Required artifact must be a regular file, not a symbolic link, reparse point, or special file: metrics.ndjson",
             result.Errors);
     }
 

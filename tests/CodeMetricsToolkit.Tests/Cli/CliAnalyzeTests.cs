@@ -306,8 +306,8 @@ public sealed partial class CliAnalyzeTests
 
         Assert.Equal("syntax", manifest.RootElement.GetProperty("mode").GetString());
         Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "type") && HasPropertyValue(node, "targetIdStability", "syntax_fallback"));
-        Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "member") && HasPropertyValue(node, "targetIdStability", "syntax_fallback"));
-        Assert.Contains(chunks, chunk => HasPropertyValue(chunk, "targetKind", "member") && HasPropertyValue(chunk, "targetIdStability", "syntax_fallback"));
+        Assert.Contains(graphNodes, node => HasPropertyValue(node, "kind", "member") && HasPropertyValue(node, "targetIdStability", "line_fallback"));
+        Assert.Contains(chunks, chunk => HasPropertyValue(chunk, "targetKind", "member") && HasPropertyValue(chunk, "targetIdStability", "line_fallback"));
 
         JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
         Assert.DoesNotContain(metrics, metric => HasPropertyValue(metric, "metricId", "operation_count"));

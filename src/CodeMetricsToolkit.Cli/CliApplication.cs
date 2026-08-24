@@ -149,7 +149,14 @@ public static class CliApplication
                         return CliExitCodes.InputError;
                     }
 
-                    includePatterns.Add(args[++index]);
+                    var includeValue = args[++index];
+                    if (string.IsNullOrWhiteSpace(includeValue))
+                    {
+                        await error.WriteLineAsync("--include requires a non-empty glob.").ConfigureAwait(false);
+                        return CliExitCodes.InputError;
+                    }
+
+                    includePatterns.Add(includeValue);
                     break;
 
                 case "--exclude":
@@ -159,7 +166,14 @@ public static class CliApplication
                         return CliExitCodes.InputError;
                     }
 
-                    excludePatterns.Add(args[++index]);
+                    var excludeValue = args[++index];
+                    if (string.IsNullOrWhiteSpace(excludeValue))
+                    {
+                        await error.WriteLineAsync("--exclude requires a non-empty glob.").ConfigureAwait(false);
+                        return CliExitCodes.InputError;
+                    }
+
+                    excludePatterns.Add(excludeValue);
                     break;
 
                 case "--include-chunk-text":
@@ -297,11 +311,29 @@ public static class CliApplication
         }
         catch (InvalidDataException exception)
         {
-            await error.WriteLineAsync(exception.Message).ConfigureAwait(false);
-            return exception.Message.StartsWith("Staged artifact set is invalid", StringComparison.Ordinal)
-                ? CliExitCodes.InvalidArtifacts
-                : CliExitCodes.InputError;
+            return await WriteInvalidDataAsync(error, exception).ConfigureAwait(false);
         }
+        catch (AggregateException exception)
+        {
+            InvalidDataException? invalidData = exception.Flatten()
+                .InnerExceptions
+                .OfType<InvalidDataException>()
+                .FirstOrDefault();
+            if (invalidData is not null)
+            {
+                return await WriteInvalidDataAsync(error, invalidData).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<int> WriteInvalidDataAsync(TextWriter error, InvalidDataException exception)
+    {
+        await error.WriteLineAsync(exception.Message).ConfigureAwait(false);
+        return exception.Message.StartsWith("Staged artifact set is invalid", StringComparison.Ordinal)
+            ? CliExitCodes.InvalidArtifacts
+            : CliExitCodes.InputError;
     }
 
     private static async Task<int> RunListMetricsAsync(

@@ -229,13 +229,14 @@ public static class ScoringEngine
                 $"manifest.json mode '{artifacts.AnalysisMode}' is not allowed by the scoring profile.");
         }
 
-        var scoredKinds = profile.Operations
+        var scoredIdentityKinds = profile.Operations
             .OfType<ThresholdDebtOperation>()
             .Select(operation => operation.TargetKind)
+            .Where(kind => kind is "type" or "member")
             .ToHashSet(StringComparer.Ordinal);
 
         var unexpectedStabilities = selectedMetrics
-            .Where(metric => scoredKinds.Contains(metric.TargetKind))
+            .Where(metric => scoredIdentityKinds.Contains(metric.TargetKind))
             .Select(metric => metric.TargetIdStability)
             .Distinct(StringComparer.Ordinal)
             .Where(stability => !profile.AllowedTargetIdStabilities.Contains(

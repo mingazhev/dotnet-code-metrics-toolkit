@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Discovery;
 
 namespace CodeMetricsToolkit.Core.Validation;
 
@@ -118,10 +119,10 @@ public static class OutputValidator
 
         try
         {
-            if ((File.GetAttributes(artifactPath) & FileAttributes.ReparsePoint) != 0)
+            if (!FileKind.IsRegularFile(artifactPath))
             {
                 errors.Add(
-                    $"Required artifact must be a regular file, not a symbolic link or reparse point: {artifactName}");
+                    $"Required artifact must be a regular file, not a symbolic link, reparse point, or special file: {artifactName}");
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

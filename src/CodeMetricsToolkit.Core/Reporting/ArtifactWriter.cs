@@ -217,7 +217,13 @@ public static class ArtifactWriter
         IEnumerable<T> values,
         CancellationToken cancellationToken)
     {
-        await using FileStream stream = File.Create(path);
+        await using var stream = new FileStream(
+            path,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 64 * 1024,
+            FileOptions.Asynchronous);
         await using var writer = new StreamWriter(stream);
         writer.NewLine = "\n";
 
@@ -226,8 +232,10 @@ public static class ArtifactWriter
             cancellationToken.ThrowIfCancellationRequested();
 
             var json = JsonSerializer.Serialize(value, NdjsonOptions);
-            await writer.WriteLineAsync(json).ConfigureAwait(false);
+            await writer.WriteLineAsync(json.AsMemory(), cancellationToken).ConfigureAwait(false);
         }
+
+        await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private sealed record ManifestArtifact(

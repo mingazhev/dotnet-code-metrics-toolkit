@@ -67,7 +67,7 @@ internal static class LineFactsCollector
         }
 
         var blankLineCount = sourceText.Lines.Count(line =>
-            string.IsNullOrWhiteSpace(line.ToString()) &&
+            IsBlankLine(sourceText, line) &&
             !commentLines.Contains(line.LineNumber));
 
         return new LineFacts(
@@ -78,6 +78,20 @@ internal static class LineFactsCollector
             commentLines.Count,
             commentLines.Count(tokenLines.Contains),
             documentationCommentLines.Count);
+    }
+
+    private static bool IsBlankLine(SourceText sourceText, TextLine line)
+    {
+        TextSpan span = line.Span;
+        for (var index = span.Start; index < span.End; index++)
+        {
+            if (!char.IsWhiteSpace(sourceText[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static int CountLines(TextSpan span, SyntaxTree syntaxTree)

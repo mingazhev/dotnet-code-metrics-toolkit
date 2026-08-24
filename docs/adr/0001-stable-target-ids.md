@@ -26,9 +26,9 @@ chunk:<target-id>#<chunk-kind>
 For `type` and `member`, `<xml-doc-id>` is `ISymbol.GetDocumentationCommentId()`. The assembly name is included because XML doc ids are only unique inside an assembly.
 
 `solution:root` is the artifact-local singleton root. Project ids hash the
-repository-relative project path. These structural targets currently report
-`targetIdStability=syntax_fallback` because the public stability enum predates a
-separate structural category; neither id depends on line positions.
+repository-relative project path. These structural targets report
+`targetIdStability=syntax_fallback`; neither id depends on line positions.
+Member fallback identities that embed `:start-line` report `line_fallback`.
 
 Fallback ids are allowed only when semantic loading is unavailable:
 

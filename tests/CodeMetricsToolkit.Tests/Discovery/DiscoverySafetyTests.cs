@@ -216,6 +216,45 @@ public sealed class DiscoverySafetyTests
     }
 
     [Fact]
+    public void SourceDiscoveryRejectsAggregateByteQuotaAcrossPatternWalks()
+    {
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("bytes");
+        File.WriteAllText(Path.Combine(input, "A.cs"), "123");
+        File.WriteAllText(Path.Combine(input, "B.cs"), "456");
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
+            SourceFileDiscovery.Discover(
+                input,
+                includeGeneratedCode: false,
+                includePatterns: null,
+                excludePatterns: null,
+                Limits(totalBytes: 5, fileBytes: 4),
+                CancellationToken.None));
+
+        Assert.Contains("total size exceeds 5 bytes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExplicitSolutionRejectsNonRegularFilesBeforeParsing()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("input");
+        var solutionPath = Path.Combine(input, "NamedPipe.sln");
+        Assert.Equal(0, MkFifo(solutionPath, Convert.ToInt32("644", 8)));
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
+            SourceFileDiscovery.Discover(solutionPath, includeGeneratedCode: false));
+
+        Assert.Contains("not a regular file", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceDiscoveryRejectsFileAndDepthQuotas()
     {
         using var fixture = new TemporaryDirectory();

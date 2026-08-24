@@ -190,6 +190,9 @@ public sealed partial class CliAnalyzeTests
                 .GetProperty("analysisHealth")
                 .GetProperty("analysisQuality")
                 .GetString());
+        using var manifest = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(output.Path, "manifest.json")));
+        Assert.Equal("semantic", manifest.RootElement.GetProperty("mode").GetString());
         Assert.DoesNotContain(
             ReadNdjson(Path.Combine(output.Path, "metrics.ndjson")),
             metric => metric.TryGetProperty("filePath", out JsonElement filePath) &&
@@ -235,6 +238,23 @@ public sealed partial class CliAnalyzeTests
             message => message.GetString()!.Contains(
                 "authored source file(s) outside the analysis root",
                 StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task EmptyIncludeGlobIsAnInputError()
+    {
+        using var output = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("SimpleProject");
+
+        var exitCode = await RunCliAllowFailureAsync(
+            "analyze",
+            projectPath,
+            "--output",
+            output.Path,
+            "--include",
+            "");
+
+        Assert.Equal(CliExitCodes.InputError, exitCode);
     }
 
     [Fact]

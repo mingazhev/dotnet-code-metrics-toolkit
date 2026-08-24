@@ -726,10 +726,10 @@ internal static class ScoringArtifactReader
             throw InvalidArtifacts($"Required artifact '{artifactName}' does not exist.");
         }
 
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+        if (!RegularFile.IsRegularFile(path))
         {
             throw InvalidArtifacts(
-                $"Required artifact must be a regular file, not a symbolic link or reparse point: {artifactName}");
+                $"Required artifact must be a regular file, not a symbolic link, reparse point, or special file: {artifactName}");
         }
     }
 

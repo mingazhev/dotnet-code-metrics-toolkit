@@ -127,6 +127,30 @@ public sealed partial class ScoringEngineTests
     }
 
     [Fact]
+    public async Task SemanticMemberPinAllowsScoredFileSyntaxFallback()
+    {
+        using var artifacts = TestArtifacts.Create(
+            analysisQuality: "trusted",
+            Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 15),
+            Metric("member:a", "src/A.cs", "member_length", "1.0.0", 55),
+            MetricForTarget(
+                "file",
+                "file:src/A.cs",
+                "src/A.cs",
+                "lines_of_code",
+                "1.0.0",
+                40,
+                stability: "syntax_fallback"));
+        await using Stream profile = ProfileStream(
+            Profile(ThresholdOperation() + "," + FileThresholdOperation() + "," + WeightedOperation()));
+
+        ScoringResult result = await ScoringEngine.EvaluateAsync(artifacts.Path, profile);
+
+        Assert.Equal(15, result.Values["debt"]);
+        Assert.Equal(0, result.Values["file_debt"]);
+    }
+
+    [Fact]
     public async Task AllowsSemanticPinWhenUnscoredStructuralRowsUseSyntaxFallback()
     {
         using var artifacts = TestArtifacts.Create(
@@ -569,6 +593,29 @@ public sealed partial class ScoringEngineTests
                 "squaredGapSum": "squared_debt",
                 "violatingTargetCount": "violating_targets",
                 "maxTargetGap": "max_target_gap"
+              }
+            }
+            """;
+    }
+
+    private static string FileThresholdOperation()
+    {
+        return """
+            {
+              "operation": "thresholdDebt",
+              "targetKind": "file",
+              "thresholds": [
+                {
+                  "metricId": "lines_of_code",
+                  "metricVersion": "1.0.0",
+                  "maximum": 100
+                }
+              ],
+              "outputs": {
+                "gapSum": "file_debt",
+                "squaredGapSum": "file_squared",
+                "violatingTargetCount": "file_violations",
+                "maxTargetGap": "file_max"
               }
             }
             """;

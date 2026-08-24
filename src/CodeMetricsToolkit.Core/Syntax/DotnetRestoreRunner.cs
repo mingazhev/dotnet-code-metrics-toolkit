@@ -45,7 +45,7 @@ internal static class DotnetRestoreRunner
 
             if (result.ExitCode != 0)
             {
-                messages.Add($"dotnet restore failed for {Path.GetFileName(targetPath)} with exit code {result.ExitCode}: {TrimProcessOutput(result)}");
+                messages.Add($"dotnet restore failed for {Path.GetFileName(targetPath)} with exit code {result.ExitCode}.");
                 return new RestoreResult("failed", messages);
             }
 
@@ -82,6 +82,7 @@ internal static class DotnetRestoreRunner
                 WorkingDirectory = workingDirectory,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,
+                RedirectStandardInput = true,
                 UseShellExecute = false
             }
         };
@@ -92,17 +93,20 @@ internal static class DotnetRestoreRunner
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        process.Start();
         var outputBuffer = new BoundedProcessOutput();
         var errorBuffer = new BoundedProcessOutput();
-        Task output = DrainProcessOutputAsync(process.StandardOutput, outputBuffer);
-        Task error = DrainProcessOutputAsync(process.StandardError, errorBuffer);
-        using CancellationTokenRegistration cancellationRegistration = cancellationToken.Register(
-            static state => TryKillProcessTree((Process)state!),
-            process);
+        Task? output = null;
+        Task? error = null;
 
         try
         {
+            process.Start();
+            output = DrainProcessOutputAsync(process.StandardOutput, outputBuffer);
+            error = DrainProcessOutputAsync(process.StandardError, errorBuffer);
+            using CancellationTokenRegistration cancellationRegistration = cancellationToken.Register(
+                static state => TryKillProcessTree((Process)state!),
+                process);
+
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             await Task.WhenAll(output, error)
                 .WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None)
@@ -111,7 +115,10 @@ internal static class DotnetRestoreRunner
         catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
         {
             TryKillProcessTree(process);
-            await ObserveCanceledProcessAsync(process, output, error).ConfigureAwait(false);
+            if (output is not null && error is not null)
+            {
+                await ObserveCanceledProcessAsync(process, output, error).ConfigureAwait(false);
+            }
             if (exception is OperationCanceledException canceled)
             {
                 throw canceled;
@@ -206,18 +213,6 @@ internal static class DotnetRestoreRunner
         {
             buffer.AppendChunk(characters.AsSpan(0, read));
         }
-    }
-
-    private static string TrimProcessOutput(ProcessResult result)
-    {
-        var text = string.IsNullOrWhiteSpace(result.StandardError)
-            ? result.StandardOutput
-            : result.StandardError;
-        var flattened = string.Join(" ", text
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Take(4));
-
-        return string.IsNullOrWhiteSpace(flattened) ? "no process output" : flattened;
     }
 
     internal sealed record RestoreResult(

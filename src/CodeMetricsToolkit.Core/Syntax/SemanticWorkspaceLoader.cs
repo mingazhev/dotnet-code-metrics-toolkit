@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using Microsoft.CodeAnalysis;
@@ -38,8 +39,8 @@ internal static class SemanticWorkspaceLoader
             workspace.SkipUnrecognizedProjects = true;
             workspace.LoadMetadataForReferencedProjects = false;
 
-            var workspaceDiagnostics = new List<WorkspaceDiagnostic>();
-            workspace.RegisterWorkspaceFailedHandler(args => workspaceDiagnostics.Add(args.Diagnostic));
+            var workspaceDiagnostics = new ConcurrentQueue<WorkspaceDiagnostic>();
+            workspace.RegisterWorkspaceFailedHandler(args => workspaceDiagnostics.Enqueue(args.Diagnostic));
 
             Solution solution = await LoadSolutionAsync(sources, workspace, cancellationToken).ConfigureAwait(false);
             IReadOnlySet<string> includedSourcePaths = sources.CandidateSourceFiles
