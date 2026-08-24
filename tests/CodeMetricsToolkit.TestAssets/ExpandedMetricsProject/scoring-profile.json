@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "expanded-metrics-e2e",
+  "version": "1.0.0",
+  "artifactContractVersion": "0.1.0",
+  "allowedAnalysisModes": ["semantic"],
+  "allowedTargetIdStabilities": ["semantic", "syntax_fallback"],
+  "selectors": {
+    "includeFilePaths": ["**/*.cs"],
+    "excludeFilePaths": [],
+    "requireTrusted": true,
+    "minTargetCount": 7
+  },
+  "primary": {
+    "key": "score",
+    "direction": "minimize"
+  },
+  "operations": [
+    {
+      "operation": "thresholdDebt",
+      "targetKind": "member",
+      "thresholds": [
+        {
+          "metricId": "cyclomatic_complexity",
+          "metricVersion": "1.0.0",
+          "maximum": 1,
+          "weight": 2
+        },
+        {
+          "metricId": "member_length",
+          "metricVersion": "1.0.0",
+          "maximum": 3
+        }
+      ],
+      "outputs": {
+        "gapSum": "debt",
+        "squaredGapSum": "squared_debt",
+        "violatingTargetCount": "violating_targets",
+        "maxTargetGap": "max_target_gap"
+      }
+    },
+    {
+      "operation": "weightedSum",
+      "terms": [
+        { "key": "debt", "weight": 1 },
+        { "key": "squared_debt", "weight": 0.1 }
+      ],
+      "output": "score"
+    }
+  ]
+}

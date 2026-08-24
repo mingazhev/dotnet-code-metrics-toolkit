@@ -7,11 +7,19 @@ namespace CodeMetricsToolkit.Core.Analysis;
 
 public static class CodeMetricsAnalyzer
 {
+    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
+
     public static async Task<AnalysisRunResult> AnalyzeAsync(
         AnalyzeRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        InputSelection originalInput = SourceFileDiscovery.ResolveInputSelection(request.InputPath);
+        var outputPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.OutputPath));
+        ValidateOutputLocation(outputPath, originalInput.RootPath);
 
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         IsolatedInput? isolatedInput = request.IsolateInput
@@ -56,13 +64,13 @@ public static class CodeMetricsAnalyzer
             HotspotRanking hotspotRanking = HotspotRanker.Rank(facts, request.Top, cancellationToken);
             MetricResultLine[] metrics = SyntaxMetricProjector.Project(facts, cancellationToken)
                 .Concat(GraphMetricProjector.Project(facts, cancellationToken))
+                .Concat(SemanticMetricProjector.Project(facts, cancellationToken))
                 .Concat(DiagnosticMetricProjector.Project(facts, cancellationToken))
                 .Concat(hotspotRanking.Metrics)
                 .ToArray();
-            var outputPath = Path.GetFullPath(request.OutputPath);
             DateTimeOffset completedAt = DateTimeOffset.UtcNow;
 
-            await ArtifactWriter.WriteAsync(
+            IReadOnlyList<string> publicationWarnings = await ArtifactWriter.WriteAsync(
                 outputPath,
                 facts,
                 reportedRootPath,
@@ -74,6 +82,7 @@ public static class CodeMetricsAnalyzer
                 startedAt,
                 completedAt,
                 cancellationToken).ConfigureAwait(false);
+            warnings.AddRange(publicationWarnings);
 
             if (isolatedInput is not null)
             {
@@ -93,7 +102,7 @@ public static class CodeMetricsAnalyzer
                 {
                     RootPath = reportedRootPath,
                     ProjectCount = facts.ProjectPaths.Count,
-                    FileCount = facts.Files.Count,
+                    FileCount = facts.Files.Select(file => file.FilePath).Distinct(StringComparer.Ordinal).Count(),
                     TypeCount = facts.Types.Count,
                     MemberCount = facts.Members.Count,
                     MetricResultCount = metrics.Length,
@@ -109,5 +118,71 @@ public static class CodeMetricsAnalyzer
                 System.Diagnostics.Trace.TraceWarning(cleanupFailure);
             }
         }
+    }
+
+    private static void ValidateOutputLocation(string outputPath, string originalInputRoot)
+    {
+        outputPath = NormalizePath(outputPath);
+        var inputRoot = NormalizePath(originalInputRoot);
+
+        if (IsSamePath(outputPath, inputRoot) || IsAncestorOf(outputPath, inputRoot))
+        {
+            throw new ArgumentException(
+                $"Artifact output directory cannot be the analyzed input root or one of its ancestors: " +
+                outputPath,
+                nameof(outputPath));
+        }
+    }
+
+    private static bool IsSamePath(string left, string right)
+    {
+        return string.Equals(left, right, PathComparison);
+    }
+
+    private static bool IsAncestorOf(string possibleAncestor, string path)
+    {
+        var ancestorPrefix = Path.EndsInDirectorySeparator(possibleAncestor)
+            ? possibleAncestor
+            : possibleAncestor + Path.DirectorySeparatorChar;
+
+        return path.StartsWith(ancestorPrefix, PathComparison);
+    }
+
+    private static string NormalizePath(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var fullPath = Path.GetFullPath(path);
+
+        if (OperatingSystem.IsMacOS())
+        {
+            fullPath = ResolveMacOsRootAlias(fullPath);
+        }
+
+        return Path.TrimEndingDirectorySeparator(fullPath);
+    }
+
+    private static string ResolveMacOsRootAlias(string fullPath)
+    {
+        var root = Path.GetPathRoot(fullPath)!;
+        var relativePath = Path.GetRelativePath(root, fullPath);
+        var separator = relativePath.IndexOfAny(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+        var firstComponent = separator < 0 ? relativePath : relativePath[..separator];
+        var firstPath = Path.Combine(root, firstComponent);
+
+        if (!Directory.Exists(firstPath) ||
+            (File.GetAttributes(firstPath) & FileAttributes.ReparsePoint) == 0)
+        {
+            return fullPath;
+        }
+
+        FileSystemInfo? target = new DirectoryInfo(firstPath).ResolveLinkTarget(returnFinalTarget: true);
+        if (target is null || separator < 0)
+        {
+            return target?.FullName ?? fullPath;
+        }
+
+        return Path.Combine(target.FullName, relativePath[(separator + 1)..]);
     }
 }

@@ -14,4 +14,5 @@ public sealed record TypeFacts
     public required int LinesOfCode { get; init; }
     public required int NonCommentLinesOfCode { get; init; }
     public required int MemberCount { get; init; }
+    public TypeSemanticFacts? Semantic { get; init; }
 }

@@ -7,6 +7,17 @@ namespace CodeMetricsToolkit.Tests.SchemaValidation;
 public sealed class OutputValidatorTests
 {
     [Fact]
+    public void DefaultValidationLimitsMatchDocumentedSecurityBoundary()
+    {
+        Assert.Equal(128L * 1024 * 1024, ValidationInputLimits.Default.MaxJsonArtifactBytes);
+        Assert.Equal(1024L * 1024 * 1024, ValidationInputLimits.Default.MaxNdjsonArtifactBytes);
+        Assert.Equal(8 * 1024 * 1024, ValidationInputLimits.Default.MaxNdjsonLineCharacters);
+        Assert.Equal(1_000_000, ValidationInputLimits.Default.MaxNdjsonLines);
+        Assert.Equal(1_000_000, ValidationInputLimits.Default.MaxNdjsonRecords);
+        Assert.Equal(64, ValidationInputLimits.Default.MaxJsonDepth);
+    }
+
+    [Fact]
     public void ValidFixturePassesRuntimeValidation()
     {
         using var output = TemporaryOutput.Create();
@@ -212,6 +223,46 @@ public sealed class OutputValidatorTests
                 StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("metrics.ndjson")]
+    [InlineData("chunks.ndjson")]
+    public void ArtifactTargetStabilityThatDiffersFromGraphIsRejected(string artifactName)
+    {
+        using var output = TemporaryOutput.Create();
+        UpdateFirstNdjsonRecord(
+            output.File(artifactName),
+            root => root["targetIdStability"] = "syntax_fallback");
+
+        OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.StartsWith(
+                $"{artifactName}:1 targetIdStability 'syntax_fallback' does not match " +
+                "graph node targetIdStability 'semantic'",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GraphNodeWithoutTargetStabilityIsRejected()
+    {
+        using var output = TemporaryOutput.Create();
+        UpdateJson(output.File("graph.json"), root =>
+        {
+            JsonObject firstNode = root["nodes"]!.AsArray()[0]!.AsObject();
+            Assert.True(firstNode.Remove("targetIdStability"));
+        });
+
+        OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("graph.json does not conform", StringComparison.Ordinal) &&
+                error.Contains("targetIdStability", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void GraphEdgeWithMissingEndpointIsRejected()
     {
@@ -259,6 +310,120 @@ public sealed class OutputValidatorTests
         Assert.Contains(
             "summary.json schemaVersion '0.2.0' does not match manifest schemaVersion '0.1.0'.",
             result.Errors);
+    }
+
+    [Fact]
+    public void ValidationRejectsJsonAndNdjsonFilesBeforeConfiguredByteLimits()
+    {
+        using var jsonOutput = TemporaryOutput.Create();
+        var manifestLength = new FileInfo(jsonOutput.File("manifest.json")).Length;
+
+        OutputValidationResult jsonResult = OutputValidator.Validate(
+            jsonOutput.Path,
+            Limits(jsonBytes: manifestLength - 1),
+            CancellationToken.None);
+
+        Assert.False(jsonResult.IsValid);
+        Assert.Contains(
+            $"manifest.json is {manifestLength} bytes and exceeds the maximum of " +
+            $"{manifestLength - 1} bytes.",
+            jsonResult.Errors);
+
+        using var ndjsonOutput = TemporaryOutput.Create();
+        var metricsLength = new FileInfo(ndjsonOutput.File("metrics.ndjson")).Length;
+
+        OutputValidationResult ndjsonResult = OutputValidator.Validate(
+            ndjsonOutput.Path,
+            Limits(ndjsonBytes: metricsLength - 1),
+            CancellationToken.None);
+
+        Assert.False(ndjsonResult.IsValid);
+        Assert.Contains(
+            $"metrics.ndjson is {metricsLength} bytes and exceeds the maximum of " +
+            $"{metricsLength - 1} bytes.",
+            ndjsonResult.Errors);
+    }
+
+    [Fact]
+    public void ValidationRejectsNdjsonLineLineCountAndRecordCountLimits()
+    {
+        using var longLineOutput = TemporaryOutput.Create();
+        OutputValidationResult longLine = OutputValidator.Validate(
+            longLineOutput.Path,
+            Limits(lineCharacters: 32),
+            CancellationToken.None);
+        Assert.Contains(
+            "metrics.ndjson:1 exceeds the maximum line length of 32 characters.",
+            longLine.Errors);
+
+        using var lineCountOutput = TemporaryOutput.Create();
+        File.WriteAllText(lineCountOutput.File("diagnostics.ndjson"), "\n\n\n");
+        OutputValidationResult lineCount = OutputValidator.Validate(
+            lineCountOutput.Path,
+            Limits(lines: 2),
+            CancellationToken.None);
+        Assert.Contains(
+            "diagnostics.ndjson exceeds the maximum line count of 2.",
+            lineCount.Errors);
+
+        using var recordCountOutput = TemporaryOutput.Create();
+        var metric = File.ReadAllText(recordCountOutput.File("metrics.ndjson"));
+        File.AppendAllText(recordCountOutput.File("metrics.ndjson"), metric);
+        OutputValidationResult recordCount = OutputValidator.Validate(
+            recordCountOutput.Path,
+            Limits(records: 1),
+            CancellationToken.None);
+        Assert.Contains(
+            "metrics.ndjson exceeds the maximum record count of 1.",
+            recordCount.Errors);
+    }
+
+    [Fact]
+    public void ValidationReportsInvalidUtf8InNdjsonAsAContractError()
+    {
+        using var output = TemporaryOutput.Create();
+        File.WriteAllBytes(output.File("metrics.ndjson"), [0x7b, 0xff, 0x7d, 0x0a]);
+
+        OutputValidationResult result = OutputValidator.Validate(
+            output.Path,
+            CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("metrics.ndjson is not valid UTF-8.", result.Errors);
+    }
+
+    [Fact]
+    public void ValidationUsesConfiguredJsonMaximumDepth()
+    {
+        using var output = TemporaryOutput.Create();
+
+        OutputValidationResult result = OutputValidator.Validate(
+            output.Path,
+            Limits(jsonDepth: 2),
+            CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.StartsWith("manifest.json is invalid JSON", StringComparison.Ordinal) &&
+                error.Contains("maximum configured depth", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static ValidationInputLimits Limits(
+        long jsonBytes = 10_000,
+        long ndjsonBytes = 10_000,
+        int lineCharacters = 10_000,
+        int lines = 100,
+        int records = 100,
+        int jsonDepth = 64)
+    {
+        return new ValidationInputLimits(
+            jsonBytes,
+            ndjsonBytes,
+            lineCharacters,
+            lines,
+            records,
+            jsonDepth);
     }
 
     private static void UpdateJson(string path, Action<JsonObject> update)

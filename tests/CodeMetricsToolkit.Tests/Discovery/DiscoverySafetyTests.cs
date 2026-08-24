@@ -1,9 +1,22 @@
 using CodeMetricsToolkit.Core.Discovery;
+using CodeMetricsToolkit.Core.Facts;
+using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Tests.Discovery;
 
 public sealed class DiscoverySafetyTests
 {
+    [Fact]
+    public void DefaultIsolationLimitsMatchDocumentedSecurityBoundary()
+    {
+        Assert.Equal(4L * 1024 * 1024 * 1024, InputIsolationLimits.Default.MaxTotalBytes);
+        Assert.Equal(256L * 1024 * 1024, InputIsolationLimits.Default.MaxFileBytes);
+        Assert.Equal(250_000, InputIsolationLimits.Default.MaxFileCount);
+        Assert.Equal(50_000, InputIsolationLimits.Default.MaxDirectoryCount);
+        Assert.Equal(96, InputIsolationLimits.Default.MaxDepth);
+    }
+
     [Fact]
     public void DiscoveryDoesNotFollowDirectoryOrFileSymlinks()
     {
@@ -93,6 +106,96 @@ public sealed class DiscoverySafetyTests
     }
 
     [Fact]
+    public void IsolatedCopyRejectsPerFileAndAggregateByteQuotasBeforeCopyingOffender()
+    {
+        using var fixture = new TemporaryDirectory();
+        var perFileRoot = fixture.CreateDirectory("per-file");
+        File.WriteAllText(Path.Combine(perFileRoot, "Large.cs"), "12345");
+
+        InvalidDataException perFile = Assert.Throws<InvalidDataException>(() =>
+            InputIsolator.CopyToTemporaryDirectory(
+                perFileRoot,
+                Limits(totalBytes: 10, fileBytes: 4),
+                CancellationToken.None));
+
+        Assert.Equal(
+            "Input isolation limit exceeded at 'Large.cs': file size 5 bytes exceeds 4 bytes.",
+            perFile.Message);
+
+        var aggregateRoot = fixture.CreateDirectory("aggregate");
+        File.WriteAllText(Path.Combine(aggregateRoot, "A.cs"), "123");
+        File.WriteAllText(Path.Combine(aggregateRoot, "B.cs"), "456");
+
+        InvalidDataException aggregate = Assert.Throws<InvalidDataException>(() =>
+            InputIsolator.CopyToTemporaryDirectory(
+                aggregateRoot,
+                Limits(totalBytes: 5, fileBytes: 4),
+                CancellationToken.None));
+
+        Assert.Contains("total size exceeds 5 bytes", aggregate.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IsolatedCopyRejectsFileDirectoryAndDepthQuotas()
+    {
+        using var fixture = new TemporaryDirectory();
+        var fileRoot = fixture.CreateDirectory("files");
+        File.WriteAllText(Path.Combine(fileRoot, "A.cs"), "a");
+        File.WriteAllText(Path.Combine(fileRoot, "B.cs"), "b");
+
+        InvalidDataException files = Assert.Throws<InvalidDataException>(() =>
+            InputIsolator.CopyToTemporaryDirectory(
+                fileRoot,
+                Limits(fileCount: 1),
+                CancellationToken.None));
+        Assert.Contains("file count exceeds 1", files.Message, StringComparison.Ordinal);
+
+        var directoryRoot = fixture.CreateDirectory("directories");
+        Directory.CreateDirectory(Path.Combine(directoryRoot, "A"));
+        Directory.CreateDirectory(Path.Combine(directoryRoot, "B"));
+
+        InvalidDataException directories = Assert.Throws<InvalidDataException>(() =>
+            InputIsolator.CopyToTemporaryDirectory(
+                directoryRoot,
+                Limits(directoryCount: 2),
+                CancellationToken.None));
+        Assert.Contains("directory count exceeds 2", directories.Message, StringComparison.Ordinal);
+
+        var depthRoot = fixture.CreateDirectory("depth");
+        Directory.CreateDirectory(Path.Combine(depthRoot, "one", "two"));
+
+        InvalidDataException depth = Assert.Throws<InvalidDataException>(() =>
+            InputIsolator.CopyToTemporaryDirectory(
+                depthRoot,
+                Limits(depth: 1),
+                CancellationToken.None));
+        Assert.Contains("directory depth exceeds 1", depth.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IsolatedCopyAcceptsTreeWithinExplicitBudget()
+    {
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("bounded");
+        Directory.CreateDirectory(Path.Combine(input, "src"));
+        File.WriteAllText(Path.Combine(input, "src", "A.cs"), "abc");
+
+        using IsolatedInput isolated = InputIsolator.CopyToTemporaryDirectory(
+            input,
+            Limits(
+                totalBytes: 3,
+                fileBytes: 3,
+                fileCount: 1,
+                directoryCount: 2,
+                depth: 1),
+            CancellationToken.None);
+
+        Assert.Equal(
+            "abc",
+            File.ReadAllText(Path.Combine(isolated.IsolatedRootPath, "src", "A.cs")));
+    }
+
+    [Fact]
     public void SourceDiscoveryHonorsPreCanceledToken()
     {
         using var fixture = new TemporaryDirectory();
@@ -105,6 +208,63 @@ public sealed class DiscoverySafetyTests
                 input,
                 includeGeneratedCode: false,
                 cancellationToken: cancellation.Token));
+    }
+
+    private static InputIsolationLimits Limits(
+        long totalBytes = 100,
+        long fileBytes = 100,
+        int fileCount = 10,
+        int directoryCount = 10,
+        int depth = 10)
+    {
+        return new InputIsolationLimits(
+            totalBytes,
+            fileBytes,
+            fileCount,
+            directoryCount,
+            depth);
+    }
+
+    [Fact]
+    public async Task DirectoryWithoutProjectUsesRelocatableSyntheticProjectAndConnectedGraph()
+    {
+        using var fixture = new TemporaryDirectory();
+        var firstRoot = fixture.CreateDirectory("first");
+        var secondRoot = fixture.CreateDirectory("second");
+        const string source = "namespace Sample; internal sealed class Relocatable { public void Run() { } }";
+        File.WriteAllText(Path.Combine(firstRoot, "Relocatable.cs"), source);
+        File.WriteAllText(Path.Combine(secondRoot, "Relocatable.cs"), source);
+
+        DiscoveredSources firstSources = SourceFileDiscovery.Discover(firstRoot, includeGeneratedCode: false);
+        DiscoveredSources secondSources = SourceFileDiscovery.Discover(secondRoot, includeGeneratedCode: false);
+        SyntaxAnalysisFacts firstFacts = await SyntaxFactsCollector.CollectAsync(
+            firstSources,
+            useSemantic: false,
+            noRestore: true,
+            CancellationToken.None);
+        SyntaxAnalysisFacts secondFacts = await SyntaxFactsCollector.CollectAsync(
+            secondSources,
+            useSemantic: false,
+            noRestore: true,
+            CancellationToken.None);
+
+        Assert.Equal(["."], firstSources.ProjectPaths);
+        Assert.Equal(
+            firstFacts.Types.Select(type => type.TargetId),
+            secondFacts.Types.Select(type => type.TargetId));
+        Assert.Equal(
+            firstFacts.Members.Select(member => member.TargetId),
+            secondFacts.Members.Select(member => member.TargetId));
+
+        GraphArtifact graph = GraphProjector.Project(firstFacts);
+        GraphNodeLine project = Assert.Single(graph.Nodes, node => node.Kind == "project");
+        GraphNodeLine file = Assert.Single(graph.Nodes, node => node.Kind == "file");
+        Assert.Equal(".", project.FilePath);
+        Assert.Equal("source-tree", project.Name);
+        Assert.Contains(graph.Edges, edge =>
+            edge.From == "solution:root" && edge.To == project.Id && edge.Kind == "contains");
+        Assert.Contains(graph.Edges, edge =>
+            edge.From == project.Id && edge.To == file.Id && edge.Kind == "contains");
     }
 
     [Fact]

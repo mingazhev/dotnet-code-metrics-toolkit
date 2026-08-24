@@ -16,7 +16,14 @@ Therefore:
 
 `--isolate-input` copies input to a temporary directory to avoid accidental parent-level
 `Directory.Build.*`, `Directory.Packages.props`, or NuGet configuration. It does not
-neutralize malicious files inside the input.
+neutralize malicious files inside the input. Isolation aborts above 4 GiB total,
+256 MiB per file, 250,000 files, 50,000 directories, or 96 directory levels and cleans
+up the partial temporary copy.
+
+Keep the input tree immutable for the complete analysis run. Discovery and later file
+reads are separate operations; portable handle-relative, no-follow traversal is not yet
+implemented, so concurrent path or symlink replacement is outside the supported threat
+model.
 
 For an explicit solution, referenced projects may be outside the solution's directory
 only when they remain inside a recognized repository boundary (`.git`, `global.json`, or
@@ -43,3 +50,11 @@ Avoid `--include-chunk-text` unless a downstream consumer truly needs it.
 Use a single writer for each output path and start readers only after analysis completes.
 Publication is rollback-safe for ordinary exceptions, but a process crash during a
 directory swap can leave a hidden backup generation that requires operator cleanup.
+The output may be inside the analyzed root, including the default
+`artifacts/codemetrics`, but it cannot equal the input root or contain it. Existing
+symbolic links or reparse points in the output's parent path are rejected.
+
+Structured artifact consumers fail closed at fixed resource ceilings: 128 MiB per JSON
+artifact, 1 GiB per NDJSON artifact, 8 Mi characters per NDJSON line, 1,000,000
+lines/records, 1 MiB per scoring profile, and JSON depth 64. These limits bound resource
+consumption; schema and cross-artifact validation remain separate requirements.

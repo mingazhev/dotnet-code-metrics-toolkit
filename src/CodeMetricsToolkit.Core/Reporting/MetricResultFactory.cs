@@ -34,4 +34,35 @@ internal static class MetricResultFactory
             Tags = tags
         };
     }
+
+    public static MetricResultLine Number(
+        string metricId,
+        string metricVersion,
+        string targetKind,
+        string targetId,
+        string targetIdStability,
+        string filePath,
+        int startLine,
+        int endLine,
+        double value,
+        string unit,
+        IReadOnlyList<string>? tags = null)
+    {
+        return new MetricResultLine
+        {
+            SchemaVersion = ContractVersion.Current,
+            MetricId = metricId,
+            MetricVersion = metricVersion,
+            TargetId = targetId,
+            TargetKind = targetKind,
+            TargetIdStability = targetIdStability,
+            ValueKind = "number",
+            NumericValue = value,
+            Unit = unit,
+            FilePath = filePath,
+            StartLine = startLine,
+            EndLine = endLine,
+            Tags = tags
+        };
+    }
 }

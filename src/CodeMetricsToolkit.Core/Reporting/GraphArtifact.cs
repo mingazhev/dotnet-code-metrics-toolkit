@@ -10,7 +10,7 @@ public sealed record GraphNodeLine
     public required string Id { get; init; }
     public required string Kind { get; init; }
     public required string Name { get; init; }
-    public string? TargetIdStability { get; init; }
+    public required string TargetIdStability { get; init; }
     public string? FilePath { get; init; }
     public int? StartLine { get; init; }
     public int? EndLine { get; init; }

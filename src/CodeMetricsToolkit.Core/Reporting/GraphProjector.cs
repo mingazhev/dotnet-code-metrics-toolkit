@@ -1,6 +1,7 @@
 using CodeMetricsToolkit.Abstractions;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
+using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Core.Reporting;
 
@@ -10,9 +11,10 @@ public static class GraphProjector
     {
         ArgumentNullException.ThrowIfNull(facts);
 
-        GraphNodeLine[] nodes = facts.ProjectPaths
+        GraphNodeLine[] nodes = new[] { CreateSolutionNode() }
+            .Concat(facts.ProjectPaths
             .Order(StringComparer.Ordinal)
-            .Select(CreateProjectNode)
+            .Select(CreateProjectNode))
             .Concat(facts.Files
             .OrderBy(file => file.TargetId, StringComparer.Ordinal)
             .Select(CreateFileNode))
@@ -24,7 +26,8 @@ public static class GraphProjector
                 .Select(CreateMemberNode))
             .ToArray();
 
-        GraphEdgeLine[] edges = CreateProjectFileEdges(facts)
+        GraphEdgeLine[] edges = CreateSolutionProjectEdges(facts)
+            .Concat(CreateProjectFileEdges(facts))
             .Concat(facts.GraphEdges.Select(edge =>
                 new GraphEdgeLine(edge.From, edge.To, edge.Kind, edge.Confidence)))
             .OrderBy(edge => edge.From, StringComparer.Ordinal)
@@ -35,15 +38,44 @@ public static class GraphProjector
         return new GraphArtifact(ContractVersion.Current, nodes, edges);
     }
 
+    private static GraphNodeLine CreateSolutionNode()
+    {
+        return new GraphNodeLine
+        {
+            Id = TargetIds.SolutionRoot,
+            Kind = "solution",
+            Name = "analysis-root",
+            TargetIdStability = "syntax_fallback",
+            FilePath = ".",
+            StartLine = 1,
+            EndLine = 1
+        };
+    }
+
     private static GraphNodeLine CreateProjectNode(string projectPath)
     {
         return new GraphNodeLine
         {
             Id = ProjectIdentity.TargetId(projectPath),
             Kind = "project",
-            Name = Path.GetFileNameWithoutExtension(projectPath),
-            FilePath = projectPath
+            Name = ProjectIdentity.IsSynthetic(projectPath)
+                ? ProjectIdentity.SyntheticProjectName
+                : Path.GetFileNameWithoutExtension(projectPath),
+            TargetIdStability = "syntax_fallback",
+            FilePath = projectPath,
+            StartLine = 1,
+            EndLine = 1
         };
+    }
+
+    private static IEnumerable<GraphEdgeLine> CreateSolutionProjectEdges(SyntaxAnalysisFacts facts)
+    {
+        return facts.ProjectPaths.Select(projectPath =>
+            new GraphEdgeLine(
+                TargetIds.SolutionRoot,
+                ProjectIdentity.TargetId(projectPath),
+                "contains",
+                "exact"));
     }
 
     private static IEnumerable<GraphEdgeLine> CreateProjectFileEdges(SyntaxAnalysisFacts facts)
@@ -52,8 +84,17 @@ public static class GraphProjector
         {
             var projectKey = ProjectIdentity.Key(projectPath);
             var projectTargetId = ProjectIdentity.TargetId(projectPath);
+            HashSet<string> projectFilePaths = facts.ProjectFileMemberships is null
+                ? facts.Files
+                    .Where(file => file.ProjectKey == projectKey)
+                    .Select(file => file.FilePath)
+                    .ToHashSet(StringComparer.Ordinal)
+                : facts.ProjectFileMemberships
+                    .Where(membership => membership.ProjectKey == projectKey)
+                    .Select(membership => membership.FilePath)
+                    .ToHashSet(StringComparer.Ordinal);
 
-            foreach (FileFacts file in facts.Files.Where(file => file.ProjectKey == projectKey))
+            foreach (FileFacts file in facts.Files.Where(file => projectFilePaths.Contains(file.FilePath)))
             {
                 yield return new GraphEdgeLine(projectTargetId, file.TargetId, "contains", "exact");
             }

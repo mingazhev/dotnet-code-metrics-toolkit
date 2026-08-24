@@ -26,7 +26,7 @@ Each analysis writes one self-contained artifact directory:
 | `chunks.ndjson` | Stable source ranges and hashes for downstream retrieval |
 | `diagnostics.ndjson` | Syntax, compiler, nullable, workspace, and project-load diagnostics |
 
-The current catalog contains 19 raw and derived metrics. Run `codemetrics list-metrics`
+The current catalog contains 50 raw and derived metrics. Run `codemetrics list-metrics`
 for the authoritative list and `codemetrics explain <metric-id>` for a formula and its
 known limitations.
 
@@ -96,6 +96,8 @@ See:
 - [Architecture](docs/toolkit/architecture.md)
 - [Security and trust model](docs/toolkit/security.md)
 - [Metric formulas](src/CodeMetricsToolkit.Core/Metrics/README.md)
+- [Metric expansion research](docs/research/metric-expansion.md)
+- [Testing strategy and coverage map](docs/testing.md)
 - [Known limitations](docs/mvp-limitations.md)
 - [Autoresearch integration example](docs/toolkit/autoresearch-integration.md)
 
@@ -110,6 +112,10 @@ dotnet test CodeMetricsToolkit.sln --configuration Release --no-build --no-resto
 The SDK is pinned by `global.json`, dependency versions are centralized in
 `Directory.Packages.props`, and warnings are treated as errors. Contributions must keep
 metric formulas and artifact schemas versioned. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Licensed under the [MIT License](LICENSE).
 
 ## Repository layout
 

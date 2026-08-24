@@ -25,7 +25,7 @@ public static class ArtifactWriter
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public static Task WriteAsync(
+    public static Task<IReadOnlyList<string>> WriteAsync(
         string outputPath,
         SyntaxAnalysisFacts facts,
         string reportedRootPath,
@@ -162,7 +162,7 @@ public static class ArtifactWriter
     {
         var population = string.Join(
             '\n',
-            files.Select(file => file.FilePath).Order(StringComparer.Ordinal));
+            files.Select(file => file.FilePath).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(population));
 
         return "sha256:" + Convert.ToHexString(hash).ToLowerInvariant();
@@ -178,7 +178,7 @@ public static class ArtifactWriter
             ContractVersion.Current,
             reportedRootPath,
             facts.ProjectPaths.Count,
-            facts.Files.Count,
+            facts.Files.Select(file => file.FilePath).Distinct(StringComparer.Ordinal).Count(),
             facts.Types.Count,
             facts.Members.Count,
             metrics.Count,

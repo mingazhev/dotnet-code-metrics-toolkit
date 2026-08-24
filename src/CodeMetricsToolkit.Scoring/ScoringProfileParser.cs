@@ -11,13 +11,15 @@ internal static class ScoringProfileParser
     private static readonly HashSet<string> TargetIdStabilities =
         new(["semantic", "syntax_fallback", "line_fallback"], StringComparer.Ordinal);
 
-    public static ParsedScoringProfile Parse(string json)
+    public static ParsedScoringProfile Parse(string json, int maxJsonDepth)
     {
         ArgumentNullException.ThrowIfNull(json);
 
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(
+                json,
+                new JsonDocumentOptions { MaxDepth = maxJsonDepth });
             JsonElement root = RequireObject(document.RootElement, "profile");
             EnsureAllowedProperties(
                 root,

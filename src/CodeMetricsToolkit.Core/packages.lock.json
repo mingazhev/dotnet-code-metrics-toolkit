@@ -319,9 +319,6 @@
         "type": "Transitive",
         "resolved": "10.0.3",
         "contentHash": "JCKbH/CN5l0CSoJBILEvJmNQVp5vV+FY3q2ue4K9p4eDT4mFEv0bjTQCV+MD6Qk1b/qk9fWmZZKhG1TklbXw1Q=="
-      },
-      "codemetricstoolkit.abstractions": {
-        "type": "Project"
       }
     }
   }

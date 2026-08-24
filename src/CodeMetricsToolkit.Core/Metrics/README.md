@@ -94,24 +94,58 @@ Formula:
 lines_of_code = inclusive source line span count
 ```
 
-Target kinds: `file`, `type`.
+Target kinds: `solution`, `project`, `file`, `type`.
 
-### non_comment_lines_of_code@1.0.0
+Project and solution observations aggregate unique file paths. Never sum type LOC to
+obtain a repository total: nested types overlap their containing types and partial types
+span multiple files.
+
+### token_line_count@1.0.0
 
 Formula:
 
 ```text
-non_comment_lines_of_code = distinct source lines containing C# syntax tokens
+token_line_count = distinct source lines containing C# syntax tokens
 ```
 
-Target kinds: `file`, `type`.
+Target kinds: `solution`, `project`, `file`, `type`.
 
-### method_length@1.0.0
+### line classification and ratios
+
+The file line pass builds two sets from Roslyn: lines containing syntax tokens and lines
+intersecting comment trivia. XML documentation trivia is tracked separately.
+
+```text
+blank_line_count = whitespace-only lines outside comment trivia
+comment_only_line_count = comment-bearing lines with no syntax token
+commented_line_count = all distinct comment-bearing lines
+mixed_code_comment_line_count = lines with both a token and comment trivia
+documentation_comment_line_count = lines intersecting XML documentation trivia
+```
+
+`commented_line_count` deliberately overlaps `token_line_count` on mixed lines.
+An empty-looking line inside a multiline comment is comment-only, not blank. All five
+raw metrics target `solution`, `project`, and `file`.
+
+The corresponding ratios are:
+
+```text
+token_line_ratio = token_line_count / lines_of_code
+blank_line_ratio = blank_line_count / lines_of_code
+comment_only_line_ratio = comment_only_line_count / lines_of_code
+commented_line_ratio = commented_line_count / lines_of_code
+documentation_comment_ratio = documentation_comment_line_count / lines_of_code
+```
+
+Ratios use unit `ratio` and are omitted for a zero-line population. Numerators and the
+denominator are always emitted alongside a ratio.
+
+### member_length@1.0.0
 
 Formula:
 
 ```text
-method_length = inclusive source line span count for the member declaration
+member_length = inclusive source line span count for the member declaration
 ```
 
 Target kind: `member`.
@@ -145,6 +179,14 @@ member_count = number of member targets contained by the file or type
 ```
 
 Target kinds: `file`, `type`.
+
+### decision_point_count@1.0.0
+
+```text
+decision_point_count = the decision_points component of cyclomatic_complexity
+```
+
+This exposes the non-baseline numerator without adding one per member.
 
 ## aggregate member metrics
 
@@ -185,16 +227,116 @@ incoming_type_dependency_count =
   count(distinct internal source types depending on the target type)
 ```
 
-### dependency_cycle_count@1.0.0
+### dependency_cycle_membership@1.0.0
 
 Formula:
 
 ```text
-dependency_cycle_count = 1 if target type belongs to a type dependency SCC, else 0
+dependency_cycle_membership = 1 if target type belongs to a type dependency SCC, else 0
 ```
 
 The MVP reports strongly-connected-component membership, not the exact count of
 all simple cycles in the graph.
+
+### dependency_component_size@1.0.0
+
+```text
+dependency_component_size = size(type dependency SCC) when cyclic, otherwise 0
+```
+
+### transitive dependency metrics
+
+```text
+transitive_type_dependency_count = distinct internal types reachable from target
+transitive_type_dependent_count = distinct internal types that can reach target
+```
+
+The target itself is excluded, including when it belongs to a cycle.
+
+## call graph metrics
+
+```text
+distinct_outgoing_callee_count = count(distinct internal member callees)
+distinct_incoming_caller_count = count(distinct internal member callers)
+recursive_component_size = size(call SCC) when recursive, otherwise 0
+```
+
+`distinct_outgoing_callee_count` and `distinct_incoming_caller_count` target members and types. A type value
+aggregates distinct member endpoints across its members. A direct self-recursive member
+has `recursive_component_size=1`; mutual recursion reports the full SCC size.
+
+The static call graph contains explicit invocations and object construction resolved to
+source members. It is not complete for reflection, `dynamic`, delegates, framework
+callbacks, dependency injection, generated dispatch, or external members.
+
+New graph metrics are emitted only for a trusted semantic analysis. The three original
+type dependency metrics retain their legacy best-effort behavior for compatibility.
+
+## semantic symbol metrics
+
+### inheritance_depth@1.0.0
+
+```text
+inheritance_depth = count(non-System.Object base classes)
+```
+
+A class directly deriving from `System.Object` has depth 0. Interfaces and value types
+also report 0.
+
+### type_coupling@1.0.0
+
+```text
+type_coupling = count(distinct coupled named type original definitions)
+```
+
+The population includes bases, interfaces, attributes, member signatures, constraints,
+and type syntax in the target's declarations and executable members. Constructed generic
+types contribute the generic definition and their named type arguments. Primitive
+special types, type parameters, error types, and the target itself are excluded.
+
+This is a toolkit definition, not a compatibility claim with Visual Studio, SonarQube,
+or another CBO implementation.
+
+### public API documentation
+
+```text
+public_api_count = effectively public/protected explicit source symbols
+documented_public_api_count = public API symbols with non-empty XML documentation
+public_api_documentation_ratio = documented_public_api_count / public_api_count
+```
+
+Target kinds: `type`, `project`. Public members inside an inaccessible containing type
+are not public API. Implicit compiler members and property/event accessor methods are
+excluded. Nested types are counted on their own type target to avoid project double
+counting. The ratio is omitted for a zero-symbol population.
+
+All semantic symbol metrics require `analysisQuality=trusted`.
+
+## operation and control-flow graph metrics
+
+The operation pass uses explicit Roslyn `IOperation` nodes. `operation_count` excludes
+implicit operations and method/constructor/block wrapper operations.
+
+```text
+allocation_count = explicit object + array + anonymous object + delegate creation sites
+await_count = explicit await operations
+control_flow_graph_count = Roslyn CFG roots aggregated into the member
+basic_block_count = all CFG blocks, including entry and exit
+reachable_basic_block_count = blocks where BasicBlock.IsReachable is true
+unreachable_basic_block_count = basic_block_count - reachable_basic_block_count
+control_flow_edge_count = non-null fall-through + conditional successors
+cfg_cyclomatic_complexity = E - N + 2P
+```
+
+In the CFG formula, `E` is `control_flow_edge_count`, `N` is
+`basic_block_count`, and `P` is `control_flow_graph_count`. The CFG metric is omitted when
+Roslyn cannot construct a graph. It does not replace `cyclomatic_complexity@1.0.0`, which
+remains syntax-based and independently versioned.
+
+Properties can contribute multiple accessor graphs. Auto-properties with no authored
+executable body do not emit operation/CFG observations. Static allocation counts are
+source sites, not bytes or runtime frequency. All operation/CFG metrics require a trusted
+semantic analysis.
 
 ## diagnostic_count@1.0.0
 
@@ -243,7 +385,7 @@ Member weights:
 cognitive_complexity  0.30
 cyclomatic_complexity 0.25
 nesting_depth         0.15
-method_length         0.15
+member_length         0.15
 diagnostic_count      0.10
 parameter_count       0.05
 ```

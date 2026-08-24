@@ -15,8 +15,8 @@ The broad metrics plan treated ids as a reporting detail. For autoresearch they 
 Use semantic ids when Roslyn symbols are available:
 
 ```text
-solution:<root-hash>
-project:<assembly-name>|<repo-relative-csproj-path>
+solution:root
+project:<project-path-hash>
 file:<repo-relative-path>
 type:<assembly-name>/<xml-doc-id>
 member:<assembly-name>/<xml-doc-id>
@@ -24,6 +24,11 @@ chunk:<target-id>#<chunk-kind>
 ```
 
 For `type` and `member`, `<xml-doc-id>` is `ISymbol.GetDocumentationCommentId()`. The assembly name is included because XML doc ids are only unique inside an assembly.
+
+`solution:root` is the artifact-local singleton root. Project ids hash the
+repository-relative project path. These structural targets currently report
+`targetIdStability=syntax_fallback` because the public stability enum predates a
+separate structural category; neither id depends on line positions.
 
 Fallback ids are allowed only when semantic loading is unavailable:
 

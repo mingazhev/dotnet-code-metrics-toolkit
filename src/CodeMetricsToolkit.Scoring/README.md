@@ -75,5 +75,17 @@ The package includes `schemas/scoring-profile.schema.json`. Scoring fails closed
 analysis trust, artifact versions, metric versions, target declarations, or generation
 consistency do not satisfy the profile.
 
+Scoring also enforces hard resource limits before or while reading inputs: 1 MiB for a
+profile, 128 MiB each for `manifest.json`, `summary.json`, and `graph.json`, and 1 GiB
+for `metrics.ndjson`. Metrics are streamed with limits of 8 Mi characters per line,
+1,000,000 physical lines, and 1,000,000 non-empty metric records. JSON nesting is
+limited to 64. Inputs beyond these limits fail with `InvalidProfile` or
+`InvalidArtifacts`; data is never silently truncated.
+
+Path selectors use normalized, artifact-root-relative paths. `*` and `?` never cross a
+directory separator, `**` does, and `**/` may match zero directories. For example,
+`*.cs` selects only root files while `**/*.cs` selects C# files at any depth. A leading
+`./` and Windows `\` separators are normalized before matching.
+
 Consumers must score only after `codemetrics analyze` has completed. Concurrent reads
 during output replacement are outside the supported publication model.

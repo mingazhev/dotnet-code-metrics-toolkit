@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using CodeMetricsToolkit.Abstractions;
 
@@ -23,7 +24,17 @@ public static class OutputValidator
 
     public static OutputValidationResult Validate(string artifactDirectory, CancellationToken cancellationToken)
     {
+        return Validate(artifactDirectory, ValidationInputLimits.Default, cancellationToken);
+    }
+
+    internal static OutputValidationResult Validate(
+        string artifactDirectory,
+        ValidationInputLimits limits,
+        CancellationToken cancellationToken)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactDirectory);
+        ArgumentNullException.ThrowIfNull(limits);
+        limits.Validate();
         cancellationToken.ThrowIfCancellationRequested();
 
         var errors = new List<string>();
@@ -57,6 +68,7 @@ public static class OutputValidator
             JsonElement? document = ValidateJson(
                 Path.Combine(artifactDirectory, artifactName),
                 schemaName,
+                limits,
                 errors);
 
             if (document is not null)
@@ -79,6 +91,7 @@ public static class OutputValidator
                 Path.Combine(artifactDirectory, artifactName),
                 schemaName,
                 manifestSchemaVersion,
+                limits,
                 errors,
                 cancellationToken);
 
@@ -120,13 +133,19 @@ public static class OutputValidator
     private static JsonElement? ValidateJson(
         string artifactPath,
         string schemaName,
+        ValidationInputLimits limits,
         List<string> errors)
     {
         var artifactName = Path.GetFileName(artifactPath);
 
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(artifactPath));
+            var json = ValidationInputReader.ReadJsonBytes(
+                artifactPath,
+                limits.MaxJsonArtifactBytes);
+            using var document = JsonDocument.Parse(
+                json,
+                new JsonDocumentOptions { MaxDepth = limits.MaxJsonDepth });
             JsonElement root = document.RootElement.Clone();
             ValidateAgainstSchema(root, artifactName, schemaName, null, errors);
 
@@ -135,6 +154,10 @@ public static class OutputValidator
         catch (JsonException exception)
         {
             errors.Add($"{artifactName} is invalid JSON: {exception.Message}");
+        }
+        catch (InvalidDataException exception)
+        {
+            errors.Add(exception.Message);
         }
         catch (IOException exception)
         {
@@ -152,6 +175,7 @@ public static class OutputValidator
         string artifactPath,
         string schemaName,
         string? manifestSchemaVersion,
+        ValidationInputLimits limits,
         List<string> errors,
         CancellationToken cancellationToken)
     {
@@ -159,14 +183,21 @@ public static class OutputValidator
         long recordCount = 0;
         var lineNumber = 0;
         var targetReferences = new List<ArtifactTargetReference>();
-        var seenTargetReferences = new HashSet<(string TargetId, string TargetKind)>();
+        var seenTargetReferences = new HashSet<(
+            string TargetId,
+            string TargetKind,
+            string TargetIdStability)>();
 
         try
         {
-            foreach (var line in File.ReadLines(artifactPath))
+            foreach (BoundedTextLine boundedLine in ValidationInputReader.ReadNdjsonLines(
+                artifactPath,
+                limits,
+                cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                lineNumber++;
+                lineNumber = boundedLine.Number;
+                var line = boundedLine.Text;
 
                 if (string.IsNullOrWhiteSpace(line))
                 {
@@ -174,10 +205,18 @@ public static class OutputValidator
                 }
 
                 recordCount++;
+                if (recordCount > limits.MaxNdjsonRecords)
+                {
+                    throw new InvalidDataException(
+                        $"{artifactName} exceeds the maximum record count of " +
+                        $"{limits.MaxNdjsonRecords}.");
+                }
 
                 try
                 {
-                    using var document = JsonDocument.Parse(line);
+                    using var document = JsonDocument.Parse(
+                        line,
+                        new JsonDocumentOptions { MaxDepth = limits.MaxJsonDepth });
                     JsonElement root = document.RootElement;
                     ValidateAgainstSchema(root, artifactName, schemaName, lineNumber, errors);
                     ArtifactContractInvariants.ValidateSchemaVersion(
@@ -199,6 +238,14 @@ public static class OutputValidator
                 }
             }
         }
+        catch (InvalidDataException exception)
+        {
+            errors.Add(exception.Message);
+        }
+        catch (DecoderFallbackException)
+        {
+            errors.Add($"{artifactName} is not valid UTF-8.");
+        }
         catch (IOException exception)
         {
             errors.Add($"{artifactName} could not be read: {exception.Message}");
@@ -216,7 +263,7 @@ public static class OutputValidator
         string artifactName,
         int lineNumber,
         List<ArtifactTargetReference> targetReferences,
-        HashSet<(string TargetId, string TargetKind)> seenTargetReferences)
+        HashSet<(string TargetId, string TargetKind, string TargetIdStability)> seenTargetReferences)
     {
         if (!string.Equals(artifactName, ArtifactNames.Metrics, StringComparison.Ordinal) &&
             !string.Equals(artifactName, ArtifactNames.Chunks, StringComparison.Ordinal))
@@ -226,15 +273,23 @@ public static class OutputValidator
 
         var targetId = ArtifactContractInvariants.ReadStringProperty(record, "targetId");
         var targetKind = ArtifactContractInvariants.ReadStringProperty(record, "targetKind");
+        var targetIdStability = ArtifactContractInvariants.ReadStringProperty(
+            record,
+            "targetIdStability");
 
         if (targetId is null ||
             targetKind is null ||
-            !seenTargetReferences.Add((targetId, targetKind)))
+            targetIdStability is null ||
+            !seenTargetReferences.Add((targetId, targetKind, targetIdStability)))
         {
             return;
         }
 
-        targetReferences.Add(new ArtifactTargetReference(lineNumber, targetId, targetKind));
+        targetReferences.Add(new ArtifactTargetReference(
+            lineNumber,
+            targetId,
+            targetKind,
+            targetIdStability));
     }
 
     private static void ValidateAgainstSchema(

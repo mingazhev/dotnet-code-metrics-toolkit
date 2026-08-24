@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CodeMetricsToolkit.Abstractions;
 using CodeMetricsToolkit.Core.Facts;
+using Microsoft.CodeAnalysis.Text;
 
 namespace CodeMetricsToolkit.Core.Reporting;
 
@@ -12,6 +13,7 @@ public static class ChunkProjector
         ArgumentNullException.ThrowIfNull(facts);
 
         var chunks = new List<ChunkLine>();
+        IReadOnlyDictionary<string, SourceText> sourceSnapshots = facts.SourceTextSnapshots;
 
         foreach (FileFacts file in facts.Files.OrderBy(file => file.FilePath, StringComparer.Ordinal))
         {
@@ -24,7 +26,7 @@ public static class ChunkProjector
                 .ToArray();
 
             chunks.Add(CreateChunk(
-                facts.RootPath,
+                sourceSnapshots,
                 file.TargetId,
                 "file",
                 file.TargetIdStability,
@@ -47,7 +49,7 @@ public static class ChunkProjector
             foreach (SourceSpanFacts declaration in type.Declarations)
             {
                 chunks.Add(CreateChunk(
-                    facts.RootPath,
+                    sourceSnapshots,
                     type.TargetId,
                     "type",
                     type.TargetIdStability,
@@ -71,7 +73,7 @@ public static class ChunkProjector
             foreach (SourceSpanFacts declaration in member.Declarations)
             {
                 chunks.Add(CreateChunk(
-                    facts.RootPath,
+                    sourceSnapshots,
                     member.TargetId,
                     "member",
                     member.TargetIdStability,
@@ -107,7 +109,7 @@ public static class ChunkProjector
     }
 
     private static ChunkLine CreateChunk(
-        string rootPath,
+        IReadOnlyDictionary<string, SourceText> sourceSnapshots,
         string targetId,
         string targetKind,
         string targetIdStability,
@@ -116,7 +118,7 @@ public static class ChunkProjector
         IReadOnlyList<string> relatedTargetIds,
         bool includeText)
     {
-        var text = ReadLineRange(rootPath, span);
+        var text = ReadLineRange(sourceSnapshots, span);
 
         return new ChunkLine
         {
@@ -136,19 +138,28 @@ public static class ChunkProjector
         };
     }
 
-    private static string ReadLineRange(string rootPath, SourceSpanFacts span)
+    private static string ReadLineRange(
+        IReadOnlyDictionary<string, SourceText> sourceSnapshots,
+        SourceSpanFacts span)
     {
-        var path = Path.Combine(rootPath, span.FilePath);
-        var lines = File.ReadAllLines(path);
-        if (lines.Length == 0)
+        if (!sourceSnapshots.TryGetValue(span.FilePath, out SourceText? sourceText))
+        {
+            throw new InvalidOperationException(
+                $"No collected source snapshot exists for '{span.FilePath}'.");
+        }
+
+        if (sourceText.Length == 0)
         {
             return string.Empty;
         }
 
-        var startIndex = Math.Clamp(span.StartLine - 1, 0, Math.Max(0, lines.Length - 1));
-        var endIndex = Math.Clamp(span.EndLine - 1, startIndex, Math.Max(0, lines.Length - 1));
+        var startIndex = Math.Clamp(span.StartLine - 1, 0, sourceText.Lines.Count - 1);
+        var endIndex = Math.Clamp(span.EndLine - 1, startIndex, sourceText.Lines.Count - 1);
 
-        return string.Join('\n', lines[startIndex..(endIndex + 1)]);
+        return string.Join(
+            '\n',
+            Enumerable.Range(startIndex, endIndex - startIndex + 1)
+                .Select(index => sourceText.Lines[index].ToString()));
     }
 
     private static int EstimateTokens(string text)
