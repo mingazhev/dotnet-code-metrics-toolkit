@@ -38,7 +38,7 @@
     { "metricId": "documentation_comment_line_count", "metricVersion": "1.0.0", "targetId": "file:MetricsSample.cs", "targetKind": "file", "valueKind": "integer", "numericValue": 3, "unit": "lines" },
     { "metricId": "documentation_comment_ratio", "metricVersion": "1.0.0", "targetId": "file:MetricsSample.cs", "targetKind": "file", "valueKind": "number", "numericValue": 0.06818181818181818, "unit": "ratio" },
     { "metricId": "documented_public_api_count", "metricVersion": "1.0.0", "targetId": "project:688ae7c6b5a32359", "targetKind": "project", "valueKind": "integer", "numericValue": 3, "unit": "count" },
-    { "metricId": "hotspot_rank", "metricVersion": "1.0.0", "targetId": "type:ExpandedMetricsProject/T:ExpandedMetricsProject.BaseApi", "targetKind": "type", "valueKind": "integer", "numericValue": 14, "unit": "rank" },
+    { "metricId": "hotspot_rank", "metricVersion": "2.0.0", "targetId": "type:ExpandedMetricsProject/T:ExpandedMetricsProject.BaseApi", "targetKind": "type", "valueKind": "integer", "numericValue": 14, "unit": "rank" },
     { "metricId": "distinct_incoming_caller_count", "metricVersion": "1.0.0", "targetId": "type:ExpandedMetricsProject/T:ExpandedMetricsProject.MetricsSample", "targetKind": "type", "valueKind": "integer", "numericValue": 3, "unit": "count" },
     { "metricId": "incoming_type_dependency_count", "metricVersion": "1.0.0", "targetId": "type:ExpandedMetricsProject/T:ExpandedMetricsProject.BaseApi", "targetKind": "type", "valueKind": "integer", "numericValue": 1, "unit": "count" },
     { "metricId": "inheritance_depth", "metricVersion": "1.0.0", "targetId": "type:ExpandedMetricsProject/T:ExpandedMetricsProject.MetricsSample", "targetKind": "type", "valueKind": "integer", "numericValue": 1, "unit": "levels" },

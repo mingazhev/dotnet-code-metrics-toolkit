@@ -14,4 +14,12 @@ public sealed record SyntaxAnalysisFacts
     internal IReadOnlyList<ProjectFileMembershipFacts>? ProjectFileMemberships { get; init; }
     internal IReadOnlyDictionary<string, string> SourceTextSnapshots { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
+
+    internal IReadOnlyList<ProjectFileMembershipFacts> GetProjectFileMemberships()
+    {
+        return ProjectFileMemberships ?? Files
+            .Select(file => new ProjectFileMembershipFacts(file.ProjectKey, file.FilePath))
+            .Distinct()
+            .ToArray();
+    }
 }

@@ -61,13 +61,17 @@ public static class CodeMetricsAnalyzer
                 };
             }
 
-            HotspotRanking hotspotRanking = HotspotRanker.Rank(facts, request.Top, cancellationToken);
-            MetricResultLine[] metrics = SyntaxMetricProjector.Project(facts, cancellationToken)
+            MetricResultLine[] metricRows = SyntaxMetricProjector.Project(facts, cancellationToken)
                 .Concat(GraphMetricProjector.Project(facts, cancellationToken))
                 .Concat(SemanticMetricProjector.Project(facts, cancellationToken))
                 .Concat(DiagnosticMetricProjector.Project(facts, cancellationToken))
-                .Concat(hotspotRanking.Metrics)
                 .ToArray();
+            HotspotRanking hotspotRanking = HotspotRanker.Rank(
+                facts,
+                metricRows,
+                request.Top,
+                cancellationToken);
+            MetricResultLine[] metrics = metricRows.Concat(hotspotRanking.Metrics).ToArray();
             DateTimeOffset completedAt = DateTimeOffset.UtcNow;
 
             IReadOnlyList<string> publicationWarnings = await ArtifactWriter.WriteAsync(

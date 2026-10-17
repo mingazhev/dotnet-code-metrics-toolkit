@@ -22,7 +22,7 @@ public static class MetricCatalog
         new("decision_point_count", "1.0.0", ["member"], "syntax", "count", "syntax decision points used by cyclomatic_complexity", "Publishes the non-baseline component of syntax cyclomatic complexity.", ["Useful as a transparent density numerator; not a CFG edge count."]),
         new("cognitive_complexity", "0.1.0", ["member"], "syntax", "count", "structural decisions plus nesting increments", "Sonar-inspired cognitive complexity baseline.", ["Not Sonar-compatible; version stays 0.1.0 until golden samples prove compatibility."]),
         new("nesting_depth", "1.0.0", ["member"], "syntax", "levels", "max active structural decision depth", "Captures deepest nested structural decision level inside a member.", ["Boolean operators add complexity but do not increase nesting depth."]),
-        new("type_count", "1.0.0", ["file"], "syntax", "count", "number of type declarations in the file", "Counts discovered type targets per file.", ["Partial type declarations count where their declaration appears."]),
+        new("type_count", "1.0.0", ["file"], "syntax", "count", "number of type declarations in the file", "Counts each type declaration in the file; partial declarations count separately in their source files.", []),
         new("member_count", "1.0.0", ["file", "type"], "syntax", "count", "number of member targets contained by the target", "Counts discovered member targets per file or type.", ["Generated code is excluded unless --include-generated is set."]),
         new("max_member_cyclomatic_complexity", "1.0.0", ["file", "type"], "syntax", "count", "max(cyclomatic_complexity for contained members)", "Worst member cyclomatic complexity inside a file or type.", ["Returns 0 when the target contains no members."]),
         new("p95_member_cyclomatic_complexity", "1.0.0", ["file", "type"], "syntax", "count", "nearest-rank p95 of contained member cyclomatic_complexity", "High-percentile member cyclomatic complexity inside a file or type.", ["Small samples collapse to the maximum value."]),
@@ -53,8 +53,11 @@ public static class MetricCatalog
         new("control_flow_edge_count", "1.0.0", ["member"], "semantic", "count", "non-null fall-through and conditional CFG successors", "Counts directed Roslyn control-flow branches across member graphs.", []),
         new("cfg_cyclomatic_complexity", "1.0.0", ["member"], "semantic", "count", "E - N + 2P over Roslyn CFG edges, blocks and graph components", "Computes graph-based cyclomatic complexity separately from the syntax metric.", ["E is control_flow_edge_count, N is basic_block_count, and P is control_flow_graph_count.", "Omitted when no CFG can be constructed."]),
         new("diagnostic_count", "1.0.0", ["file", "type", "member"], "syntax/semantic", "count", "number of diagnostics whose span overlaps the target", "Counts syntax, compiler and nullable diagnostics for source-linked targets.", ["Emitted only when summary.analysisHealth.trustedDiagnostics is true.", "Project-load diagnostics without source spans are emitted in diagnostics.ndjson but not attributed to source targets.", "The toolkit does not execute third-party DiagnosticAnalyzer instances."]),
-        new("hotspot_rank", "1.0.0", ["file", "type", "member"], "derived", "rank", "weighted empirical-percentile rank over target-kind-specific component metrics", "Built-in, opinionated navigation heuristic for finding review candidates.", ["Ranking is prioritization, not a proof of code quality or a universal objective.", "Diagnostic components are excluded when summary.analysisHealth.diagnosticsIncludedInHotspotRank is false."])
+        new("hotspot_rank", "2.0.0", ["file", "type", "member"], "derived", "rank", "weighted empirical-percentile rank over available target-kind-specific component metrics; unavailable components are excluded and remaining weights are normalized", "Built-in, opinionated navigation heuristic for finding review candidates.", ["Ranking is prioritization, not a proof of code quality or a universal objective.", "Diagnostic components are excluded when summary.analysisHealth.diagnosticsIncludedInHotspotRank is false.", "Unavailable components, including trusted graph metrics during syntax-only or degraded analysis, are not treated as measured zeroes."])
     ];
+
+    private static readonly Dictionary<string, MetricDescriptor> ById = All
+        .ToDictionary(metric => metric.Id, StringComparer.Ordinal);
 
     public static MetricDescriptor? Find(string idOrVersionedId)
     {
@@ -68,8 +71,9 @@ public static class MetricCatalog
             version = idOrVersionedId[(separator + 1)..];
         }
 
-        return All.FirstOrDefault(metric =>
-            string.Equals(metric.Id, id, StringComparison.Ordinal) &&
-            (version is null || string.Equals(metric.Version, version, StringComparison.Ordinal)));
+        return ById.TryGetValue(id, out MetricDescriptor? metric) &&
+            (version is null || string.Equals(metric.Version, version, StringComparison.Ordinal))
+                ? metric
+                : null;
     }
 }

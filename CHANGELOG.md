@@ -26,6 +26,8 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
   the patched 10.0.10 release without shipping a private MSBuild runtime.
 - Tool version metadata is sourced from package/assembly metadata instead of a literal.
 - Semantic trust now requires complete coverage of the selected source population.
+- `hotspot_rank` is versioned as 2.0.0 and ranks only available projected metrics;
+  unavailable components are excluded and remaining weights are normalized.
 
 ### Fixed
 
@@ -57,6 +59,7 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 - Failed restore process text is no longer copied into `summary.json`.
 - Semantic graph metrics are omitted for degraded analysis instead of publishing
   untrusted type-dependency counts under the same metric ids.
+- File `type_count` now counts each partial type declaration in its declaration file.
 - Source snapshots stored on analysis facts are plain text, not Roslyn `SourceText`.
 - Diagnostic and graph-edge collection fail closed at the 1,000,000-record consumer ceiling.
 

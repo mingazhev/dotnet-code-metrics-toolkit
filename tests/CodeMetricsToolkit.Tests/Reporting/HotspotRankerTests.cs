@@ -56,16 +56,72 @@ public sealed class HotspotRankerTests
             EndLine = member.EndLine,
             Tags = ["compiler"]
         };
+        AnalysisDiagnostic taggedDiagnostic = diagnostic with
+        {
+            Id = "CS0002",
+            Tags = ["nullable"]
+        };
         SyntaxAnalysisFacts facts = TestFacts.Analysis(
             files: [file],
             types: [type],
             members: [member],
-            diagnostics: [diagnostic]);
+            diagnostics: [diagnostic, taggedDiagnostic]);
 
         HotspotRanking ranking = HotspotRanker.Rank(facts, top: 3, CancellationToken.None);
+        MetricResultLine aggregate = Assert.Single(
+            DiagnosticMetricProjector.Project(facts, CancellationToken.None),
+            metric => metric.TargetId == member.TargetId && metric.Tags is null);
+        HotspotLine memberHotspot = Assert.Single(ranking.Hotspots, hotspot => hotspot.TargetId == member.TargetId);
+        HotspotComponentLine diagnosticComponent = Assert.Single(
+            memberHotspot.Components,
+            component => component.MetricId == "diagnostic_count");
 
-        Assert.Contains(
-            ranking.Hotspots.SelectMany(hotspot => hotspot.Components),
-            component => component.MetricId == "diagnostic_count" && component.Value == 1);
+        Assert.Equal(aggregate.NumericValue, diagnosticComponent.Value);
+    }
+
+    [Theory]
+    [InlineData("syntax_only")]
+    [InlineData("degraded")]
+    public void RankUsesAvailableProjectedMetricRowsAndNormalizesRemainingWeights(string analysisQuality)
+    {
+        FileFacts firstFile = TestFacts.File("file:a", "A.cs");
+        FileFacts secondFile = TestFacts.File("file:b", "B.cs");
+        TypeFacts firstType = TestFacts.Type("type:a", firstFile.TargetId, firstFile.FilePath, memberCount: 11) with
+        {
+            Declarations =
+            [
+                TestFacts.Span(firstFile.FilePath, 1, 4),
+                TestFacts.Span(firstFile.FilePath, 6, 9)
+            ]
+        };
+        TypeFacts secondType = TestFacts.Type("type:b", secondFile.TargetId, secondFile.FilePath);
+        SyntaxAnalysisFacts facts = TestFacts.Analysis(
+            files: [firstFile, secondFile],
+            types: [firstType, secondType],
+            edges: [TestFacts.Edge(firstType.TargetId, secondType.TargetId, "uses_type")],
+            trusted: false,
+            diagnosticsInHotspots: false);
+        facts = facts with { Health = facts.Health with { AnalysisQuality = analysisQuality } };
+        MetricResultLine[] projectedMetrics = SyntaxMetricProjector.Project(facts, CancellationToken.None)
+            .Concat(GraphMetricProjector.Project(facts, CancellationToken.None))
+            .Concat(SemanticMetricProjector.Project(facts, CancellationToken.None))
+            .Concat(DiagnosticMetricProjector.Project(facts, CancellationToken.None))
+            .ToArray();
+
+        HotspotRanking ranking = HotspotRanker.Rank(facts, top: 10, CancellationToken.None);
+
+        HotspotLine hotspot = Assert.Single(ranking.Hotspots, item => item.TargetId == firstType.TargetId);
+        Assert.DoesNotContain(hotspot.Components, component => component.MetricId == "outgoing_type_dependency_count");
+        Assert.Equal(1, hotspot.Components.Sum(component => component.Weight), 12);
+        foreach (HotspotComponentLine component in hotspot.Components)
+        {
+            MetricResultLine metric = Assert.Single(projectedMetrics, row =>
+                row.TargetId == firstType.TargetId &&
+                row.MetricId == component.MetricId &&
+                row.Tags is null);
+            Assert.Equal(metric.NumericValue, component.Value);
+        }
+
+        Assert.All(ranking.Metrics, metric => Assert.Equal("2.0.0", metric.MetricVersion));
     }
 }

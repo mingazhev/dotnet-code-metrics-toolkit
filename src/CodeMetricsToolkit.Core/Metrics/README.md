@@ -170,6 +170,9 @@ type_count = number of type declarations in the file
 
 Target kind: `file`.
 
+Each partial declaration counts in its source file, including multiple declarations
+of the same logical type in one file. The graph still contains one node per logical type.
+
 ### member_count@1.0.0
 
 Formula:
@@ -366,7 +369,7 @@ is `true`. If restore or MSBuild project loading fails, compiler diagnostics are
 not treated as code-quality metrics because they may reflect a broken analysis
 environment instead of broken source code.
 
-## hotspot_rank@1.0.0
+## hotspot_rank@2.0.0
 
 `hotspot_rank` is a built-in, opinionated navigation heuristic. It is deterministic
 and explainable, but it is not a policy-free fact or a universal quality objective.
@@ -377,7 +380,10 @@ by target kind and target id.
 
 Diagnostic components are included only when
 `summary.json.analysisHealth.diagnosticsIncludedInHotspotRank` is `true`.
-Otherwise the ranker re-normalizes the remaining component weights.
+Components are read from the emitted metric rows. If a component is unavailable,
+the ranker excludes it and normalizes the weights of the remaining components.
+This includes trusted graph metrics during syntax-only or degraded analysis; an
+unavailable dependency metric is not treated as a measured zero.
 
 Member weights:
 

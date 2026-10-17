@@ -233,6 +233,16 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal(2, graphEdges.Count(edge =>
             HasPropertyValue(edge, "kind", "declares") &&
             HasPropertyValue(edge, "to", partialTypeId)));
+
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        foreach (JsonElement declaration in partialType.GetProperty("declarations").EnumerateArray())
+        {
+            var filePath = declaration.GetProperty("filePath").GetString()!;
+            JsonElement typeCount = Assert.Single(metrics, metric =>
+                HasPropertyValue(metric, "metricId", "type_count") &&
+                HasPropertyValue(metric, "filePath", filePath));
+            Assert.Equal(1, typeCount.GetProperty("numericValue").GetInt32());
+        }
     }
 
     [Fact]

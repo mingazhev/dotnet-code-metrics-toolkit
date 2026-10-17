@@ -99,6 +99,32 @@ public sealed class SyntaxMetricProjectorTests
     }
 
     [Fact]
+    public void ProjectCountsPartialTypeDeclarationsInEachFile()
+    {
+        FileFacts first = TestFacts.File("file:a", "A.cs");
+        FileFacts second = TestFacts.File("file:b", "B.cs");
+        TypeFacts partialType = TestFacts.Type("type:partial", first.TargetId, first.FilePath) with
+        {
+            Declarations =
+            [
+                TestFacts.Span(first.FilePath, 1, 3),
+                TestFacts.Span(first.FilePath, 5, 7),
+                TestFacts.Span(second.FilePath, 1, 3)
+            ]
+        };
+        SyntaxAnalysisFacts facts = TestFacts.Analysis(files: [first, second], types: [partialType]);
+
+        IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(
+            facts,
+            CancellationToken.None);
+        GraphArtifact graph = GraphProjector.Project(facts);
+
+        Assert.Equal(2, Metric(metrics, first.TargetId, "type_count").NumericValue);
+        Assert.Equal(1, Metric(metrics, second.TargetId, "type_count").NumericValue);
+        Assert.Single(graph.Nodes, node => node.Id == partialType.TargetId && node.Kind == "type");
+    }
+
+    [Fact]
     public void ProjectFallsBackToFileProjectKeysForExternallyConstructedFacts()
     {
         const string projectPath = "External.csproj";

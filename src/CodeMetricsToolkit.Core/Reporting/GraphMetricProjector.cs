@@ -79,8 +79,7 @@ public static class GraphMetricProjector
             metrics.Add(CreateTypeMetric(
                 type,
                 "dependency_cycle_membership",
-                dependencyGraph.GetCyclicComponentSize(type.TargetId) > 0 ? 1 : 0,
-                "flag"));
+                dependencyGraph.GetCyclicComponentSize(type.TargetId) > 0 ? 1 : 0));
         }
 
         DirectedGraphAnalysis callGraph = DirectedGraphAnalyzer.Analyze(
@@ -160,35 +159,30 @@ public static class GraphMetricProjector
     private static MetricResultLine CreateTypeMetric(
         TypeFacts type,
         string metricId,
-        int value,
-        string unit = "count")
+        int value)
     {
         return MetricResultFactory.Numeric(
             metricId,
-            "1.0.0",
             "type",
             type.TargetId,
             type.TargetIdStability,
             type.FilePath,
             type.StartLine,
             type.EndLine,
-            value,
-            unit);
+            value);
     }
 
     private static MetricResultLine CreateMemberMetric(MemberFacts member, string metricId, int value)
     {
         return MetricResultFactory.Numeric(
             metricId,
-            "1.0.0",
             "member",
             member.TargetId,
             member.TargetIdStability,
             member.FilePath,
             member.StartLine,
             member.EndLine,
-            value,
-            "count");
+            value);
     }
 
 }

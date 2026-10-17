@@ -26,10 +26,10 @@ public static class SemanticMetricProjector
                 continue;
             }
 
-            AddTypeMetric(metrics, type, "inheritance_depth", type.Semantic.InheritanceDepth, "levels");
-            AddTypeMetric(metrics, type, "type_coupling", type.Semantic.ClassCoupling, "count");
-            AddTypeMetric(metrics, type, "public_api_count", type.Semantic.PublicApiCount, "count");
-            AddTypeMetric(metrics, type, "documented_public_api_count", type.Semantic.DocumentedPublicApiCount, "count");
+            AddTypeMetric(metrics, type, "inheritance_depth", type.Semantic.InheritanceDepth);
+            AddTypeMetric(metrics, type, "type_coupling", type.Semantic.ClassCoupling);
+            AddTypeMetric(metrics, type, "public_api_count", type.Semantic.PublicApiCount);
+            AddTypeMetric(metrics, type, "documented_public_api_count", type.Semantic.DocumentedPublicApiCount);
             if (type.Semantic.PublicApiCount > 0)
             {
                 AddTypeRatioMetric(
@@ -51,13 +51,12 @@ public static class SemanticMetricProjector
             var publicApiCount = typeFacts.Sum(type => type.PublicApiCount);
             var documentedPublicApiCount = typeFacts.Sum(type => type.DocumentedPublicApiCount);
 
-            AddProjectMetric(metrics, projectPath, "public_api_count", publicApiCount, "count");
+            AddProjectMetric(metrics, projectPath, "public_api_count", publicApiCount);
             AddProjectMetric(
                 metrics,
                 projectPath,
                 "documented_public_api_count",
-                documentedPublicApiCount,
-                "count");
+                documentedPublicApiCount);
             if (publicApiCount > 0)
             {
                 AddProjectRatioMetric(
@@ -101,40 +100,34 @@ public static class SemanticMetricProjector
         List<MetricResultLine> metrics,
         TypeFacts type,
         string metricId,
-        double value,
-        string unit)
+        double value)
     {
         metrics.Add(MetricResultFactory.Numeric(
             metricId,
-            "1.0.0",
             "type",
             type.TargetId,
             type.TargetIdStability,
             type.FilePath,
             type.StartLine,
             type.EndLine,
-            value,
-            unit));
+            value));
     }
 
     private static void AddProjectMetric(
         List<MetricResultLine> metrics,
         string projectPath,
         string metricId,
-        double value,
-        string unit)
+        double value)
     {
         metrics.Add(MetricResultFactory.Numeric(
             metricId,
-            "1.0.0",
             "project",
             ProjectIdentity.TargetId(projectPath),
             "syntax_fallback",
             projectPath,
             1,
             1,
-            value,
-            unit));
+            value));
     }
 
     private static void AddTypeRatioMetric(
@@ -145,15 +138,13 @@ public static class SemanticMetricProjector
     {
         metrics.Add(MetricResultFactory.Number(
             metricId,
-            "1.0.0",
             "type",
             type.TargetId,
             type.TargetIdStability,
             type.FilePath,
             type.StartLine,
             type.EndLine,
-            value,
-            "ratio"));
+            value));
     }
 
     private static void AddProjectRatioMetric(
@@ -164,15 +155,13 @@ public static class SemanticMetricProjector
     {
         metrics.Add(MetricResultFactory.Number(
             metricId,
-            "1.0.0",
             "project",
             ProjectIdentity.TargetId(projectPath),
             "syntax_fallback",
             projectPath,
             1,
             1,
-            value,
-            "ratio"));
+            value));
     }
 
     private static void AddMemberMetric(
@@ -183,14 +172,12 @@ public static class SemanticMetricProjector
     {
         metrics.Add(MetricResultFactory.Numeric(
             metricId,
-            "1.0.0",
             "member",
             member.TargetId,
             member.TargetIdStability,
             member.FilePath,
             member.StartLine,
             member.EndLine,
-            value,
-            "count"));
+            value));
     }
 }

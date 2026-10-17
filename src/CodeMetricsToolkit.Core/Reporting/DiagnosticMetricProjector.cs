@@ -78,7 +78,6 @@ public static class DiagnosticMetricProjector
     {
         return MetricResultFactory.Numeric(
             "diagnostic_count",
-            "1.0.0",
             targetKind,
             targetId,
             targetIdStability,
@@ -86,7 +85,6 @@ public static class DiagnosticMetricProjector
             startLine,
             endLine,
             count,
-            "count",
             tags);
     }
 
