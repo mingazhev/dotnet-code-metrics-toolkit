@@ -9,7 +9,7 @@ public sealed record FileFacts
     public required int StartLine { get; init; }
     public required int EndLine { get; init; }
     public required int LinesOfCode { get; init; }
-    public required int NonCommentLinesOfCode { get; init; }
+    public required int TokenLineCount { get; init; }
     public required int BlankLineCount { get; init; }
     public required int CommentOnlyLineCount { get; init; }
     public required int CommentedLineCount { get; init; }

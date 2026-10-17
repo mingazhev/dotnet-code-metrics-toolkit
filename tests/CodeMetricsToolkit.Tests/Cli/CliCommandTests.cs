@@ -10,6 +10,24 @@ namespace CodeMetricsToolkit.Tests.Cli;
 public sealed partial class CliAnalyzeTests
 {
     [Fact]
+    public async Task SameLinePartialDeclarationsRemainDistinctPhysicalDeclarations()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        await File.WriteAllTextAsync(
+            Path.Combine(input.Path, "SameLine.cs"),
+            "partial class Sample { } partial class Sample { }");
+
+        var exitCode = await RunCliAsync("analyze", input.Path, "--syntax-only", "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        Assert.Equal(2, MetricInt(metrics, "file:SameLine.cs", "type_count"));
+        JsonElement[] chunks = ReadNdjson(Path.Combine(output.Path, "chunks.ndjson"));
+        Assert.Equal(chunks.Length, chunks.Select(chunk => chunk.GetProperty("chunkId").GetString()).Distinct().Count());
+    }
+
+    [Fact]
     public async Task ListMetricsAndExplainCommandsExposeMetricCatalog()
     {
         using var listOutput = new StringWriter();
@@ -23,12 +41,18 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal(0, listExitCode);
         Assert.Equal(0, explainExitCode);
         Assert.Equal(
-            50,
+            66,
             listOutput.ToString().Split(
                 Environment.NewLine,
                 StringSplitOptions.RemoveEmptyEntries).Length);
         Assert.Contains("diagnostic_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("cfg_cyclomatic_complexity@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("duplicated_block_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("duplicated_line_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("duplicated_line_ratio@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("outgoing_type_dependency_count@1.1.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("outgoing_namespace_dependency_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("weighted_member_complexity@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("Formula: number of diagnostics whose span overlaps the target", explainOutput.ToString(), StringComparison.Ordinal);
     }
 
@@ -204,4 +228,36 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal("<timestamp>", normalized.RootElement.GetProperty("startedAt").GetString());
         Assert.Equal(0, normalized.RootElement.GetProperty("durationMs").GetInt32());
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepeatedAnalysisPreservesValuesIdentitiesAndRankingOrder(bool syntaxOnly)
+    {
+        using var first = TemporaryDirectory.Create();
+        using var second = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("ExpandedMetricsProject");
+        foreach (var outputPath in new[] { first.Path, second.Path })
+        {
+            string[] arguments = syntaxOnly
+                ? ["analyze", projectPath, "--output", outputPath, "--syntax-only"]
+                : ["analyze", projectPath, "--output", outputPath];
+            Assert.Equal(0, await RunCliAsync(arguments));
+        }
+
+        foreach (var artifact in new[] { "manifest.json", "summary.json", "graph.json" })
+        {
+            Assert.Equal(
+                ArtifactSnapshotNormalizer.NormalizeJsonFile(Path.Combine(first.Path, artifact)),
+                ArtifactSnapshotNormalizer.NormalizeJsonFile(Path.Combine(second.Path, artifact)));
+        }
+
+        foreach (var artifact in new[] { "metrics.ndjson", "chunks.ndjson", "diagnostics.ndjson" })
+        {
+            Assert.Equal(
+                await File.ReadAllTextAsync(Path.Combine(first.Path, artifact)),
+                await File.ReadAllTextAsync(Path.Combine(second.Path, artifact)));
+        }
+    }
+
 }

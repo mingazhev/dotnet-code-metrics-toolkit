@@ -22,13 +22,17 @@ Each analysis writes one self-contained artifact directory:
 | `manifest.json` | Tool, contract, input, timing, mode, and artifact inventory |
 | `summary.json` | Counts, analysis health, trust signals, and top hotspots |
 | `metrics.ndjson` | One versioned metric observation per line |
-| `graph.json` | Project/file/type/member nodes and dependency edges |
+| `graph.json` | Solution/project/namespace/file/type/member nodes and dependency edges |
 | `chunks.ndjson` | Stable source ranges and hashes for downstream retrieval |
 | `diagnostics.ndjson` | Syntax, compiler, nullable, workspace, and project-load diagnostics |
 
-The current catalog contains 50 raw and derived metrics. Run `codemetrics list-metrics`
-for the authoritative list and `codemetrics explain <metric-id>` for a formula and its
+The catalog covers source lines, complexity, dependencies, duplication and semantic facts.
+Run `codemetrics list-metrics` for the authoritative list and `codemetrics explain <metric-id>` for a formula and its
 known limitations.
+
+Duplication collection currently supports up to 500,000 tokens per analysis. Exceeding
+its budget fails the run rather than publishing incomplete measurements; see the
+[duplication definition and limits](src/CodeMetricsToolkit.Core/Metrics/README.md#duplicated_block_count100-duplicated_line_count100-and-duplicated_line_ratio100).
 
 ## Quick start
 
@@ -43,7 +47,7 @@ dotnet pack src/CodeMetricsToolkit.Cli/CodeMetricsToolkit.Cli.csproj \
 dotnet tool install CodeMetricsToolkit.Tool \
   --global \
   --add-source artifacts/packages \
-  --version 0.1.0
+  --version 0.2.0
 ```
 
 Analyze a trusted repository with semantic project loading:
@@ -96,6 +100,7 @@ See:
 - [Architecture](docs/toolkit/architecture.md)
 - [Security and trust model](docs/toolkit/security.md)
 - [Metric formulas](src/CodeMetricsToolkit.Core/Metrics/README.md)
+- [Cleanup plan and implementation results](docs/research/cleanup-and-design-plan.md)
 - [Metric expansion research](docs/research/metric-expansion.md)
 - [Testing strategy and coverage map](docs/testing.md)
 - [Known limitations](docs/mvp-limitations.md)

@@ -66,11 +66,11 @@
     }
   ],
   "properties": {
-    "schemaVersion": { "const": "0.1.0" },
+    "schemaVersion": { "const": "0.2.0" },
     "metricId": { "type": "string", "minLength": 1 },
     "metricVersion": { "type": "string", "minLength": 1 },
     "targetId": { "type": "string", "minLength": 1 },
-    "targetKind": { "enum": [ "solution", "project", "file", "type", "member" ] },
+    "targetKind": { "enum": [ "solution", "project", "namespace", "file", "type", "member" ] },
     "targetIdStability": { "enum": [ "semantic", "syntax_fallback", "line_fallback" ] },
     "valueKind": { "enum": [ "integer", "number", "string", "boolean" ] },
     "numericValue": { "type": "number" },
@@ -82,6 +82,7 @@
     "endLine": { "type": "integer", "minimum": 1 },
     "tags": {
       "type": "array",
+      "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     }
   }

@@ -6,6 +6,7 @@ public sealed record MetricDescriptor(
     IReadOnlyList<string> TargetKinds,
     string AnalysisMode,
     string Unit,
+    string ValueKind,
     string Formula,
     string Description,
     IReadOnlyList<string> KnownLimitations);

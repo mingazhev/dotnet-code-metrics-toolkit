@@ -4,7 +4,7 @@ namespace CodeMetricsToolkit.Tests.Support;
 
 internal static class TestFacts
 {
-    public static SyntaxAnalysisFacts Analysis(
+    public static AnalysisFacts Analysis(
         IReadOnlyList<FileFacts>? files = null,
         IReadOnlyList<TypeFacts>? types = null,
         IReadOnlyList<MemberFacts>? members = null,
@@ -19,7 +19,7 @@ internal static class TestFacts
     {
         IReadOnlyList<FileFacts> analysisFiles = files ?? [];
 
-        return new SyntaxAnalysisFacts
+        return new AnalysisFacts
         {
             Mode = trusted ? "semantic" : "partial_semantic",
             Health = new AnalysisHealth
@@ -69,7 +69,7 @@ internal static class TestFacts
             StartLine = 1,
             EndLine = lines,
             LinesOfCode = lines,
-            NonCommentLinesOfCode = tokenLines,
+            TokenLineCount = tokenLines,
             BlankLineCount = blanks,
             CommentOnlyLineCount = commentOnly,
             CommentedLineCount = commented,
@@ -100,7 +100,7 @@ internal static class TestFacts
             EndLine = endLine,
             Declarations = [Span(path, startLine, endLine)],
             LinesOfCode = endLine - startLine + 1,
-            NonCommentLinesOfCode = Math.Max(0, endLine - startLine),
+            TokenLineCount = Math.Max(0, endLine - startLine),
             MemberCount = memberCount,
             Semantic = semantic
         };
@@ -139,7 +139,7 @@ internal static class TestFacts
                 CognitiveComplexity = cognitive,
                 NestingDepth = nesting
             },
-            MethodLength = endLine - startLine + 1,
+            MemberLength = endLine - startLine + 1,
             ParameterCount = parameterCount,
             Operations = operations
         };
@@ -156,12 +156,13 @@ internal static class TestFacts
         };
     }
 
-    public static SourceSpanFacts Span(string path, int startLine, int endLine)
+    public static SourceSpanFacts Span(string path, int startLine, int endLine, int startColumn = 1)
     {
         return new SourceSpanFacts
         {
             FilePath = path,
             StartLine = startLine,
+            StartColumn = startColumn,
             EndLine = endLine
         };
     }

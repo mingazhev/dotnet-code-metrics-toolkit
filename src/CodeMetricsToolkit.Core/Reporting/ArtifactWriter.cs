@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Security.Cryptography;
 using System.Text;
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Analysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
@@ -27,13 +27,12 @@ public static class ArtifactWriter
 
     public static Task<IReadOnlyList<string>> WriteAsync(
         string outputPath,
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         string reportedRootPath,
         AnalyzeRequest request,
         DiscoveredSources sources,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots,
-        bool includeChunkText,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken)
@@ -56,7 +55,6 @@ public static class ArtifactWriter
                 sources,
                 metrics,
                 hotspots,
-                includeChunkText,
                 startedAt,
                 completedAt,
                 token),
@@ -65,13 +63,12 @@ public static class ArtifactWriter
 
     private static async Task WriteArtifactsAsync(
         string outputPath,
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         string reportedRootPath,
         AnalyzeRequest request,
         DiscoveredSources sources,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots,
-        bool includeChunkText,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken)
@@ -93,7 +90,7 @@ public static class ArtifactWriter
 
         await WriteNdjsonAsync(
             Path.Combine(outputPath, ArtifactNames.Chunks),
-            ChunkProjector.Project(facts, includeChunkText, cancellationToken),
+            ChunkProjector.Project(facts, request.IncludeChunkText, cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
         await WriteNdjsonAsync(
@@ -116,7 +113,7 @@ public static class ArtifactWriter
 
     private static ManifestArtifact CreateManifest(
         string rootPath,
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         AnalyzeRequest request,
         DiscoveredSources sources,
         DateTimeOffset startedAt,
@@ -169,21 +166,22 @@ public static class ArtifactWriter
     }
 
     private static SummaryArtifact CreateSummary(
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         string reportedRootPath,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots)
     {
+        var summary = AnalysisSummary.Create(facts, reportedRootPath, metrics.Count);
         return new SummaryArtifact(
             ContractVersion.Current,
-            reportedRootPath,
-            facts.ProjectPaths.Count,
-            facts.Files.Select(file => file.FilePath).Distinct(StringComparer.Ordinal).Count(),
-            facts.Types.Count,
-            facts.Members.Count,
-            metrics.Count,
-            facts.Diagnostics.Count,
-            facts.Health,
+            summary.RootPath,
+            summary.ProjectCount,
+            summary.FileCount,
+            summary.TypeCount,
+            summary.MemberCount,
+            summary.MetricResultCount,
+            summary.DiagnosticCount,
+            summary.Health,
             hotspots);
     }
 

@@ -4,7 +4,7 @@
 analyzer that emits deterministic, machine-readable facts about C# codebases.
 
 ```bash
-dotnet tool install CodeMetricsToolkit.Tool --global --version 0.1.0
+dotnet tool install CodeMetricsToolkit.Tool --global --version 0.2.0
 codemetrics analyze /path/to/repository --output artifacts/codemetrics
 codemetrics validate-output artifacts/codemetrics
 ```

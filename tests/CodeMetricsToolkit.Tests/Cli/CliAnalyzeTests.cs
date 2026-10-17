@@ -120,6 +120,7 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal(6, MetricInt(metrics, projectBId, "lines_of_code"));
         Assert.Equal(9, MetricInt(metrics, "solution:root", "lines_of_code"));
         Assert.Equal(3, MetricInt(metrics, sharedFileId, "lines_of_code"));
+        Assert.Equal(1, MetricInt(metrics, sharedFileId, "type_count"));
         Assert.Equal(2, MetricInt(metrics, projectAId, "public_api_count"));
         Assert.Equal(2, MetricInt(metrics, projectBId, "public_api_count"));
         Assert.DoesNotContain(metrics, metric =>
@@ -227,12 +228,23 @@ public sealed partial class CliAnalyzeTests
         JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
         JsonElement[] graphEdges = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "edges");
         const string partialTypeId = "type:PartialTypesProject/T:PartialTypesProject.PartialOrder";
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
 
         JsonElement partialType = Assert.Single(graphNodes, node => HasPropertyValue(node, "id", partialTypeId));
         Assert.Equal(2, partialType.GetProperty("declarations").GetArrayLength());
+        Assert.Equal(9, MetricInt(metrics, partialTypeId, "member_count"));
         Assert.Equal(2, graphEdges.Count(edge =>
             HasPropertyValue(edge, "kind", "declares") &&
             HasPropertyValue(edge, "to", partialTypeId)));
+
+        foreach (JsonElement declaration in partialType.GetProperty("declarations").EnumerateArray())
+        {
+            var filePath = declaration.GetProperty("filePath").GetString()!;
+            JsonElement typeCount = Assert.Single(metrics, metric =>
+                HasPropertyValue(metric, "metricId", "type_count") &&
+                HasPropertyValue(metric, "filePath", filePath));
+            Assert.Equal(1, typeCount.GetProperty("numericValue").GetInt32());
+        }
     }
 
     [Fact]
@@ -473,10 +485,10 @@ public sealed partial class CliAnalyzeTests
             .Select(element => element.Clone())
             .ToArray();
 
-        JsonElement methodLength = Assert.Single(components, component => HasPropertyValue(component, "metricId", "member_length"));
+        JsonElement memberLength = Assert.Single(components, component => HasPropertyValue(component, "metricId", "member_length"));
         JsonElement cyclomatic = Assert.Single(components, component => HasPropertyValue(component, "metricId", "cyclomatic_complexity"));
-        Assert.Equal(0.15, methodLength.GetProperty("weight").GetDouble());
-        Assert.True(cyclomatic.GetProperty("weight").GetDouble() > methodLength.GetProperty("weight").GetDouble());
+        Assert.Equal(0.15, memberLength.GetProperty("weight").GetDouble());
+        Assert.True(cyclomatic.GetProperty("weight").GetDouble() > memberLength.GetProperty("weight").GetDouble());
         Assert.Contains(components, component => HasPropertyValue(component, "metricId", "diagnostic_count"));
     }
 }

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace CodeMetricsToolkit.Scoring;
 
 internal sealed record ScoringArtifacts(
@@ -43,5 +45,5 @@ internal sealed record ArtifactMetric(
     string? FilePath,
     IReadOnlyList<string> Tags)
 {
-    public string TagSignature => string.Join('\u001f', Tags);
+    public string TagSignature => JsonSerializer.Serialize(Tags);
 }

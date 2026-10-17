@@ -2,7 +2,7 @@ using CodeMetricsToolkit.Core;
 using CodeMetricsToolkit.Core.Reporting;
 using CodeMetricsToolkit.Core.Validation;
 using CodeMetricsToolkit.Tests.SchemaValidation;
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 
 namespace CodeMetricsToolkit.Tests.Reporting;
 

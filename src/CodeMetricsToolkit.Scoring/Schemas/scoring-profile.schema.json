@@ -11,7 +11,7 @@
     "version": {
       "$ref": "#/$defs/threePartVersion"
     },
-    "artifactContractVersion": { "const": "0.1.0" },
+    "artifactContractVersion": { "const": "0.2.0" },
     "allowedAnalysisModes": {
       "type": "array",
       "minItems": 1,
@@ -50,7 +50,7 @@
     "selectors": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Selectors apply to complete targets: every declaration path must match includeFilePaths and any excludeFilePaths match rejects the target. Non-empty path selectors require graph nodes with complete declaration paths; this is a stricter scoring precondition than the base 0.1.0 artifact schema.",
+      "description": "Selectors apply to complete source-linked targets: every declaration path must match includeFilePaths and any excludeFilePaths match rejects the target. Namespace nodes use their source type declaration paths; project targets have no source paths. Non-empty path selectors require graph nodes with complete declaration paths.",
       "properties": {
         "includeFilePaths": {
           "type": "array",
@@ -108,7 +108,7 @@
       "required": [ "operation", "targetKind", "thresholds", "outputs" ],
       "properties": {
         "operation": { "const": "thresholdDebt" },
-        "targetKind": { "enum": [ "file", "type", "member" ] },
+        "targetKind": { "enum": [ "file", "type", "member", "project", "namespace" ] },
         "thresholds": {
           "type": "array",
           "minItems": 1,

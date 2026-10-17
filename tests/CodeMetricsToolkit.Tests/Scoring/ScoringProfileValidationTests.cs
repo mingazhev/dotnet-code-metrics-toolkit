@@ -1,10 +1,11 @@
 using CodeMetricsToolkit.Scoring;
+using static CodeMetricsToolkit.Tests.Scoring.ScoringTestSupport;
 using Json.Schema;
 using System.Text.Json;
 
 namespace CodeMetricsToolkit.Tests.Scoring;
 
-public sealed partial class ScoringEngineTests
+public sealed class ScoringProfileValidationTests
 {
     [Fact]
     public async Task RejectsUnknownOperationBeforeReadingArtifacts()
@@ -59,7 +60,7 @@ public sealed partial class ScoringEngineTests
     public async Task RejectsUnsupportedArtifactContractInProfile()
     {
         var profileJson = ValidProfile().Replace(
-            "\"artifactContractVersion\": \"0.1.0\"",
+            "\"artifactContractVersion\": \"0.2.0\"",
             "\"artifactContractVersion\": \"9.9.9\"",
             StringComparison.Ordinal);
         await using Stream profile = ProfileStream(profileJson);
@@ -79,13 +80,13 @@ public sealed partial class ScoringEngineTests
             "src/A.cs",
             "cyclomatic_complexity",
             "1.0.0",
-            15).Replace("\"schemaVersion\":\"0.1.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
+            15).Replace("\"schemaVersion\":\"0.2.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
         var secondMetric = Metric(
             "member:a",
             "src/A.cs",
             "member_length",
             "1.0.0",
-            55).Replace("\"schemaVersion\":\"0.1.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
+            55).Replace("\"schemaVersion\":\"0.2.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
         using var artifacts = TestArtifacts.CreateWithOptions(
             analysisQuality: "trusted",
             trustedDiagnostics: true,
@@ -98,7 +99,7 @@ public sealed partial class ScoringEngineTests
             () => ScoringEngine.EvaluateAsync(artifacts.Path, profile));
 
         Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
-        Assert.Contains("profile requires artifactContractVersion '0.1.0'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("profile requires artifactContractVersion '0.2.0'", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -228,6 +229,82 @@ public sealed partial class ScoringEngineTests
 
         Assert.Equal(ScoringFailureKind.PreconditionsNotMet, exception.FailureKind);
         Assert.Contains("non-finite squaredGapSum", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DistinctTagSetsWithASeparatorAreNotDuplicateThresholds()
+    {
+        const string operation = """
+            {
+              "operation": "thresholdDebt",
+              "targetKind": "member",
+              "thresholds": [
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["left\u001fright"]
+                },
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["left", "right"]
+                }
+              ],
+              "outputs": {
+                "gapSum": "debt",
+                "squaredGapSum": "squared_debt",
+                "violatingTargetCount": "violating_targets",
+                "maxTargetGap": "max_target_gap"
+              }
+            }
+            """;
+        await using Stream profile = ProfileStream(Profile(operation + "," + WeightedOperation()));
+
+        ScoringException exception = await Assert.ThrowsAsync<ScoringException>(
+            () => ScoringEngine.EvaluateAsync("does-not-exist", profile));
+
+        Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
+        Assert.Contains("manifest.json", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReorderedDuplicateTagSetsRemainDuplicateThresholds()
+    {
+        const string operation = """
+            {
+              "operation": "thresholdDebt",
+              "targetKind": "member",
+              "thresholds": [
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["left", "right"]
+                },
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["right", "left"]
+                }
+              ],
+              "outputs": {
+                "gapSum": "debt",
+                "squaredGapSum": "squared_debt",
+                "violatingTargetCount": "violating_targets",
+                "maxTargetGap": "max_target_gap"
+              }
+            }
+            """;
+        await using Stream profile = ProfileStream(Profile(operation + "," + WeightedOperation()));
+
+        ScoringException exception = await Assert.ThrowsAsync<ScoringException>(
+            () => ScoringEngine.EvaluateAsync("does-not-exist", profile));
+
+        Assert.Equal(ScoringFailureKind.InvalidProfile, exception.FailureKind);
+        Assert.Contains("contains duplicate metric 'diagnostic_count@1.0.0[tags=left,right]'", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

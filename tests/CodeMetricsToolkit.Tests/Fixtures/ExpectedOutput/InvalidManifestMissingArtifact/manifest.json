@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "0.2.0",
   "tool": "CodeMetricsToolkit",
-  "toolVersion": "0.1.0",
+  "toolVersion": "0.2.0",
   "rootPath": "/repo",
   "startedAt": "2026-05-06T08:00:00Z",
   "completedAt": "2026-05-06T08:00:01Z",

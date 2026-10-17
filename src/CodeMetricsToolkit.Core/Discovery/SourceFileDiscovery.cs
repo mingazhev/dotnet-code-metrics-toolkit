@@ -1,3 +1,4 @@
+using CodeMetricsToolkit.Core.Contracts;
 namespace CodeMetricsToolkit.Core.Discovery;
 
 public static class SourceFileDiscovery
@@ -13,15 +14,6 @@ public static class SourceFileDiscovery
         RecurseSubdirectories = false,
         ReturnSpecialDirectories = false
     };
-
-    private static readonly string[] ExcludedDirectoryNames =
-    [
-        ".git",
-        ".vs",
-        "bin",
-        "obj",
-        "artifacts"
-    ];
 
     private static readonly string[] GeneratedFileSuffixes =
     [
@@ -489,7 +481,7 @@ public static class SourceFileDiscovery
 
     private static bool ShouldSkipDirectory(DirectoryInfo directory)
     {
-        return ExcludedDirectoryNames.Contains(directory.Name, StringComparer.OrdinalIgnoreCase);
+        return DiscoveryDirectoryPolicy.IsExcluded(directory.Name);
     }
 
     private static bool IsGeneratedFile(string fileName)

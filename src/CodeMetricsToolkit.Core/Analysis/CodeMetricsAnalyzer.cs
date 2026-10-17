@@ -1,7 +1,8 @@
+using CodeMetricsToolkit.Core.Contracts;
+using CodeMetricsToolkit.Core.Metrics;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Reporting;
-using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Core.Analysis;
 
@@ -40,7 +41,7 @@ public static class CodeMetricsAnalyzer
             MSBuildRegistration.RegistrationResult registration = request.SyntaxOnly
                 ? MSBuildRegistration.RegistrationResult.Available
                 : MSBuildRegistration.EnsureRegistered(sources.RootPath);
-            SyntaxAnalysisFacts facts = await SyntaxFactsCollector.CollectAsync(
+            AnalysisFacts facts = await AnalysisFactsCollector.CollectAsync(
                     sources,
                     useSemantic: !request.SyntaxOnly && registration.IsAvailable,
                     noRestore: request.NoRestore,
@@ -61,13 +62,18 @@ public static class CodeMetricsAnalyzer
                 };
             }
 
-            HotspotRanking hotspotRanking = HotspotRanker.Rank(facts, request.Top, cancellationToken);
-            MetricResultLine[] metrics = SyntaxMetricProjector.Project(facts, cancellationToken)
+            MetricResultLine[] metricRows = SyntaxMetricProjector.Project(facts, cancellationToken)
+                .Concat(DuplicationMetricProjector.Project(facts, cancellationToken))
                 .Concat(GraphMetricProjector.Project(facts, cancellationToken))
                 .Concat(SemanticMetricProjector.Project(facts, cancellationToken))
                 .Concat(DiagnosticMetricProjector.Project(facts, cancellationToken))
-                .Concat(hotspotRanking.Metrics)
                 .ToArray();
+            HotspotRanking hotspotRanking = HotspotRanker.Rank(
+                facts,
+                metricRows,
+                request.Top,
+                cancellationToken);
+            MetricResultLine[] metrics = metricRows.Concat(hotspotRanking.Metrics).ToArray();
             DateTimeOffset completedAt = DateTimeOffset.UtcNow;
 
             IReadOnlyList<string> publicationWarnings = await ArtifactWriter.WriteAsync(
@@ -78,7 +84,6 @@ public static class CodeMetricsAnalyzer
                 sources,
                 metrics,
                 hotspotRanking.Hotspots,
-                request.IncludeChunkText,
                 startedAt,
                 completedAt,
                 cancellationToken).ConfigureAwait(false);
@@ -98,17 +103,7 @@ public static class CodeMetricsAnalyzer
             {
                 OutputPath = outputPath,
                 Warnings = warnings,
-                Summary = new AnalysisSummary
-                {
-                    RootPath = reportedRootPath,
-                    ProjectCount = facts.ProjectPaths.Count,
-                    FileCount = facts.Files.Select(file => file.FilePath).Distinct(StringComparer.Ordinal).Count(),
-                    TypeCount = facts.Types.Count,
-                    MemberCount = facts.Members.Count,
-                    MetricResultCount = metrics.Length,
-                    DiagnosticCount = facts.Diagnostics.Count,
-                    Health = facts.Health
-                }
+                Summary = AnalysisSummary.Create(facts, reportedRootPath, metrics.Length)
             };
         }
         catch (Exception exception)

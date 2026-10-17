@@ -1,4 +1,4 @@
-namespace CodeMetricsToolkit.Abstractions;
+namespace CodeMetricsToolkit.Core.Contracts;
 
 public static class ArtifactNames
 {

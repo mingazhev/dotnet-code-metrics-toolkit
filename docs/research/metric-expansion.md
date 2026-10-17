@@ -1,6 +1,10 @@
 # Metric expansion research
 
-Status: P0-P2 core slice implemented, 2026-08-13.
+Historical proposal: P0-P2 core slice implemented, 2026-08-13.
+
+The baseline and recommendations below describe that iteration, not the current catalog.
+For the October cleanup and next metric families, see [cleanup-and-design-plan.md](cleanup-and-design-plan.md).
+Use `codemetrics list-metrics` for the supported catalog.
 
 This document evaluates metrics that can extend the toolkit without turning the
 collector into a quality policy engine. The recommendation is deliberately narrower
@@ -26,12 +30,12 @@ Ratios are useful only when their numerator and denominator are also emitted. A 
 without its components hides scale: 50% comments can mean one comment line in a two-line
 file or 5,000 comment lines in a mature library.
 
-## Current baseline
+## Historical baseline (`8e81221`)
 
 The baseline catalog contained 19 metrics over files, types, and members. The graph had
 project, file, type, and member nodes, with `contains`, `declares`, `inherits`,
-`implements`, `uses_type`, and `calls` edges. Only type dependency edges currently
-produce graph metrics; call edges are collected but not measured.
+`implements`, `uses_type`, and `calls` edges. At that baseline, only type dependency edges
+produced graph metrics; call edges were collected but not measured.
 
 A syntax-only self-analysis of commit `8e81221` produced:
 

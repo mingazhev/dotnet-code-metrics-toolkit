@@ -34,7 +34,6 @@ internal static class ArtifactSnapshotNormalizer
                     }
                 }
 
-                SortKnownArrays(jsonArray);
                 break;
         }
     }
@@ -72,36 +71,4 @@ internal static class ArtifactSnapshotNormalizer
         }
     }
 
-    private static void SortKnownArrays(JsonArray jsonArray)
-    {
-        JsonNode? first = jsonArray.FirstOrDefault();
-
-        if (first is not JsonObject firstObject)
-        {
-            return;
-        }
-
-        var sortProperty = firstObject.ContainsKey("id")
-            ? "id"
-            : firstObject.ContainsKey("targetId")
-                ? "targetId"
-                : null;
-
-        if (sortProperty is null)
-        {
-            return;
-        }
-
-        JsonNode?[] sorted = jsonArray
-            .OrderBy(node => node?[sortProperty]?.GetValue<string>(), StringComparer.Ordinal)
-            .Select(node => node?.DeepClone())
-            .ToArray();
-
-        jsonArray.Clear();
-
-        foreach (JsonNode? node in sorted)
-        {
-            jsonArray.Add(node);
-        }
-    }
 }

@@ -1,13 +1,18 @@
 using System.Globalization;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
-using CodeMetricsToolkit.Core.Validation;
 using Microsoft.CodeAnalysis;
 
 namespace CodeMetricsToolkit.Core.Syntax;
 
-internal static class AnalysisDiagnosticCollector
+internal sealed class AnalysisDiagnosticCollector
 {
+    private readonly List<AnalysisDiagnostic> _diagnostics = [];
+    private readonly Dictionary<string, int> _positions = new(StringComparer.Ordinal);
+
+    public IReadOnlyList<AnalysisDiagnostic> Diagnostics => _diagnostics;
+
     public static AnalysisDiagnostic FromSyntax(
         Diagnostic diagnostic,
         DiscoveredSourceFile sourceFile)
@@ -56,37 +61,25 @@ internal static class AnalysisDiagnosticCollector
         };
     }
 
-    public static void Add(
-        List<AnalysisDiagnostic> diagnostics,
-        HashSet<string> diagnosticKeys,
-        AnalysisDiagnostic diagnostic)
+    public void Add(AnalysisDiagnostic diagnostic)
     {
         var key = DiagnosticKey(diagnostic);
 
-        if (diagnosticKeys.Add(key))
+        if (_positions.TryGetValue(key, out var position))
         {
-            if (diagnostics.Count >= ValidationInputLimits.DefaultMaxNdjsonRecords)
-            {
-                throw new InvalidDataException(
-                    $"Analysis produced more than {ValidationInputLimits.DefaultMaxNdjsonRecords} diagnostics.");
-            }
-
-            diagnostics.Add(diagnostic);
+            AnalysisDiagnostic existing = _diagnostics[position];
+            _diagnostics[position] = existing with { Tags = MergeTags(existing.Tags, diagnostic.Tags) };
             return;
         }
 
-        for (var index = 0; index < diagnostics.Count; index++)
+        if (_diagnostics.Count >= ArtifactLimits.MaxRecords)
         {
-            AnalysisDiagnostic existing = diagnostics[index];
-            if (!string.Equals(DiagnosticKey(existing), key, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var tags = MergeTags(existing.Tags, diagnostic.Tags);
-            diagnostics[index] = existing with { Tags = tags };
-            return;
+            throw new InvalidDataException(
+                $"Analysis produced more than {ArtifactLimits.MaxRecords} diagnostics.");
         }
+
+        _positions.Add(key, _diagnostics.Count);
+        _diagnostics.Add(diagnostic);
     }
 
     private static List<string> CreateTags(Diagnostic diagnostic)

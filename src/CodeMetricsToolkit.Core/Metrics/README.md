@@ -110,6 +110,36 @@ token_line_count = distinct source lines containing C# syntax tokens
 
 Target kinds: `solution`, `project`, `file`, `type`.
 
+### duplicated_block_count@1.0.0, duplicated_line_count@1.0.0, and duplicated_line_ratio@1.0.0
+
+The duplication pass uses exact syntax-token identity: token kind and source text must
+match. It ignores trivia, including whitespace and comments, while preserving identifier
+spelling and literal text. It does not claim semantic or rename-equivalent clone matching.
+
+A qualifying occurrence is a window of 100 consecutive nonmissing C# tokens whose
+inclusive physical line span is at least 10 lines. Every counted window has a matching
+occurrence in another file or a same-file occurrence at least 100 tokens away. Overlapping
+qualifying token windows are merged within each file. Therefore
+`duplicated_block_count` counts merged regions, not clone pairs or clone groups.
+`duplicated_line_count` counts the union of physical lines intersecting those regions, so
+each line contributes at most once per file. `duplicated_line_ratio` is
+`duplicated_line_count / lines_of_code` and is omitted when the denominator is zero.
+
+Solution totals use unique physical file paths. Project totals follow project-file
+membership, so a linked physical file can contribute to each project that includes it
+while contributing once to the solution. Every file region also emits a tagged
+`duplicated_block_count=1` metric row. Its `startLine` and `endLine` identify the region;
+the deterministic `duplication_block:NNNNNN` tag distinguishes it from the untagged file
+aggregate and from other regions. Project and solution rows remain untagged aggregates.
+If a linked file is parsed differently by project-specific preprocessor symbols, the
+duplication result uses the first analyzed context, matching the existing per-file facts;
+it does not report separate conditional variants for each project. The line-ratio
+denominator uses that same canonical file's `lines_of_code` value.
+
+Analysis with duplication is bounded to 500,000 nonmissing tokens across unique physical
+source files, 500,000 candidate windows, and 20,000,000 work units. Exceeding a bound
+fails analysis with a clear error instead of emitting truncated or zero-valued results.
+
 ### line classification and ratios
 
 The file line pass builds two sets from Roslyn: lines containing syntax tokens and lines
@@ -170,6 +200,9 @@ type_count = number of type declarations in the file
 
 Target kind: `file`.
 
+Each partial declaration counts in its source file, including multiple declarations
+of the same logical type in one file. The graph still contains one node per logical type.
+
 ### member_count@1.0.0
 
 Formula:
@@ -190,9 +223,14 @@ This exposes the non-baseline numerator without adding one per member.
 
 ## aggregate member metrics
 
-These metrics project already-computed member facts onto file/type targets.
+These metrics project already-computed member facts onto file, type, project, and
+solution targets. The project population is selected by each member's project key;
+the solution population counts each semantic member target once. File populations use
+the member's primary source file, so a partial member is counted once.
 
 ```text
+max_member_length                 = max(member_length)
+p95_member_length                 = nearest-rank p95(member_length)
 max_member_cyclomatic_complexity = max(cyclomatic_complexity)
 p95_member_cyclomatic_complexity = nearest-rank p95(cyclomatic_complexity)
 max_member_cognitive_complexity  = max(cognitive_complexity)
@@ -200,13 +238,29 @@ p95_member_cognitive_complexity  = nearest-rank p95(cognitive_complexity)
 max_member_nesting_depth         = max(nesting_depth)
 ```
 
-Target kinds: `file`, `type`.
+The type-only `weighted_member_complexity` aggregate is:
 
-For targets with no contained members, aggregate values are `0`.
+```text
+weighted_member_complexity = sum(cyclomatic_complexity for contained logical members)
+```
+
+Project/solution type-size distributions use one `lines_of_code` value per logical
+type target:
+
+```text
+max_type_lines_of_code = max(lines_of_code)
+p95_type_lines_of_code = nearest-rank p95(lines_of_code)
+```
+
+For project type populations, each type's project key determines ownership. The
+solution population counts each semantic type target once; a partial type contributes
+one logical type value, whose existing `lines_of_code` metric includes its declarations.
+
+For targets with no contained members or types, aggregate values are `0`.
 
 ## dependency metrics
 
-### outgoing_type_dependency_count@1.0.0
+### outgoing_type_dependency_count@1.1.0
 
 Formula:
 
@@ -215,10 +269,14 @@ outgoing_type_dependency_count =
   count(distinct internal target types reached by inherits, implements, uses_type)
 ```
 
-`uses_type` edges are member-to-type edges. For this metric they are attributed
-to the containing type of the member.
+`uses_type` edges come from both member declarations and type declarations. Member
+edges are attributed to the containing type; type-declaration edges are attributed to
+their source type. Type-declaration usage includes referenced field and signature types,
+generic arguments, attributes, and resolved static member use.
+These six existing type-dependency metrics use version `1.1.0` because their source
+population now includes type-declaration edges; their count and SCC formulas are unchanged.
 
-### incoming_type_dependency_count@1.0.0
+### incoming_type_dependency_count@1.1.0
 
 Formula:
 
@@ -227,7 +285,7 @@ incoming_type_dependency_count =
   count(distinct internal source types depending on the target type)
 ```
 
-### dependency_cycle_membership@1.0.0
+### dependency_cycle_membership@1.1.0
 
 Formula:
 
@@ -238,20 +296,62 @@ dependency_cycle_membership = 1 if target type belongs to a type dependency SCC,
 The MVP reports strongly-connected-component membership, not the exact count of
 all simple cycles in the graph.
 
-### dependency_component_size@1.0.0
+### dependency_component_size@1.1.0
 
 ```text
 dependency_component_size = size(type dependency SCC) when cyclic, otherwise 0
 ```
 
-### transitive dependency metrics
+### transitive_type_dependency_count@1.1.0
 
 ```text
 transitive_type_dependency_count = distinct internal types reachable from target
+```
+
+### transitive_type_dependent_count@1.1.0
+
+```text
 transitive_type_dependent_count = distinct internal types that can reach target
 ```
 
 The target itself is excluded, including when it belongs to a cycle.
+
+### project dependency metrics
+
+```text
+outgoing_project_dependency_count = distinct analyzed projects directly referenced by the project
+incoming_project_dependency_count = distinct analyzed projects that directly reference the project
+project_dependency_cycle_membership = 1 when the project belongs to a direct-reference SCC, else 0
+project_dependency_component_size = size of that cyclic SCC, or 0 outside a cycle
+```
+
+Only declared project references with both endpoints in the successful semantic
+workspace are included. Package, assembly, and source-level type references do not add
+project edges. Cycle values describe strongly connected components, not a count of
+simple cycles.
+
+### namespace dependency metrics
+
+Namespaces are identified within a project, including its global namespace. Their
+dependency graph aggregates internal type dependency edges and excludes dependencies
+within the same namespace:
+
+```text
+outgoing_namespace_dependency_count = distinct other analyzed namespaces reached by internal type edges
+incoming_namespace_dependency_count = distinct other analyzed namespaces with incoming internal type edges
+namespace_dependency_cycle_membership = 1 when the namespace belongs to a dependency SCC, else 0
+namespace_dependency_component_size = size of that cyclic SCC, or 0 outside a cycle
+```
+
+Type usage edges include declarations such as fields, signatures, generic arguments,
+attributes, and resolved static member use. External types are excluded from the internal
+dependency graph. Nested types remain assigned to their lexical namespace; they do not
+create additional namespace nodes. Namespace metrics and all eight project/namespace
+dependency metrics require a trusted semantic analysis.
+
+Namespace graph nodes use the project path as primary metadata and carry source
+declaration spans separately. Consumers selecting namespaces by source file must use
+those declarations.
 
 ## call graph metrics
 
@@ -269,8 +369,7 @@ The static call graph contains explicit invocations and object construction reso
 source members. It is not complete for reflection, `dynamic`, delegates, framework
 callbacks, dependency injection, generated dispatch, or external members.
 
-New graph metrics are emitted only for a trusted semantic analysis. The three original
-type dependency metrics retain their legacy best-effort behavior for compatibility.
+All graph metrics are emitted only for a trusted semantic analysis.
 
 ## semantic symbol metrics
 
@@ -366,7 +465,7 @@ is `true`. If restore or MSBuild project loading fails, compiler diagnostics are
 not treated as code-quality metrics because they may reflect a broken analysis
 environment instead of broken source code.
 
-## hotspot_rank@1.0.0
+## hotspot_rank@2.0.0
 
 `hotspot_rank` is a built-in, opinionated navigation heuristic. It is deterministic
 and explainable, but it is not a policy-free fact or a universal quality objective.
@@ -377,7 +476,10 @@ by target kind and target id.
 
 Diagnostic components are included only when
 `summary.json.analysisHealth.diagnosticsIncludedInHotspotRank` is `true`.
-Otherwise the ranker re-normalizes the remaining component weights.
+Components are read from the emitted metric rows. If a component is unavailable,
+the ranker excludes it and normalizes the weights of the remaining components.
+This includes trusted graph metrics during syntax-only or degraded analysis; an
+unavailable dependency metric is not treated as a measured zero.
 
 Member weights:
 

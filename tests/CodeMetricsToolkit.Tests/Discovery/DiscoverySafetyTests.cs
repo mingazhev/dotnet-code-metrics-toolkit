@@ -1,7 +1,7 @@
+using CodeMetricsToolkit.Core.Analysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Reporting;
-using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Tests.Discovery;
 
@@ -91,6 +91,47 @@ public sealed class DiscoverySafetyTests
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
         Assert.Equal(privateMode, File.GetUnixFileMode(isolated.IsolatedRootPath));
         Assert.Equal(privateMode, File.GetUnixFileMode(Path.Combine(isolated.IsolatedRootPath, "child")));
+    }
+
+    [Fact]
+    public void IsolatedCopyDoesNotCopyItsOwnTemporaryRootWhenTempDirectoryIsInsideInput()
+    {
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("input");
+        var temporaryDirectory = Path.Combine(input, "scratch");
+        Directory.CreateDirectory(temporaryDirectory);
+        File.WriteAllText(Path.Combine(input, "Included.cs"), "class Included { }");
+        File.WriteAllText(Path.Combine(temporaryDirectory, "Existing.txt"), "keep");
+
+        using IsolatedInput isolated = InputIsolator.CopyToTemporaryDirectory(
+            input,
+            InputIsolationLimits.Default,
+            temporaryDirectory,
+            CancellationToken.None);
+
+        Assert.Equal("class Included { }", File.ReadAllText(Path.Combine(isolated.IsolatedRootPath, "Included.cs")));
+        Assert.Equal(
+            "keep",
+            File.ReadAllText(Path.Combine(isolated.IsolatedRootPath, "scratch", "Existing.txt")));
+        Assert.Empty(Directory.EnumerateDirectories(Path.Combine(isolated.IsolatedRootPath, "scratch")));
+    }
+
+    [Fact]
+    public void IsolatedCopyCleansTemporaryRootAfterFailureWithTempDirectoryInsideInput()
+    {
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("input");
+        var temporaryDirectory = Path.Combine(input, "scratch");
+        Directory.CreateDirectory(temporaryDirectory);
+        File.WriteAllText(Path.Combine(input, "TooLarge.cs"), "12345");
+
+        Assert.Throws<InvalidDataException>(() => InputIsolator.CopyToTemporaryDirectory(
+            input,
+            Limits(totalBytes: 4, fileBytes: 4),
+            temporaryDirectory,
+            CancellationToken.None));
+
+        Assert.Empty(Directory.EnumerateDirectories(temporaryDirectory));
     }
 
     [Fact]
@@ -371,12 +412,12 @@ public sealed class DiscoverySafetyTests
 
         DiscoveredSources firstSources = SourceFileDiscovery.Discover(firstRoot, includeGeneratedCode: false);
         DiscoveredSources secondSources = SourceFileDiscovery.Discover(secondRoot, includeGeneratedCode: false);
-        SyntaxAnalysisFacts firstFacts = await SyntaxFactsCollector.CollectAsync(
+        AnalysisFacts firstFacts = await AnalysisFactsCollector.CollectAsync(
             firstSources,
             useSemantic: false,
             noRestore: true,
             CancellationToken.None);
-        SyntaxAnalysisFacts secondFacts = await SyntaxFactsCollector.CollectAsync(
+        AnalysisFacts secondFacts = await AnalysisFactsCollector.CollectAsync(
             secondSources,
             useSemantic: false,
             noRestore: true,

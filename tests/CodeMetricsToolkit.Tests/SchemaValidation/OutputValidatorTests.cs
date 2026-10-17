@@ -61,6 +61,23 @@ public sealed class OutputValidatorTests
     }
 
     [Fact]
+    public void DuplicateMetricTagsAreRejected()
+    {
+        using var output = TemporaryOutput.Create();
+        UpdateFirstNdjsonRecord(
+            output.File("metrics.ndjson"),
+            root => root["tags"] = new JsonArray("compiler", "compiler"));
+
+        OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("metrics.ndjson:1 does not conform", StringComparison.Ordinal) &&
+                error.Contains("metric-result.schema.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task RuntimeValidationIsSafeAcrossParallelCalls()
     {
         using var output = TemporaryOutput.Create();
@@ -302,13 +319,13 @@ public sealed class OutputValidatorTests
     public void ArtifactSchemaVersionMismatchIsRejected()
     {
         using var output = TemporaryOutput.Create();
-        UpdateJson(output.File("summary.json"), root => root["schemaVersion"] = "0.2.0");
+        UpdateJson(output.File("summary.json"), root => root["schemaVersion"] = "0.3.0");
 
         OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
 
         Assert.False(result.IsValid);
         Assert.Contains(
-            "summary.json schemaVersion '0.2.0' does not match manifest schemaVersion '0.1.0'.",
+            "summary.json schemaVersion '0.3.0' does not match manifest schemaVersion '0.2.0'.",
             result.Errors);
     }
 

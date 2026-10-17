@@ -56,3 +56,13 @@ before comparing diagnostic metrics across runs.
 `calls` edges are best-effort Roslyn symbol edges. Dynamic dispatch, reflection,
 source generators and unresolved external symbols are not modeled precisely in
 the MVP.
+
+## Duplication
+
+Duplication compares exact token kinds and source text. Identifier renames and equivalent
+expressions are not normalized. Linked files with different preprocessor configurations
+use the same first analyzed context as the other physical-file metrics.
+
+The collector has fixed token, window and work budgets; exceeding one fails the analysis.
+It does not publish a partial count or silently skip duplication on large inputs. See the
+[metric formulas](../src/CodeMetricsToolkit.Core/Metrics/README.md) for thresholds and limits.

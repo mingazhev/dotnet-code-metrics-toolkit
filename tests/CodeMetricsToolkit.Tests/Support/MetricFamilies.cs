@@ -28,7 +28,12 @@ internal static class MetricFamilies
         "p95_member_cyclomatic_complexity",
         "max_member_cognitive_complexity",
         "p95_member_cognitive_complexity",
-        "max_member_nesting_depth"
+        "max_member_nesting_depth",
+        "weighted_member_complexity",
+        "max_member_length",
+        "p95_member_length",
+        "max_type_lines_of_code",
+        "p95_type_lines_of_code"
     };
 
     public static IReadOnlySet<string> Graph { get; } = new HashSet<string>(StringComparer.Ordinal)
@@ -41,7 +46,22 @@ internal static class MetricFamilies
         "recursive_component_size",
         "dependency_component_size",
         "transitive_type_dependency_count",
-        "transitive_type_dependent_count"
+        "transitive_type_dependent_count",
+        "outgoing_project_dependency_count",
+        "incoming_project_dependency_count",
+        "project_dependency_cycle_membership",
+        "project_dependency_component_size",
+        "outgoing_namespace_dependency_count",
+        "incoming_namespace_dependency_count",
+        "namespace_dependency_cycle_membership",
+        "namespace_dependency_component_size"
+    };
+
+    public static IReadOnlySet<string> Duplication { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "duplicated_block_count",
+        "duplicated_line_count",
+        "duplicated_line_ratio"
     };
 
     public static IReadOnlySet<string> Semantic { get; } = new HashSet<string>(StringComparer.Ordinal)
@@ -69,6 +89,7 @@ internal static class MetricFamilies
         new HashSet<string>(StringComparer.Ordinal) { "hotspot_rank" };
 
     public static IReadOnlySet<string> All { get; } = Syntax
+        .Concat(Duplication)
         .Concat(Graph)
         .Concat(Semantic)
         .Concat(Diagnostics)
