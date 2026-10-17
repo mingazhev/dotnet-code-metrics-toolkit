@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Security.Cryptography;
 using System.Text;
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Analysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
@@ -27,7 +27,7 @@ public static class ArtifactWriter
 
     public static Task<IReadOnlyList<string>> WriteAsync(
         string outputPath,
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         string reportedRootPath,
         AnalyzeRequest request,
         DiscoveredSources sources,
@@ -63,7 +63,7 @@ public static class ArtifactWriter
 
     private static async Task WriteArtifactsAsync(
         string outputPath,
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         string reportedRootPath,
         AnalyzeRequest request,
         DiscoveredSources sources,
@@ -113,7 +113,7 @@ public static class ArtifactWriter
 
     private static ManifestArtifact CreateManifest(
         string rootPath,
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         AnalyzeRequest request,
         DiscoveredSources sources,
         DateTimeOffset startedAt,
@@ -166,7 +166,7 @@ public static class ArtifactWriter
     }
 
     private static SummaryArtifact CreateSummary(
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         string reportedRootPath,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots)

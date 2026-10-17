@@ -1,7 +1,7 @@
+using CodeMetricsToolkit.Core.Metrics;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Reporting;
-using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Core.Analysis;
 
@@ -40,7 +40,7 @@ public static class CodeMetricsAnalyzer
             MSBuildRegistration.RegistrationResult registration = request.SyntaxOnly
                 ? MSBuildRegistration.RegistrationResult.Available
                 : MSBuildRegistration.EnsureRegistered(sources.RootPath);
-            SyntaxAnalysisFacts facts = await SyntaxFactsCollector.CollectAsync(
+            AnalysisFacts facts = await AnalysisFactsCollector.CollectAsync(
                     sources,
                     useSemantic: !request.SyntaxOnly && registration.IsAvailable,
                     noRestore: request.NoRestore,

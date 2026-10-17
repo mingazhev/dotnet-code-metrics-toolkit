@@ -1,7 +1,7 @@
+using CodeMetricsToolkit.Core.Analysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Reporting;
-using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Tests.Discovery;
 
@@ -412,12 +412,12 @@ public sealed class DiscoverySafetyTests
 
         DiscoveredSources firstSources = SourceFileDiscovery.Discover(firstRoot, includeGeneratedCode: false);
         DiscoveredSources secondSources = SourceFileDiscovery.Discover(secondRoot, includeGeneratedCode: false);
-        SyntaxAnalysisFacts firstFacts = await SyntaxFactsCollector.CollectAsync(
+        AnalysisFacts firstFacts = await AnalysisFactsCollector.CollectAsync(
             firstSources,
             useSemantic: false,
             noRestore: true,
             CancellationToken.None);
-        SyntaxAnalysisFacts secondFacts = await SyntaxFactsCollector.CollectAsync(
+        AnalysisFacts secondFacts = await AnalysisFactsCollector.CollectAsync(
             secondSources,
             useSemantic: false,
             noRestore: true,

@@ -204,4 +204,36 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal("<timestamp>", normalized.RootElement.GetProperty("startedAt").GetString());
         Assert.Equal(0, normalized.RootElement.GetProperty("durationMs").GetInt32());
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepeatedAnalysisPreservesValuesIdentitiesAndRankingOrder(bool syntaxOnly)
+    {
+        using var first = TemporaryDirectory.Create();
+        using var second = TemporaryDirectory.Create();
+        var projectPath = TestAssetPath("ExpandedMetricsProject");
+        foreach (var outputPath in new[] { first.Path, second.Path })
+        {
+            string[] arguments = syntaxOnly
+                ? ["analyze", projectPath, "--output", outputPath, "--syntax-only"]
+                : ["analyze", projectPath, "--output", outputPath];
+            Assert.Equal(0, await RunCliAsync(arguments));
+        }
+
+        foreach (var artifact in new[] { "manifest.json", "summary.json", "graph.json" })
+        {
+            Assert.Equal(
+                ArtifactSnapshotNormalizer.NormalizeJsonFile(Path.Combine(first.Path, artifact)),
+                ArtifactSnapshotNormalizer.NormalizeJsonFile(Path.Combine(second.Path, artifact)));
+        }
+
+        foreach (var artifact in new[] { "metrics.ndjson", "chunks.ndjson", "diagnostics.ndjson" })
+        {
+            Assert.Equal(
+                await File.ReadAllTextAsync(Path.Combine(first.Path, artifact)),
+                await File.ReadAllTextAsync(Path.Combine(second.Path, artifact)));
+        }
+    }
+
 }

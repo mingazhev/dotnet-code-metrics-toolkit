@@ -1,5 +1,5 @@
 using System.Globalization;
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using Microsoft.CodeAnalysis;

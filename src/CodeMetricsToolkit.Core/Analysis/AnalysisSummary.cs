@@ -4,7 +4,7 @@ using CodeMetricsToolkit.Core.Facts;
 
 public sealed record AnalysisSummary
 {
-    internal static AnalysisSummary Create(SyntaxAnalysisFacts facts, string rootPath, int metricResultCount)
+    internal static AnalysisSummary Create(AnalysisFacts facts, string rootPath, int metricResultCount)
     {
         return new AnalysisSummary
         {

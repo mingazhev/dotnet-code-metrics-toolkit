@@ -1,14 +1,13 @@
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
-using CodeMetricsToolkit.Core.Syntax;
 
 namespace CodeMetricsToolkit.Core.Reporting;
 
 public static class GraphProjector
 {
     public static GraphArtifact Project(
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(facts);
@@ -71,7 +70,7 @@ public static class GraphProjector
         };
     }
 
-    private static IEnumerable<GraphEdgeLine> CreateSolutionProjectEdges(SyntaxAnalysisFacts facts)
+    private static IEnumerable<GraphEdgeLine> CreateSolutionProjectEdges(AnalysisFacts facts)
     {
         return facts.ProjectPaths.Select(projectPath =>
             new GraphEdgeLine(
@@ -81,7 +80,7 @@ public static class GraphProjector
                 "exact"));
     }
 
-    private static IEnumerable<GraphEdgeLine> CreateProjectFileEdges(SyntaxAnalysisFacts facts)
+    private static IEnumerable<GraphEdgeLine> CreateProjectFileEdges(AnalysisFacts facts)
     {
         foreach (var projectPath in facts.ProjectPaths)
         {

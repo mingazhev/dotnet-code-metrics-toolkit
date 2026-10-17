@@ -1,5 +1,5 @@
 using System.Text.Json;
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 
 namespace CodeMetricsToolkit.Core.Validation;
 

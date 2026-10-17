@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Facts;
 using Microsoft.CodeAnalysis.Text;
 
@@ -9,7 +9,7 @@ namespace CodeMetricsToolkit.Core.Reporting;
 public static class ChunkProjector
 {
     public static IReadOnlyList<ChunkLine> Project(
-        SyntaxAnalysisFacts facts,
+        AnalysisFacts facts,
         bool includeText,
         CancellationToken cancellationToken = default)
     {

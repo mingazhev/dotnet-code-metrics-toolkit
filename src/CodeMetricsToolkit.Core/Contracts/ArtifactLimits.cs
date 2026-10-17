@@ -1,4 +1,4 @@
-namespace CodeMetricsToolkit.Abstractions;
+namespace CodeMetricsToolkit.Core.Contracts;
 
 internal static class ArtifactLimits
 {

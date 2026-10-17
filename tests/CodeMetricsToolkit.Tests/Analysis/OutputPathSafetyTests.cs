@@ -1,4 +1,4 @@
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core;
 using CodeMetricsToolkit.Core.Analysis;
 

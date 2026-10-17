@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.Json;
-using CodeMetricsToolkit.Abstractions;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Discovery;
 
 namespace CodeMetricsToolkit.Core.Validation;

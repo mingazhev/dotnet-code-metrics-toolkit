@@ -1,7 +1,7 @@
+using CodeMetricsToolkit.Core.Analysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Reporting;
-using CodeMetricsToolkit.Core.Syntax;
 using CodeMetricsToolkit.Tests.Support;
 
 namespace CodeMetricsToolkit.Tests.Reporting;
@@ -20,7 +20,7 @@ public sealed class ChunkProjectorTests
         DiscoveredSources sources = SourceFileDiscovery.Discover(
             directory.Path,
             includeGeneratedCode: false);
-        SyntaxAnalysisFacts facts = await SyntaxFactsCollector.CollectAsync(
+        AnalysisFacts facts = await AnalysisFactsCollector.CollectAsync(
             sources,
             useSemantic: false,
             noRestore: true,
@@ -55,7 +55,7 @@ public sealed class ChunkProjectorTests
                 startLine: 3,
                 endLine: 3))
             .ToArray();
-        SyntaxAnalysisFacts facts = TestFacts.Analysis(
+        AnalysisFacts facts = TestFacts.Analysis(
             files: [file],
             types: [type],
             members: members,
