@@ -131,6 +131,10 @@ while contributing once to the solution. Every file region also emits a tagged
 `duplicated_block_count=1` metric row. Its `startLine` and `endLine` identify the region;
 the deterministic `duplication_block:NNNNNN` tag distinguishes it from the untagged file
 aggregate and from other regions. Project and solution rows remain untagged aggregates.
+If a linked file is parsed differently by project-specific preprocessor symbols, the
+duplication result uses the first analyzed context, matching the existing per-file facts;
+it does not report separate conditional variants for each project. The line-ratio
+denominator uses that same canonical file's `lines_of_code` value.
 
 Analysis with duplication is bounded to 500,000 nonmissing tokens across unique physical
 source files, 500,000 candidate windows, and 20,000,000 work units. Exceeding a bound

@@ -147,10 +147,7 @@ internal static class DuplicationFactsCollector
     {
         SourceFileContext[] uniqueSources = sourceFiles
             .GroupBy(context => context.SourceFile.RelativePath, StringComparer.Ordinal)
-            .Select(group => group
-                .OrderBy(context => context.SourceFile.ProjectKey, StringComparer.Ordinal)
-                .ThenBy(context => context.SourceFile.FullPath, StringComparer.Ordinal)
-                .First())
+            .Select(group => group.First())
             .OrderBy(context => context.SourceFile.RelativePath, StringComparer.Ordinal)
             .ToArray();
         var files = new List<FileTokenData>(uniqueSources.Length);

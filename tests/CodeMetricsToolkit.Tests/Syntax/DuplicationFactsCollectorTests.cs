@@ -143,6 +143,44 @@ public sealed class DuplicationFactsCollectorTests
     }
 
     [Fact]
+    public void CollectUsesFirstContextForLinkedFileWhenItsProjectKeySortsLater()
+    {
+        var expectedBody = Declarations(25);
+        var alternateBody = Declarations(25, changedAt: 10, changedToken: "identifier");
+        var sharedSource = $"#if FIRST_CONTEXT\n{expectedBody}\n#else\n{alternateBody}\n#endif";
+        SourceFileContext firstContext = Parse(
+            "Shared.cs",
+            sharedSource,
+            "ZProject.csproj",
+            "f000000000000000",
+            ["FIRST_CONTEXT"]);
+        SourceFileContext secondContext = Parse(
+            "Shared.cs",
+            sharedSource,
+            "AProject.csproj",
+            "0000000000000001");
+        SourceFileContext matchingFile = Parse("Other.cs", expectedBody);
+
+        Assert.Equal(firstContext.SourceText.ToString(), secondContext.SourceText.ToString());
+        Assert.NotEqual(
+            string.Join("|", firstContext.Root.DescendantTokens().Select(token => token.Text)),
+            string.Join("|", secondContext.Root.DescendantTokens().Select(token => token.Text)));
+        Assert.True(StringComparer.Ordinal.Compare(
+            firstContext.SourceFile.ProjectKey,
+            secondContext.SourceFile.ProjectKey) > 0);
+
+        DuplicationFacts facts = DuplicationFactsCollector.Collect(
+            [firstContext, secondContext, matchingFile],
+            CancellationToken.None);
+
+        DuplicationFileFacts sharedFile = Assert.Single(facts.Files, file => file.FilePath == "Shared.cs");
+        DuplicationRegionFacts region = Assert.Single(sharedFile.Regions);
+        Assert.Equal((2, 26), (region.StartLine, region.EndLine));
+        Assert.Equal(25, sharedFile.DuplicatedLineCount);
+        Assert.Equal(2, facts.Files.Count(file => file.Regions.Count > 0));
+    }
+
+    [Fact]
     public void CollectObservesCancellation()
     {
         using var cancellation = new CancellationTokenSource();
@@ -224,17 +262,22 @@ public sealed class DuplicationFactsCollectorTests
             statements.Chunk(statementsPerLine).Select(line => string.Join(" ", line)));
     }
 
-    private static SourceFileContext Parse(string relativePath, string source)
+    private static SourceFileContext Parse(
+        string relativePath,
+        string source,
+        string projectPath = "Sample.csproj",
+        string projectKey = "sample-project",
+        IEnumerable<string>? preprocessorSymbols = null)
     {
         var fullPath = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "duplication-tests", relativePath));
         var text = SourceText.From(source);
         SyntaxTree tree = CSharpSyntaxTree.ParseText(
             text,
-            new CSharpParseOptions(LanguageVersion.CSharp14),
+            new CSharpParseOptions(LanguageVersion.CSharp14, preprocessorSymbols: preprocessorSymbols),
             fullPath);
 
         return new SourceFileContext(
-            new DiscoveredSourceFile(fullPath, relativePath, "Sample.csproj", "sample-project"),
+            new DiscoveredSourceFile(fullPath, relativePath, projectPath, projectKey),
             text,
             tree,
             tree.GetRoot());
