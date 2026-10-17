@@ -26,6 +26,14 @@ internal static class DuplicationMetricProjector
             .Select(group => group.OrderBy(file => file.TargetId, StringComparer.Ordinal).First())
             .OrderBy(file => file.FilePath, StringComparer.Ordinal)
             .ToArray();
+        Dictionary<string, FileFacts> uniqueFilesByPath = uniqueFiles
+            .ToDictionary(file => file.FilePath, StringComparer.Ordinal);
+        var filePathsByProject = facts.GetProjectFileMemberships()
+            .GroupBy(membership => membership.ProjectKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(membership => membership.FilePath).ToHashSet(StringComparer.Ordinal),
+                StringComparer.Ordinal);
         IReadOnlyDictionary<string, DuplicationFileFacts> duplicationByPath =
             facts.Duplication.Files
             .GroupBy(file => file.FilePath, StringComparer.Ordinal)
@@ -47,10 +55,11 @@ internal static class DuplicationMetricProjector
         {
             cancellationToken.ThrowIfCancellationRequested();
             var projectKey = ProjectIdentity.Key(projectPath);
-            var projectFiles = facts.GetProjectFileMemberships()
-                .Where(membership => membership.ProjectKey == projectKey)
-                .Select(membership => membership.FilePath)
-                .ToHashSet(StringComparer.Ordinal);
+            FileFacts[] projectFiles = filePathsByProject.GetValueOrDefault(projectKey, [])
+                .Where(uniqueFilesByPath.ContainsKey)
+                .Select(filePath => uniqueFilesByPath[filePath])
+                .OrderBy(file => file.FilePath, StringComparer.Ordinal)
+                .ToArray();
             AddScopeMetrics(
                 metrics,
                 "project",
@@ -59,7 +68,7 @@ internal static class DuplicationMetricProjector
                 projectPath,
                 1,
                 1,
-                uniqueFiles.Where(file => projectFiles.Contains(file.FilePath)).ToArray(),
+                projectFiles,
                 duplicationByPath,
                 cancellationToken);
         }
