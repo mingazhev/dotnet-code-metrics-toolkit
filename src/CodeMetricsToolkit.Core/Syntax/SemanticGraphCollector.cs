@@ -123,8 +123,8 @@ internal static class SemanticGraphCollector
             .GroupBy(pair => pair.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.Ordinal);
 
-        int existingEdgeCount = edges.Count;
-        for (int edgeIndex = 0; edgeIndex < existingEdgeCount; edgeIndex++)
+        var existingEdgeCount = edges.Count;
+        for (var edgeIndex = 0; edgeIndex < existingEdgeCount; edgeIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             GraphEdgeFacts edge = edges[edgeIndex];

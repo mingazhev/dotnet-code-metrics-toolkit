@@ -41,7 +41,7 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal(0, listExitCode);
         Assert.Equal(0, explainExitCode);
         Assert.Equal(
-            53,
+            66,
             listOutput.ToString().Split(
                 Environment.NewLine,
                 StringSplitOptions.RemoveEmptyEntries).Length);
@@ -50,6 +50,9 @@ public sealed partial class CliAnalyzeTests
         Assert.Contains("duplicated_block_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("duplicated_line_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("duplicated_line_ratio@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("outgoing_type_dependency_count@1.1.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("outgoing_namespace_dependency_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("weighted_member_complexity@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("Formula: number of diagnostics whose span overlaps the target", explainOutput.ToString(), StringComparison.Ordinal);
     }
 
