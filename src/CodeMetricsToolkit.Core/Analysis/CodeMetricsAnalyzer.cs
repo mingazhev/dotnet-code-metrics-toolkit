@@ -78,7 +78,6 @@ public static class CodeMetricsAnalyzer
                 sources,
                 metrics,
                 hotspotRanking.Hotspots,
-                request.IncludeChunkText,
                 startedAt,
                 completedAt,
                 cancellationToken).ConfigureAwait(false);
@@ -98,17 +97,7 @@ public static class CodeMetricsAnalyzer
             {
                 OutputPath = outputPath,
                 Warnings = warnings,
-                Summary = new AnalysisSummary
-                {
-                    RootPath = reportedRootPath,
-                    ProjectCount = facts.ProjectPaths.Count,
-                    FileCount = facts.Files.Select(file => file.FilePath).Distinct(StringComparer.Ordinal).Count(),
-                    TypeCount = facts.Types.Count,
-                    MemberCount = facts.Members.Count,
-                    MetricResultCount = metrics.Length,
-                    DiagnosticCount = facts.Diagnostics.Count,
-                    Health = facts.Health
-                }
+                Summary = AnalysisSummary.Create(facts, reportedRootPath, metrics.Length)
             };
         }
         catch (Exception exception)

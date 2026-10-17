@@ -1,4 +1,5 @@
 using System.Text;
+using CodeMetricsToolkit.Abstractions;
 
 namespace CodeMetricsToolkit.Core.Validation;
 
@@ -14,7 +15,7 @@ internal sealed record ValidationInputLimits(
     public const long DefaultMaxNdjsonArtifactBytes = 1024L * 1024 * 1024;
     public const int DefaultMaxNdjsonLineCharacters = 8 * 1024 * 1024;
     public const int DefaultMaxNdjsonLines = 1_000_000;
-    public const int DefaultMaxNdjsonRecords = 1_000_000;
+    public const int DefaultMaxNdjsonRecords = ArtifactLimits.MaxRecords;
     public const int DefaultMaxJsonDepth = 64;
 
     public static ValidationInputLimits Default { get; } = new(

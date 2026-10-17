@@ -33,7 +33,6 @@ public static class ArtifactWriter
         DiscoveredSources sources,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots,
-        bool includeChunkText,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken)
@@ -56,7 +55,6 @@ public static class ArtifactWriter
                 sources,
                 metrics,
                 hotspots,
-                includeChunkText,
                 startedAt,
                 completedAt,
                 token),
@@ -71,7 +69,6 @@ public static class ArtifactWriter
         DiscoveredSources sources,
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots,
-        bool includeChunkText,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken)
@@ -93,7 +90,7 @@ public static class ArtifactWriter
 
         await WriteNdjsonAsync(
             Path.Combine(outputPath, ArtifactNames.Chunks),
-            ChunkProjector.Project(facts, includeChunkText, cancellationToken),
+            ChunkProjector.Project(facts, request.IncludeChunkText, cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
         await WriteNdjsonAsync(
@@ -174,16 +171,17 @@ public static class ArtifactWriter
         IReadOnlyList<MetricResultLine> metrics,
         IReadOnlyList<HotspotLine> hotspots)
     {
+        var summary = AnalysisSummary.Create(facts, reportedRootPath, metrics.Count);
         return new SummaryArtifact(
             ContractVersion.Current,
-            reportedRootPath,
-            facts.ProjectPaths.Count,
-            facts.Files.Select(file => file.FilePath).Distinct(StringComparer.Ordinal).Count(),
-            facts.Types.Count,
-            facts.Members.Count,
-            metrics.Count,
-            facts.Diagnostics.Count,
-            facts.Health,
+            summary.RootPath,
+            summary.ProjectCount,
+            summary.FileCount,
+            summary.TypeCount,
+            summary.MemberCount,
+            summary.MetricResultCount,
+            summary.DiagnosticCount,
+            summary.Health,
             hotspots);
     }
 
