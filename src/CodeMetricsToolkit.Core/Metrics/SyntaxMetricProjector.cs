@@ -1,7 +1,5 @@
-using CodeMetricsToolkit.Core.Reporting;
 using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Facts;
-using CodeMetricsToolkit.Core.Discovery;
 
 namespace CodeMetricsToolkit.Core.Metrics;
 
@@ -101,10 +99,10 @@ public static class SyntaxMetricProjector
                 file.StartLine,
                 file.EndLine,
                 LineAggregate.FromFile(file));
-            AddNumericMetric(results, "type_count", "file", file.TargetId, file.TargetIdStability, file.FilePath, file.StartLine, file.EndLine, typeCountsByFile.GetValueOrDefault(file.FilePath));
+            AddMetric(results, "type_count", "file", file.TargetId, file.TargetIdStability, file.FilePath, file.StartLine, file.EndLine, typeCountsByFile.GetValueOrDefault(file.FilePath));
 
             IReadOnlyList<MemberFacts> members = membersByFile.GetValueOrDefault(file.FilePath, []);
-            AddNumericMetric(results, "member_count", "file", file.TargetId, file.TargetIdStability, file.FilePath, file.StartLine, file.EndLine, members.Count);
+            AddMetric(results, "member_count", "file", file.TargetId, file.TargetIdStability, file.FilePath, file.StartLine, file.EndLine, members.Count);
             AddMemberAggregateMetrics(results, "file", file.TargetId, file.TargetIdStability, file.FilePath, file.StartLine, file.EndLine, members);
         }
 
@@ -112,12 +110,12 @@ public static class SyntaxMetricProjector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            AddNumericMetric(results, "lines_of_code", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.LinesOfCode);
-            AddNumericMetric(results, "token_line_count", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.TokenLineCount);
-            AddNumericMetric(results, "member_count", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.MemberCount);
+            AddMetric(results, "lines_of_code", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.LinesOfCode);
+            AddMetric(results, "token_line_count", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.TokenLineCount);
+            AddMetric(results, "member_count", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.MemberCount);
             IReadOnlyList<MemberFacts> typeMembers = membersByType.GetValueOrDefault(type.TargetId, []);
             AddMemberAggregateMetrics(results, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, typeMembers);
-            AddNumericMetric(
+            AddMetric(
                 results,
                 "weighted_member_complexity",
                 "type",
@@ -133,12 +131,12 @@ public static class SyntaxMetricProjector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            AddNumericMetric(results, "member_length", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.MemberLength);
-            AddNumericMetric(results, "parameter_count", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ParameterCount);
-            AddNumericMetric(results, "cyclomatic_complexity", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.CyclomaticComplexity);
-            AddNumericMetric(results, "decision_point_count", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.DecisionPointCount);
-            AddNumericMetric(results, "cognitive_complexity", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.CognitiveComplexity);
-            AddNumericMetric(results, "nesting_depth", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.NestingDepth);
+            AddMetric(results, "member_length", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.MemberLength);
+            AddMetric(results, "parameter_count", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ParameterCount);
+            AddMetric(results, "cyclomatic_complexity", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.CyclomaticComplexity);
+            AddMetric(results, "decision_point_count", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.DecisionPointCount);
+            AddMetric(results, "cognitive_complexity", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.CognitiveComplexity);
+            AddMetric(results, "nesting_depth", "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.ControlFlow.NestingDepth);
         }
 
         return results;
@@ -154,46 +152,24 @@ public static class SyntaxMetricProjector
         int endLine,
         LineAggregate lines)
     {
-        AddNumericMetric(results, "lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.LinesOfCode);
-        AddNumericMetric(results, "token_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.TokenLineCount);
-        AddNumericMetric(results, "blank_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.BlankLineCount);
-        AddNumericMetric(results, "comment_only_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.CommentOnlyLineCount);
-        AddNumericMetric(results, "commented_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.CommentedLineCount);
-        AddNumericMetric(results, "mixed_code_comment_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.MixedCodeCommentLineCount);
-        AddNumericMetric(results, "documentation_comment_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.DocumentationCommentLineCount);
+        AddMetric(results, "lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.LinesOfCode);
+        AddMetric(results, "token_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.TokenLineCount);
+        AddMetric(results, "blank_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.BlankLineCount);
+        AddMetric(results, "comment_only_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.CommentOnlyLineCount);
+        AddMetric(results, "commented_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.CommentedLineCount);
+        AddMetric(results, "mixed_code_comment_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.MixedCodeCommentLineCount);
+        AddMetric(results, "documentation_comment_line_count", targetKind, targetId, targetIdStability, filePath, startLine, endLine, lines.DocumentationCommentLineCount);
 
         if (lines.LinesOfCode == 0)
         {
             return;
         }
 
-        AddRatioMetric(results, "token_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.TokenLineCount / lines.LinesOfCode);
-        AddRatioMetric(results, "blank_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.BlankLineCount / lines.LinesOfCode);
-        AddRatioMetric(results, "comment_only_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.CommentOnlyLineCount / lines.LinesOfCode);
-        AddRatioMetric(results, "commented_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.CommentedLineCount / lines.LinesOfCode);
-        AddRatioMetric(results, "documentation_comment_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.DocumentationCommentLineCount / lines.LinesOfCode);
-    }
-
-    private static void AddRatioMetric(
-        List<MetricResultLine> results,
-        string metricId,
-        string targetKind,
-        string targetId,
-        string targetIdStability,
-        string filePath,
-        int startLine,
-        int endLine,
-        double value)
-    {
-        results.Add(MetricResultFactory.Number(
-            metricId,
-            targetKind,
-            targetId,
-            targetIdStability,
-            filePath,
-            startLine,
-            endLine,
-            value));
+        AddMetric(results, "token_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.TokenLineCount / lines.LinesOfCode);
+        AddMetric(results, "blank_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.BlankLineCount / lines.LinesOfCode);
+        AddMetric(results, "comment_only_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.CommentOnlyLineCount / lines.LinesOfCode);
+        AddMetric(results, "commented_line_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.CommentedLineCount / lines.LinesOfCode);
+        AddMetric(results, "documentation_comment_ratio", targetKind, targetId, targetIdStability, filePath, startLine, endLine, (double)lines.DocumentationCommentLineCount / lines.LinesOfCode);
     }
 
     private static void AddMemberAggregateMetrics(
@@ -206,13 +182,13 @@ public static class SyntaxMetricProjector
         int endLine,
         IReadOnlyList<MemberFacts> members)
     {
-        AddNumericMetric(results, "max_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.MemberLength));
-        AddNumericMetric(results, "p95_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.MemberLength, 0.95));
-        AddNumericMetric(results, "max_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CyclomaticComplexity));
-        AddNumericMetric(results, "p95_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95));
-        AddNumericMetric(results, "max_member_cognitive_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CognitiveComplexity));
-        AddNumericMetric(results, "p95_member_cognitive_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.ControlFlow.CognitiveComplexity, 0.95));
-        AddNumericMetric(results, "max_member_nesting_depth", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.NestingDepth));
+        AddMetric(results, "max_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.MemberLength));
+        AddMetric(results, "p95_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.MemberLength, 0.95));
+        AddMetric(results, "max_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CyclomaticComplexity));
+        AddMetric(results, "p95_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95));
+        AddMetric(results, "max_member_cognitive_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CognitiveComplexity));
+        AddMetric(results, "p95_member_cognitive_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.ControlFlow.CognitiveComplexity, 0.95));
+        AddMetric(results, "max_member_nesting_depth", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.NestingDepth));
     }
 
     private static void AddScopeAggregateMetrics(
@@ -227,8 +203,8 @@ public static class SyntaxMetricProjector
         IReadOnlyList<TypeFacts> types)
     {
         AddMemberAggregateMetrics(results, targetKind, targetId, targetIdStability, filePath, startLine, endLine, members);
-        AddNumericMetric(results, "max_type_lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(types, type => type.LinesOfCode));
-        AddNumericMetric(results, "p95_type_lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(types, type => type.LinesOfCode, 0.95));
+        AddMetric(results, "max_type_lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(types, type => type.LinesOfCode));
+        AddMetric(results, "p95_type_lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(types, type => type.LinesOfCode, 0.95));
     }
 
     private static MemberFacts[] UniqueMembers(IEnumerable<MemberFacts> members)
@@ -266,7 +242,7 @@ public static class SyntaxMetricProjector
         return ordered[Math.Clamp(index, 0, ordered.Length - 1)];
     }
 
-    private static void AddNumericMetric(
+    private static void AddMetric(
         List<MetricResultLine> results,
         string metricId,
         string targetKind,
@@ -277,7 +253,7 @@ public static class SyntaxMetricProjector
         int endLine,
         double value)
     {
-        results.Add(MetricResultFactory.Numeric(
+        results.Add(MetricResultFactory.Create(
             metricId,
             targetKind,
             targetId,

@@ -1,11 +1,10 @@
-using CodeMetricsToolkit.Core.Reporting;
 using CodeMetricsToolkit.Core.Contracts;
 
 namespace CodeMetricsToolkit.Core.Metrics;
 
 internal static class MetricResultFactory
 {
-    public static MetricResultLine Numeric(
+    public static MetricResultLine Create(
         string metricId,
         string targetKind,
         string targetId,
@@ -15,36 +14,6 @@ internal static class MetricResultFactory
         int endLine,
         double value,
         IReadOnlyList<string>? tags = null)
-    {
-        return Create(metricId, targetKind, targetId, targetIdStability, filePath, startLine, endLine, value,
-            value % 1 == 0 ? "integer" : "number", tags);
-    }
-
-    public static MetricResultLine Number(
-        string metricId,
-        string targetKind,
-        string targetId,
-        string targetIdStability,
-        string filePath,
-        int startLine,
-        int endLine,
-        double value,
-        IReadOnlyList<string>? tags = null)
-    {
-        return Create(metricId, targetKind, targetId, targetIdStability, filePath, startLine, endLine, value, "number", tags);
-    }
-
-    private static MetricResultLine Create(
-        string metricId,
-        string targetKind,
-        string targetId,
-        string targetIdStability,
-        string filePath,
-        int startLine,
-        int endLine,
-        double value,
-        string valueKind,
-        IReadOnlyList<string>? tags)
     {
         MetricDescriptor descriptor = MetricCatalog.Find(metricId)
             ?? throw new ArgumentException($"Unknown metric '{metricId}'.", nameof(metricId));
@@ -55,6 +24,12 @@ internal static class MetricResultFactory
                 nameof(targetKind));
         }
 
+        if (!double.IsFinite(value) || (descriptor.ValueKind == "integer" && value % 1 != 0))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(value), value, $"Metric '{metricId}' requires a finite {descriptor.ValueKind} value.");
+        }
+
         return new MetricResultLine
         {
             SchemaVersion = ContractVersion.Current,
@@ -63,7 +38,7 @@ internal static class MetricResultFactory
             TargetId = targetId,
             TargetKind = targetKind,
             TargetIdStability = targetIdStability,
-            ValueKind = valueKind,
+            ValueKind = descriptor.ValueKind,
             NumericValue = value,
             Unit = descriptor.Unit,
             FilePath = filePath,

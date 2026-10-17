@@ -1,4 +1,4 @@
-using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Contracts;
 using System.Globalization;
 using CodeMetricsToolkit.Core.Facts;
 
@@ -43,21 +43,7 @@ public static class HotspotRanker
         new("member_count", 0.10)
     ];
 
-    public static HotspotRanking Rank(AnalysisFacts facts, int top, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(facts);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        MetricResultLine[] metrics = SyntaxMetricProjector.Project(facts, cancellationToken)
-            .Concat(GraphMetricProjector.Project(facts, cancellationToken))
-            .Concat(SemanticMetricProjector.Project(facts, cancellationToken))
-            .Concat(DiagnosticMetricProjector.Project(facts, cancellationToken))
-            .ToArray();
-
-        return Rank(facts, metrics, top, cancellationToken);
-    }
-
-    internal static HotspotRanking Rank(
+    public static HotspotRanking Rank(
         AnalysisFacts facts,
         IReadOnlyList<MetricResultLine> metrics,
         int top,
@@ -273,7 +259,7 @@ public static class HotspotRanker
 
     private static MetricResultLine ToHotspotMetric(RankedHotspot hotspot)
     {
-        return MetricResultFactory.Numeric(
+        return MetricResultFactory.Create(
             "hotspot_rank",
             hotspot.TargetKind,
             hotspot.TargetId,

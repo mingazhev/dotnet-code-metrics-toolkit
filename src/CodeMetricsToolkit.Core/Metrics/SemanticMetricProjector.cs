@@ -1,5 +1,4 @@
-using CodeMetricsToolkit.Core.Reporting;
-using CodeMetricsToolkit.Core.Discovery;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Facts;
 
 namespace CodeMetricsToolkit.Core.Metrics;
@@ -33,7 +32,7 @@ public static class SemanticMetricProjector
             AddTypeMetric(metrics, type, "documented_public_api_count", type.Semantic.DocumentedPublicApiCount);
             if (type.Semantic.PublicApiCount > 0)
             {
-                AddTypeRatioMetric(
+                AddTypeMetric(
                     metrics,
                     type,
                     "public_api_documentation_ratio",
@@ -60,7 +59,7 @@ public static class SemanticMetricProjector
                 documentedPublicApiCount);
             if (publicApiCount > 0)
             {
-                AddProjectRatioMetric(
+                AddProjectMetric(
                     metrics,
                     projectPath,
                     "public_api_documentation_ratio",
@@ -103,7 +102,7 @@ public static class SemanticMetricProjector
         string metricId,
         double value)
     {
-        metrics.Add(MetricResultFactory.Numeric(
+        metrics.Add(MetricResultFactory.Create(
             metricId,
             "type",
             type.TargetId,
@@ -120,41 +119,7 @@ public static class SemanticMetricProjector
         string metricId,
         double value)
     {
-        metrics.Add(MetricResultFactory.Numeric(
-            metricId,
-            "project",
-            ProjectIdentity.TargetId(projectPath),
-            "syntax_fallback",
-            projectPath,
-            1,
-            1,
-            value));
-    }
-
-    private static void AddTypeRatioMetric(
-        List<MetricResultLine> metrics,
-        TypeFacts type,
-        string metricId,
-        double value)
-    {
-        metrics.Add(MetricResultFactory.Number(
-            metricId,
-            "type",
-            type.TargetId,
-            type.TargetIdStability,
-            type.FilePath,
-            type.StartLine,
-            type.EndLine,
-            value));
-    }
-
-    private static void AddProjectRatioMetric(
-        List<MetricResultLine> metrics,
-        string projectPath,
-        string metricId,
-        double value)
-    {
-        metrics.Add(MetricResultFactory.Number(
+        metrics.Add(MetricResultFactory.Create(
             metricId,
             "project",
             ProjectIdentity.TargetId(projectPath),
@@ -171,7 +136,7 @@ public static class SemanticMetricProjector
         string metricId,
         int value)
     {
-        metrics.Add(MetricResultFactory.Numeric(
+        metrics.Add(MetricResultFactory.Create(
             metricId,
             "member",
             member.TargetId,

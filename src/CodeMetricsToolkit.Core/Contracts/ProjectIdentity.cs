@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace CodeMetricsToolkit.Core.Discovery;
+namespace CodeMetricsToolkit.Core.Contracts;
 
 internal static class ProjectIdentity
 {

@@ -1,4 +1,4 @@
-using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Facts;
 
 namespace CodeMetricsToolkit.Core.Metrics;
@@ -77,7 +77,7 @@ public static class DiagnosticMetricProjector
         int count,
         IReadOnlyList<string>? tags)
     {
-        return MetricResultFactory.Numeric(
+        return MetricResultFactory.Create(
             "diagnostic_count",
             targetKind,
             targetId,

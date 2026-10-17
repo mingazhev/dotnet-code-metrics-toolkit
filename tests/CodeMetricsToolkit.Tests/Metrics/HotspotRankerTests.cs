@@ -1,6 +1,6 @@
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Metrics;
 using CodeMetricsToolkit.Core.Facts;
-using CodeMetricsToolkit.Core.Reporting;
 using CodeMetricsToolkit.Tests.Support;
 
 namespace CodeMetricsToolkit.Tests.Metrics;
@@ -30,7 +30,7 @@ public sealed class HotspotRankerTests
             members: [simple, complex],
             diagnosticsInHotspots: false);
 
-        HotspotRanking ranking = HotspotRanker.Rank(facts, top: 4, CancellationToken.None);
+        HotspotRanking ranking = HotspotRanker.Rank(facts, ProjectMetrics(facts), top: 4, CancellationToken.None);
 
         Assert.Equal(MetricFamilies.Hotspots, ranking.Metrics.Select(metric => metric.MetricId).ToHashSet());
         Assert.Equal(4, ranking.Metrics.Count);
@@ -68,7 +68,7 @@ public sealed class HotspotRankerTests
             members: [member],
             diagnostics: [diagnostic, taggedDiagnostic]);
 
-        HotspotRanking ranking = HotspotRanker.Rank(facts, top: 3, CancellationToken.None);
+        HotspotRanking ranking = HotspotRanker.Rank(facts, ProjectMetrics(facts), top: 3, CancellationToken.None);
         MetricResultLine aggregate = Assert.Single(
             DiagnosticMetricProjector.Project(facts, CancellationToken.None),
             metric => metric.TargetId == member.TargetId && metric.Tags is null);
@@ -109,7 +109,7 @@ public sealed class HotspotRankerTests
             .Concat(DiagnosticMetricProjector.Project(facts, CancellationToken.None))
             .ToArray();
 
-        HotspotRanking ranking = HotspotRanker.Rank(facts, top: 10, CancellationToken.None);
+        HotspotRanking ranking = HotspotRanker.Rank(facts, projectedMetrics, top: 10, CancellationToken.None);
 
         HotspotLine hotspot = Assert.Single(ranking.Hotspots, item => item.TargetId == firstType.TargetId);
         Assert.DoesNotContain(hotspot.Components, component => component.MetricId == "outgoing_type_dependency_count");
@@ -124,5 +124,14 @@ public sealed class HotspotRankerTests
         }
 
         Assert.All(ranking.Metrics, metric => Assert.Equal("2.0.0", metric.MetricVersion));
+    }
+
+    private static MetricResultLine[] ProjectMetrics(AnalysisFacts facts)
+    {
+        return SyntaxMetricProjector.Project(facts, CancellationToken.None)
+            .Concat(GraphMetricProjector.Project(facts, CancellationToken.None))
+            .Concat(SemanticMetricProjector.Project(facts, CancellationToken.None))
+            .Concat(DiagnosticMetricProjector.Project(facts, CancellationToken.None))
+            .ToArray();
     }
 }

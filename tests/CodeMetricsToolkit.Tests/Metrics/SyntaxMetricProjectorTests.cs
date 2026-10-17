@@ -1,7 +1,7 @@
-using CodeMetricsToolkit.Core.Metrics;
-using CodeMetricsToolkit.Core.Discovery;
-using CodeMetricsToolkit.Core.Facts;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Metrics;
+using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Tests.Support;
 
 namespace CodeMetricsToolkit.Tests.Metrics;

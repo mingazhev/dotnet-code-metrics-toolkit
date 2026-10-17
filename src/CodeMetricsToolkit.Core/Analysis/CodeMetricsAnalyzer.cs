@@ -1,3 +1,4 @@
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Metrics;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;

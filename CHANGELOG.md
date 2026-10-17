@@ -31,6 +31,8 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
   `AnalysisFacts`, `AnalysisFactsCollector`, `MemberLength`, and `TokenLineCount`.
 - Metric definitions and hotspot components have one owner; diagnostics own their index,
   project/file membership has one fallback, and artifact settings come from the request.
+- Metric/hotspot result records and project identities belong to `Core.Contracts`;
+  metric descriptors own value kinds, and ranking consumes projected rows directly.
 - CodeMetricsToolkit now lives in a dedicated product repository; autoresearch is
   documented as one optional consumer.
 - The complete build, test, tool, package-smoke, and fixture surface targets .NET 10.
@@ -44,6 +46,8 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Fixed
 
+- Metric validation and Scoring agree that tags are unique unordered sets; distinct tag
+  sets containing separator characters no longer collide in metric or threshold identity.
 - Partial method definitions and implementations count as one logical type member.
 - Explicit type tests contribute their documented decision points; constant/null patterns
   remain excluded from that rule.

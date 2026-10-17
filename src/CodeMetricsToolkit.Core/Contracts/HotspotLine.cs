@@ -1,4 +1,4 @@
-namespace CodeMetricsToolkit.Core.Reporting;
+namespace CodeMetricsToolkit.Core.Contracts;
 
 public sealed record HotspotLine
 {

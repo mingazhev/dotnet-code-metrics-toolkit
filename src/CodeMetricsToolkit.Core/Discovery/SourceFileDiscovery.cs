@@ -1,3 +1,4 @@
+using CodeMetricsToolkit.Core.Contracts;
 namespace CodeMetricsToolkit.Core.Discovery;
 
 public static class SourceFileDiscovery

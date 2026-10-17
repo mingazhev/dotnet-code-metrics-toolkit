@@ -6,7 +6,7 @@
 
 ## Структура и владение
 
-- Каталог определяет ID, version, unit и допустимые target kinds. Проекторы больше
+- Каталог определяет ID, version, unit, value kind и допустимые target kinds. Проекторы больше
   не повторяют метаданные; hotspot ranking использует опубликованные metric rows.
 - Roslyn traversal находится в `Syntax`, orchestration/workspace — в `Analysis`,
   формулы и ranking — в `Metrics`, запись артефактов — в `Reporting`.
@@ -19,12 +19,19 @@
   записей принадлежит контракту, локальные лимиты чтения остались у читателей.
 - Scoring-тесты разделены по проверяемым контрактам. Проверки зависимостей защищают
   независимость Scoring, отсутствие artifact/orchestration dependencies в Facts
-  и файлового I/O в metric projections.
+  и файлового I/O, publication/discovery dependencies в metric projections.
+- Metric/hotspot DTO и project identity принадлежат `Contracts`. Ранжировщик принимает
+  готовые metric rows; второй путь запуска проекторов удалён. Единственная фабрика
+  берёт тип значения из каталога: ratio остаётся `number` при 0 и 1, а integer-метрика
+  не принимает дробные или бесконечные значения.
 
 Переименование публичных Core C# типов требует обновления imports и callers,
 компилирующихся против исходников Core. В `SourceSpanFacts` требуется `StartColumn`
 для точной идентичности деклараций. Отдельного опубликованного пакета Core нет.
 Постоянный слой устаревших алиасов не добавлен.
+`MetricResultLine`, `HotspotLine` и `HotspotComponentLine` перенесены в `Contracts`;
+`HotspotRanker.Rank` требует готовые metric rows, `MetricDescriptor` — `ValueKind`.
+JSON-представление результатов этих переносов не изменилось.
 
 ## Исправления поведения
 
@@ -36,6 +43,7 @@
 | Многострочные литералы | Token lines покрывают весь span; whitespace внутри токена не считается blank line |
 | Вложенный временный каталог | Isolation исключает собственную временную копию из обхода |
 | Windows paths | Rooted результат relative-path проверки не принимается за путь внутри входного дерева |
+| Теги метрик | Validator и Scoring требуют уникальные теги; разные наборы с символами-разделителями не образуют одинаковые signatures |
 
 Это исправления существующих документированных формул; их metric versions
 сохранены. Значения и производные агрегаты на затронутых входах могут измениться.
@@ -74,9 +82,12 @@ Chunk IDs теперь включают стартовую колонку, ус�
 - Новые поведенческие сценарии прошли executable Red перед реализацией и focused
   Green после неё. Повторный анализ в обоих режимах проверяет стабильность значений,
   идентификаторов и порядка ranking.
-- Итог: locked restore, Release build с **0 warnings / 0 errors**, **265 passed,
+- Итог с проверкой metric interfaces: locked restore, Release build с **0 warnings / 0 errors**, **280 passed,
   0 failed, 0 skipped**. Formatter verification и проверки локальных Markdown-ссылок
   прошли. CLI и Scoring 0.2.0 прошли package smoke вне checkout.
+- После переноса metric contracts все шесть артефактов на ExpandedMetricsProject
+  совпали с предыдущей сборкой в semantic и syntax-only режимах, кроме времени/root path.
+  Golden-проверка сверяет value kind всех 66 метрик с независимыми ожиданиями.
 - На фиксированном входе из 3 проектов и 79 выбранных файлов semantic health
   остался trusted. Дополнительные метрики увеличили время: syntax примерно на
   0,2–0,5 секунды, semantic на 0,6 секунды. Числа, метод и ограничения приведены

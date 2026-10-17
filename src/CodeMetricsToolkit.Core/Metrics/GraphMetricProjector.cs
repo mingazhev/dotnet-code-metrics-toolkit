@@ -1,6 +1,5 @@
-using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Facts;
-using CodeMetricsToolkit.Core.Discovery;
 
 namespace CodeMetricsToolkit.Core.Metrics;
 
@@ -240,7 +239,7 @@ public static class GraphMetricProjector
         string metricId,
         int value)
     {
-        return MetricResultFactory.Numeric(
+        return MetricResultFactory.Create(
             metricId,
             "type",
             type.TargetId,
@@ -253,7 +252,7 @@ public static class GraphMetricProjector
 
     private static MetricResultLine CreateMemberMetric(MemberFacts member, string metricId, int value)
     {
-        return MetricResultFactory.Numeric(
+        return MetricResultFactory.Create(
             metricId,
             "member",
             member.TargetId,
@@ -266,7 +265,7 @@ public static class GraphMetricProjector
 
     private static MetricResultLine CreateProjectMetric(string projectPath, string metricId, int value)
     {
-        return MetricResultFactory.Numeric(
+        return MetricResultFactory.Create(
             metricId,
             "project",
             ProjectIdentity.TargetId(projectPath),
@@ -282,7 +281,7 @@ public static class GraphMetricProjector
         string metricId,
         int value)
     {
-        return MetricResultFactory.Numeric(
+        return MetricResultFactory.Create(
             metricId,
             "namespace",
             namespaceFacts.TargetId,

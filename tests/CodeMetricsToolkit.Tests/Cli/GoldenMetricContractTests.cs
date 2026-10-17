@@ -77,6 +77,7 @@ public sealed class GoldenMetricContractTests
                     StringComparison.Ordinal));
             Assert.Equal(metric.Version, catalogExpectation.GetProperty("metricVersion").GetString());
             Assert.Equal(metric.Unit, catalogExpectation.GetProperty("unit").GetString());
+            Assert.Equal(metric.ValueKind, catalogExpectation.GetProperty("valueKind").GetString());
             Assert.Contains(
                 catalogExpectation.GetProperty("targetKind").GetString(),
                 metric.TargetKinds);

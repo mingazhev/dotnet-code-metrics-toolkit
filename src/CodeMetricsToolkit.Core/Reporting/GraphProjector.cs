@@ -1,5 +1,4 @@
 using CodeMetricsToolkit.Core.Contracts;
-using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 
 namespace CodeMetricsToolkit.Core.Reporting;

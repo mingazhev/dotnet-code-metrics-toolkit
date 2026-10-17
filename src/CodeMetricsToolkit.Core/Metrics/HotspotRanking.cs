@@ -1,4 +1,4 @@
-using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Contracts;
 namespace CodeMetricsToolkit.Core.Metrics;
 
 public sealed record HotspotRanking(

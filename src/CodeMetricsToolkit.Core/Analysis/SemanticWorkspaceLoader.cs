@@ -1,3 +1,4 @@
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Syntax;
 using System.Collections.Concurrent;
 using CodeMetricsToolkit.Core.Discovery;

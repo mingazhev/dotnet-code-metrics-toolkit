@@ -1,7 +1,5 @@
 using CodeMetricsToolkit.Core.Contracts;
-using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
-using CodeMetricsToolkit.Core.Reporting;
 
 namespace CodeMetricsToolkit.Core.Metrics;
 
@@ -180,7 +178,7 @@ internal static class DuplicationMetricProjector
 
         foreach (DuplicationRegionFacts region in duplication.Regions)
         {
-            metrics.Add(MetricResultFactory.Numeric(
+            metrics.Add(MetricResultFactory.Create(
                 "duplicated_block_count",
                 "file",
                 file.TargetId,
@@ -204,7 +202,7 @@ internal static class DuplicationMetricProjector
         int endLine,
         double value)
     {
-        metrics.Add(MetricResultFactory.Numeric(
+        metrics.Add(MetricResultFactory.Create(
             metricId,
             targetKind,
             targetId,
@@ -231,7 +229,7 @@ internal static class DuplicationMetricProjector
             return;
         }
 
-        metrics.Add(MetricResultFactory.Number(
+        metrics.Add(MetricResultFactory.Create(
             "duplicated_line_ratio",
             targetKind,
             targetId,

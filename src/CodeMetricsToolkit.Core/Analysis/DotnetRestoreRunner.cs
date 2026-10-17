@@ -1,3 +1,4 @@
+using CodeMetricsToolkit.Core.Contracts;
 using System.Diagnostics;
 using CodeMetricsToolkit.Core.Discovery;
 
