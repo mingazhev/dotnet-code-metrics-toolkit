@@ -153,7 +153,7 @@ public sealed class SyntaxMetricProjectorTests
             ParentFileTargetId = sharedSecond.TargetId,
             ProjectKey = secondProjectKey
         };
-        SyntaxAnalysisFacts facts = TestFacts.Analysis(
+        AnalysisFacts facts = TestFacts.Analysis(
             files: [sharedFirst, sharedSecond, other],
             types: [.. types, sharedTypeInSecondProject],
             members: [.. firstProjectMembers, sharedMemberInSecondProject],
@@ -202,7 +202,7 @@ public sealed class SyntaxMetricProjectorTests
     public void ProjectReportsZeroForNewAggregatesWhenPopulationsAreEmpty()
     {
         const string projectPath = "Empty.csproj";
-        SyntaxAnalysisFacts facts = TestFacts.Analysis(projects: [projectPath]);
+        AnalysisFacts facts = TestFacts.Analysis(projects: [projectPath]);
 
         IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts, CancellationToken.None);
 

@@ -120,6 +120,7 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal(6, MetricInt(metrics, projectBId, "lines_of_code"));
         Assert.Equal(9, MetricInt(metrics, "solution:root", "lines_of_code"));
         Assert.Equal(3, MetricInt(metrics, sharedFileId, "lines_of_code"));
+        Assert.Equal(1, MetricInt(metrics, sharedFileId, "type_count"));
         Assert.Equal(2, MetricInt(metrics, projectAId, "public_api_count"));
         Assert.Equal(2, MetricInt(metrics, projectBId, "public_api_count"));
         Assert.DoesNotContain(metrics, metric =>

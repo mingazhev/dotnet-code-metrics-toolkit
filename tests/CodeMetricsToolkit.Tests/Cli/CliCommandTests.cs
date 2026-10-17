@@ -10,6 +10,24 @@ namespace CodeMetricsToolkit.Tests.Cli;
 public sealed partial class CliAnalyzeTests
 {
     [Fact]
+    public async Task SameLinePartialDeclarationsRemainDistinctPhysicalDeclarations()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        await File.WriteAllTextAsync(
+            Path.Combine(input.Path, "SameLine.cs"),
+            "partial class Sample { } partial class Sample { }");
+
+        var exitCode = await RunCliAsync("analyze", input.Path, "--syntax-only", "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        Assert.Equal(2, MetricInt(metrics, "file:SameLine.cs", "type_count"));
+        JsonElement[] chunks = ReadNdjson(Path.Combine(output.Path, "chunks.ndjson"));
+        Assert.Equal(chunks.Length, chunks.Select(chunk => chunk.GetProperty("chunkId").GetString()).Distinct().Count());
+    }
+
+    [Fact]
     public async Task ListMetricsAndExplainCommandsExposeMetricCatalog()
     {
         using var listOutput = new StringWriter();

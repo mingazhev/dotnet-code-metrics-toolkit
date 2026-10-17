@@ -20,7 +20,7 @@ project:<project-path-hash>
 file:<repo-relative-path>
 type:<assembly-name>/<xml-doc-id>
 member:<assembly-name>/<xml-doc-id>
-chunk:<target-id>#<chunk-kind>
+chunk:<target-id>#<chunk-kind>@<file-path>:<start-line>:<start-column>
 ```
 
 For `type` and `member`, `<xml-doc-id>` is `ISymbol.GetDocumentationCommentId()`. The assembly name is included because XML doc ids are only unique inside an assembly.
@@ -46,6 +46,11 @@ line_fallback
 ```
 
 Partial types produce one logical type node with multiple declaration spans. Member metrics remain member-scoped unless a metric explicitly documents aggregation across partial declarations.
+
+Chunk ids identify source occurrences, so they also contain one-based line and column
+coordinates. Contract 0.2.0 adds the column to distinguish partial declarations on the
+same line. A chunk id can change after formatting even when its semantic target id stays
+the same; `targetIdStability` describes the target, not the chunk coordinates.
 
 ## Required Examples
 

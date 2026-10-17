@@ -261,6 +261,7 @@ public static class AnalysisFactsCollector
                             {
                                 FilePath = declaration.FilePath,
                                 StartLine = declaration.StartLine,
+                                StartColumn = declaration.Declaration.GetLocation().GetLineSpan().StartLinePosition.Character + 1,
                                 EndLine = declaration.EndLine
                             })
                             .ToArray(),
@@ -396,6 +397,7 @@ public static class AnalysisFactsCollector
                             {
                                 FilePath = declaration.FilePath,
                                 StartLine = declaration.StartLine,
+                                StartColumn = declaration.Declaration.GetLocation().GetLineSpan().StartLinePosition.Character + 1,
                                 EndLine = declaration.EndLine
                             })
                             .ToArray(),

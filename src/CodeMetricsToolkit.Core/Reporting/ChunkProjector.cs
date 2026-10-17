@@ -123,6 +123,7 @@ public static class ChunkProjector
         {
             FilePath = file.FilePath,
             StartLine = file.StartLine,
+            StartColumn = 1,
             EndLine = Math.Min(file.EndLine, endLine)
         };
     }
@@ -142,7 +143,7 @@ public static class ChunkProjector
         return new ChunkLine
         {
             SchemaVersion = ContractVersion.Current,
-            ChunkId = $"chunk:{targetId}#{chunkKind}@{span.FilePath}:{span.StartLine}",
+            ChunkId = $"chunk:{targetId}#{chunkKind}@{span.FilePath}:{span.StartLine}:{span.StartColumn}",
             TargetId = targetId,
             TargetKind = targetKind,
             TargetIdStability = targetIdStability,

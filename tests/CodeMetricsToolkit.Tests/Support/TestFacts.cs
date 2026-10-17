@@ -156,12 +156,13 @@ internal static class TestFacts
         };
     }
 
-    public static SourceSpanFacts Span(string path, int startLine, int endLine)
+    public static SourceSpanFacts Span(string path, int startLine, int endLine, int startColumn = 1)
     {
         return new SourceSpanFacts
         {
             FilePath = path,
             StartLine = startLine,
+            StartColumn = startColumn,
             EndLine = endLine
         };
     }

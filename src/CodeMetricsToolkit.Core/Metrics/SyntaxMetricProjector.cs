@@ -32,6 +32,7 @@ public static class SyntaxMetricProjector
                 StringComparer.Ordinal);
         IReadOnlyDictionary<string, int> typeCountsByFile = facts.Types
             .SelectMany(type => type.Declarations)
+            .DistinctBy(declaration => (declaration.FilePath, declaration.StartLine, declaration.StartColumn))
             .GroupBy(declaration => declaration.FilePath, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
@@ -205,8 +206,8 @@ public static class SyntaxMetricProjector
         int endLine,
         IReadOnlyList<MemberFacts> members)
     {
-        AddNumericMetric(results, "max_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.MethodLength));
-        AddNumericMetric(results, "p95_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.MethodLength, 0.95));
+        AddNumericMetric(results, "max_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.MemberLength));
+        AddNumericMetric(results, "p95_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.MemberLength, 0.95));
         AddNumericMetric(results, "max_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CyclomaticComplexity));
         AddNumericMetric(results, "p95_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95));
         AddNumericMetric(results, "max_member_cognitive_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CognitiveComplexity));
