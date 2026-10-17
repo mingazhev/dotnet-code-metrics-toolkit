@@ -8,6 +8,10 @@ public static class InputIsolator
     internal const int MaxIsolatedDirectoryCount = 50_000;
     internal const int MaxIsolatedDepth = 96;
 
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+
     private static readonly EnumerationOptions EnumerationOptions = new()
     {
         AttributesToSkip = FileAttributes.ReparsePoint,
@@ -15,15 +19,6 @@ public static class InputIsolator
         RecurseSubdirectories = false,
         ReturnSpecialDirectories = false
     };
-
-    private static readonly string[] ExcludedDirectoryNames =
-    [
-        ".git",
-        ".vs",
-        "bin",
-        "obj",
-        "artifacts"
-    ];
 
     public static IsolatedInput CopyToTemporaryDirectory(
         string inputPath,
@@ -40,6 +35,15 @@ public static class InputIsolator
         InputIsolationLimits limits,
         CancellationToken cancellationToken)
     {
+        return CopyToTemporaryDirectory(inputPath, limits, temporaryDirectoryPath: null, cancellationToken);
+    }
+
+    internal static IsolatedInput CopyToTemporaryDirectory(
+        string inputPath,
+        InputIsolationLimits limits,
+        string? temporaryDirectoryPath,
+        CancellationToken cancellationToken)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
         ArgumentNullException.ThrowIfNull(limits);
         limits.Validate();
@@ -48,13 +52,15 @@ public static class InputIsolator
         InputSelection selection = SourceFileDiscovery.ResolveInputSelection(inputPath);
         var sourceRoot = selection.RootPath;
         var selectedRelativePath = selection.SelectedSolutionPath ?? selection.SelectedProjectPath;
-        var tempRoot = Path.Combine(Path.GetTempPath(), "codemetrics-input-" + Guid.NewGuid().ToString("N"));
+        var tempRoot = Path.GetFullPath(Path.Combine(
+            temporaryDirectoryPath ?? Path.GetTempPath(),
+            "codemetrics-input-" + Guid.NewGuid().ToString("N")));
 
         try
         {
             CreatePrivateDirectory(tempRoot);
             var state = new IsolationCopyState(sourceRoot);
-            CopyDirectory(sourceRoot, tempRoot, depth: 0, limits, state, cancellationToken);
+            CopyDirectory(sourceRoot, tempRoot, tempRoot, depth: 0, limits, state, cancellationToken);
         }
         catch
         {
@@ -72,6 +78,7 @@ public static class InputIsolator
     private static void CopyDirectory(
         string sourceDirectory,
         string targetDirectory,
+        string temporaryRoot,
         int depth,
         InputIsolationLimits limits,
         IsolationCopyState state,
@@ -82,7 +89,7 @@ public static class InputIsolator
             cancellationToken.ThrowIfCancellationRequested();
 
             var directoryName = Path.GetFileName(directory);
-            if (ExcludedDirectoryNames.Contains(directoryName, StringComparer.OrdinalIgnoreCase))
+            if (DiscoveryDirectoryPolicy.IsExcluded(directoryName) || IsTemporaryRoot(directory, temporaryRoot))
             {
                 continue;
             }
@@ -110,6 +117,7 @@ public static class InputIsolator
             CopyDirectory(
                 directory,
                 targetChildDirectory,
+                temporaryRoot,
                 childDepth,
                 limits,
                 state,
@@ -135,6 +143,13 @@ public static class InputIsolator
                 state,
                 cancellationToken);
         }
+    }
+
+    private static bool IsTemporaryRoot(string path, string temporaryRoot)
+    {
+        return PathComparer.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)),
+            Path.TrimEndingDirectorySeparator(temporaryRoot));
     }
 
     private static void CopyFile(

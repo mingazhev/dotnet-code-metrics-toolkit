@@ -359,7 +359,7 @@ internal static class SemanticWorkspaceLoader
         };
     }
 
-    private static string? ToRelativeProjectPath(string rootPath, string? projectPath)
+    internal static string? ToRelativeProjectPath(string rootPath, string? projectPath)
     {
         if (string.IsNullOrWhiteSpace(projectPath))
         {
@@ -369,7 +369,8 @@ internal static class SemanticWorkspaceLoader
         var relativePath = Path.GetRelativePath(rootPath, projectPath)
             .Replace(Path.DirectorySeparatorChar, '/');
 
-        return string.Equals(relativePath, "..", StringComparison.Ordinal) ||
+        return Path.IsPathRooted(relativePath) ||
+            string.Equals(relativePath, "..", StringComparison.Ordinal) ||
             relativePath.StartsWith("../", StringComparison.Ordinal)
                 ? null
                 : relativePath;

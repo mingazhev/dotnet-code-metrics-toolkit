@@ -1,10 +1,30 @@
 using System.Text;
 using CodeMetricsToolkit.Scoring;
+using static CodeMetricsToolkit.Tests.Scoring.ScoringTestSupport;
 
 namespace CodeMetricsToolkit.Tests.Scoring;
 
-public sealed partial class ScoringEngineTests
+public sealed class ScoringInputLimitTests
 {
+    private static ScoringInputLimits Limits(
+        int profileBytes = 100_000,
+        int jsonBytes = 100_000,
+        long metricsBytes = 100_000,
+        int lineCharacters = 100_000,
+        int lines = 100,
+        int records = 100,
+        int jsonDepth = 64)
+    {
+        return new ScoringInputLimits(
+            profileBytes,
+            jsonBytes,
+            metricsBytes,
+            lineCharacters,
+            lines,
+            records,
+            jsonDepth);
+    }
+
     [Fact]
     public void DefaultScoringLimitsMatchDocumentedSecurityBoundary()
     {

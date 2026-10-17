@@ -94,6 +94,47 @@ public sealed class DiscoverySafetyTests
     }
 
     [Fact]
+    public void IsolatedCopyDoesNotCopyItsOwnTemporaryRootWhenTempDirectoryIsInsideInput()
+    {
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("input");
+        var temporaryDirectory = Path.Combine(input, "scratch");
+        Directory.CreateDirectory(temporaryDirectory);
+        File.WriteAllText(Path.Combine(input, "Included.cs"), "class Included { }");
+        File.WriteAllText(Path.Combine(temporaryDirectory, "Existing.txt"), "keep");
+
+        using IsolatedInput isolated = InputIsolator.CopyToTemporaryDirectory(
+            input,
+            InputIsolationLimits.Default,
+            temporaryDirectory,
+            CancellationToken.None);
+
+        Assert.Equal("class Included { }", File.ReadAllText(Path.Combine(isolated.IsolatedRootPath, "Included.cs")));
+        Assert.Equal(
+            "keep",
+            File.ReadAllText(Path.Combine(isolated.IsolatedRootPath, "scratch", "Existing.txt")));
+        Assert.Empty(Directory.EnumerateDirectories(Path.Combine(isolated.IsolatedRootPath, "scratch")));
+    }
+
+    [Fact]
+    public void IsolatedCopyCleansTemporaryRootAfterFailureWithTempDirectoryInsideInput()
+    {
+        using var fixture = new TemporaryDirectory();
+        var input = fixture.CreateDirectory("input");
+        var temporaryDirectory = Path.Combine(input, "scratch");
+        Directory.CreateDirectory(temporaryDirectory);
+        File.WriteAllText(Path.Combine(input, "TooLarge.cs"), "12345");
+
+        Assert.Throws<InvalidDataException>(() => InputIsolator.CopyToTemporaryDirectory(
+            input,
+            Limits(totalBytes: 4, fileBytes: 4),
+            temporaryDirectory,
+            CancellationToken.None));
+
+        Assert.Empty(Directory.EnumerateDirectories(temporaryDirectory));
+    }
+
+    [Fact]
     public void IsolatedCopyHonorsPreCanceledToken()
     {
         using var fixture = new TemporaryDirectory();

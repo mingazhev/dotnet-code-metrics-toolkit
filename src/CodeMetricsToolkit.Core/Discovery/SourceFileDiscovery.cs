@@ -14,15 +14,6 @@ public static class SourceFileDiscovery
         ReturnSpecialDirectories = false
     };
 
-    private static readonly string[] ExcludedDirectoryNames =
-    [
-        ".git",
-        ".vs",
-        "bin",
-        "obj",
-        "artifacts"
-    ];
-
     private static readonly string[] GeneratedFileSuffixes =
     [
         ".g.cs",
@@ -489,7 +480,7 @@ public static class SourceFileDiscovery
 
     private static bool ShouldSkipDirectory(DirectoryInfo directory)
     {
-        return ExcludedDirectoryNames.Contains(directory.Name, StringComparer.OrdinalIgnoreCase);
+        return DiscoveryDirectoryPolicy.IsExcluded(directory.Name);
     }
 
     private static bool IsGeneratedFile(string fileName)

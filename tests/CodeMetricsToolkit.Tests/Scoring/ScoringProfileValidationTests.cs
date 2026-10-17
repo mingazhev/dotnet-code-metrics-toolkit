@@ -1,10 +1,11 @@
 using CodeMetricsToolkit.Scoring;
+using static CodeMetricsToolkit.Tests.Scoring.ScoringTestSupport;
 using Json.Schema;
 using System.Text.Json;
 
 namespace CodeMetricsToolkit.Tests.Scoring;
 
-public sealed partial class ScoringEngineTests
+public sealed class ScoringProfileValidationTests
 {
     [Fact]
     public async Task RejectsUnknownOperationBeforeReadingArtifacts()
