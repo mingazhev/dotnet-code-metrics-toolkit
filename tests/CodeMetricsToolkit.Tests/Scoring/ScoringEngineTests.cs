@@ -392,6 +392,40 @@ public sealed class ScoringEngineTests
     }
 
     [Fact]
+    public async Task DistinctTagSetsContainingTheSignatureSeparatorAreNotDuplicateMetrics()
+    {
+        using var artifacts = TestArtifacts.Create(
+            analysisQuality: "trusted",
+            Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 15),
+            Metric("member:a", "src/A.cs", "member_length", "1.0.0", 55),
+            Metric("member:a", "src/A.cs", "diagnostic_count", "1.0.0", 1, "left\u001fright"),
+            Metric("member:a", "src/A.cs", "diagnostic_count", "1.0.0", 1, "left", "right"));
+        await using Stream profile = ProfileStream(ValidProfile());
+
+        ScoringResult result = await ScoringEngine.EvaluateAsync(artifacts.Path, profile);
+
+        Assert.Equal(37.5, result.Values["score"]);
+    }
+
+    [Fact]
+    public async Task ReorderedDuplicateTagSetsAreRejectedAsDuplicateMetrics()
+    {
+        using var artifacts = TestArtifacts.Create(
+            analysisQuality: "trusted",
+            Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 15),
+            Metric("member:a", "src/A.cs", "member_length", "1.0.0", 55),
+            Metric("member:a", "src/A.cs", "diagnostic_count", "1.0.0", 1, "left", "right"),
+            Metric("member:a", "src/A.cs", "diagnostic_count", "1.0.0", 1, "right", "left"));
+        await using Stream profile = ProfileStream(ValidProfile());
+
+        ScoringException exception = await Assert.ThrowsAsync<ScoringException>(
+            () => ScoringEngine.EvaluateAsync(artifacts.Path, profile));
+
+        Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
+        Assert.Contains("contains duplicate metric 'diagnostic_count@1.0.0'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task FileSelectorRejectsAggregatedTargetWhenAnyDeclarationIsOutsideIncludeScope()
     {
         using var artifacts = TestArtifacts.Create(

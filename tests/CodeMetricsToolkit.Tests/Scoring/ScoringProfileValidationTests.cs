@@ -232,6 +232,82 @@ public sealed class ScoringProfileValidationTests
     }
 
     [Fact]
+    public async Task DistinctTagSetsWithASeparatorAreNotDuplicateThresholds()
+    {
+        const string operation = """
+            {
+              "operation": "thresholdDebt",
+              "targetKind": "member",
+              "thresholds": [
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["left\u001fright"]
+                },
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["left", "right"]
+                }
+              ],
+              "outputs": {
+                "gapSum": "debt",
+                "squaredGapSum": "squared_debt",
+                "violatingTargetCount": "violating_targets",
+                "maxTargetGap": "max_target_gap"
+              }
+            }
+            """;
+        await using Stream profile = ProfileStream(Profile(operation + "," + WeightedOperation()));
+
+        ScoringException exception = await Assert.ThrowsAsync<ScoringException>(
+            () => ScoringEngine.EvaluateAsync("does-not-exist", profile));
+
+        Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
+        Assert.Contains("manifest.json", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReorderedDuplicateTagSetsRemainDuplicateThresholds()
+    {
+        const string operation = """
+            {
+              "operation": "thresholdDebt",
+              "targetKind": "member",
+              "thresholds": [
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["left", "right"]
+                },
+                {
+                  "metricId": "diagnostic_count",
+                  "metricVersion": "1.0.0",
+                  "maximum": 10,
+                  "tags": ["right", "left"]
+                }
+              ],
+              "outputs": {
+                "gapSum": "debt",
+                "squaredGapSum": "squared_debt",
+                "violatingTargetCount": "violating_targets",
+                "maxTargetGap": "max_target_gap"
+              }
+            }
+            """;
+        await using Stream profile = ProfileStream(Profile(operation + "," + WeightedOperation()));
+
+        ScoringException exception = await Assert.ThrowsAsync<ScoringException>(
+            () => ScoringEngine.EvaluateAsync("does-not-exist", profile));
+
+        Assert.Equal(ScoringFailureKind.InvalidProfile, exception.FailureKind);
+        Assert.Contains("contains duplicate metric 'diagnostic_count@1.0.0[tags=left,right]'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ScoringProfileExampleValidatesAgainstSchema()
     {
         var repositoryRoot = CodeMetricsToolkit.Tests.SchemaValidation.SchemaAssertions.RepositoryRoot();

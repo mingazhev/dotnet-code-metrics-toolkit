@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace CodeMetricsToolkit.Scoring;
 
 internal sealed record ParsedScoringProfile(
@@ -34,7 +36,7 @@ internal sealed record MetricThreshold(
 {
     public string Reference => FormatReference(MetricId, MetricVersion, Tags);
 
-    public string Signature => $"{MetricId}\u001e{MetricVersion}\u001e{string.Join('\u001f', Tags)}";
+    public string Signature => JsonSerializer.Serialize(new { MetricId, MetricVersion, Tags });
 
     internal static string FormatReference(
         string metricId,

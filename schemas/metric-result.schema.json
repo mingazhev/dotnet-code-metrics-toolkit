@@ -82,6 +82,7 @@
     "endLine": { "type": "integer", "minimum": 1 },
     "tags": {
       "type": "array",
+      "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     }
   }

@@ -61,6 +61,23 @@ public sealed class OutputValidatorTests
     }
 
     [Fact]
+    public void DuplicateMetricTagsAreRejected()
+    {
+        using var output = TemporaryOutput.Create();
+        UpdateFirstNdjsonRecord(
+            output.File("metrics.ndjson"),
+            root => root["tags"] = new JsonArray("compiler", "compiler"));
+
+        OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("metrics.ndjson:1 does not conform", StringComparison.Ordinal) &&
+                error.Contains("metric-result.schema.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task RuntimeValidationIsSafeAcrossParallelCalls()
     {
         using var output = TemporaryOutput.Create();

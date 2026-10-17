@@ -41,9 +41,11 @@ Each non-empty line is an independent metric observation with:
 Metric identity is the pair `metricId@metricVersion`. The same id at another version can
 have different semantics and must not be silently mixed in a time series.
 
-Tags distinguish slices of a metric on the same target. Duplication totals are untagged;
-tagged `duplicated_block_count=1` rows locate individual duplicated regions. Consumers
-must select the intended tag set instead of summing totals together with region rows.
+Tags distinguish slices of a metric on the same target. A tag array is an unordered set,
+so each tag must be unique within a row and tag order does not change metric identity.
+Duplication totals are untagged; tagged `duplicated_block_count=1` rows locate individual
+duplicated regions. Consumers must select the intended tag set instead of summing totals
+together with region rows.
 
 ### `graph.json`
 
