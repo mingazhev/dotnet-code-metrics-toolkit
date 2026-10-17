@@ -193,9 +193,14 @@ This exposes the non-baseline numerator without adding one per member.
 
 ## aggregate member metrics
 
-These metrics project already-computed member facts onto file/type targets.
+These metrics project already-computed member facts onto file, type, project, and
+solution targets. The project population is selected by each member's project key;
+the solution population counts each semantic member target once. File populations use
+the member's primary source file, so a partial member is counted once.
 
 ```text
+max_member_length                 = max(member_length)
+p95_member_length                 = nearest-rank p95(member_length)
 max_member_cyclomatic_complexity = max(cyclomatic_complexity)
 p95_member_cyclomatic_complexity = nearest-rank p95(cyclomatic_complexity)
 max_member_cognitive_complexity  = max(cognitive_complexity)
@@ -203,9 +208,25 @@ p95_member_cognitive_complexity  = nearest-rank p95(cognitive_complexity)
 max_member_nesting_depth         = max(nesting_depth)
 ```
 
-Target kinds: `file`, `type`.
+The type-only `weighted_member_complexity` aggregate is:
 
-For targets with no contained members, aggregate values are `0`.
+```text
+weighted_member_complexity = sum(cyclomatic_complexity for contained logical members)
+```
+
+Project/solution type-size distributions use one `lines_of_code` value per logical
+type target:
+
+```text
+max_type_lines_of_code = max(lines_of_code)
+p95_type_lines_of_code = nearest-rank p95(lines_of_code)
+```
+
+For project type populations, each type's project key determines ownership. The
+solution population counts each semantic type target once; a partial type contributes
+one logical type value, whose existing `lines_of_code` metric includes its declarations.
+
+For targets with no contained members or types, aggregate values are `0`.
 
 ## dependency metrics
 

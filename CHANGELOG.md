@@ -8,6 +8,8 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Added
 
+- Type weighted member complexity and member/type size distributions for project and
+  solution scopes.
 - Standalone .NET tool packaging for the `codemetrics` command.
 - Runtime JSON Schema validation for all emitted artifacts.
 - Product documentation, security guidance, CI, and package-install smoke coverage.

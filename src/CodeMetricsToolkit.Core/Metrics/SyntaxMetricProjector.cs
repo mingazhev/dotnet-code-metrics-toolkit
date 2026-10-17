@@ -10,6 +10,7 @@ public static class SyntaxMetricProjector
     public static IReadOnlyList<MetricResultLine> Project(AnalysisFacts facts, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(facts);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var results = new List<MetricResultLine>();
         FileFacts[] uniqueFiles = facts.Files
@@ -21,13 +22,13 @@ public static class SyntaxMetricProjector
             .GroupBy(member => member.ParentTypeTargetId, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyList<MemberFacts>)group.ToArray(),
+                group => (IReadOnlyList<MemberFacts>)UniqueMembers(group),
                 StringComparer.Ordinal);
         IReadOnlyDictionary<string, IReadOnlyList<MemberFacts>> membersByFile = facts.Members
             .GroupBy(member => member.FilePath, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyList<MemberFacts>)group.ToArray(),
+                group => (IReadOnlyList<MemberFacts>)UniqueMembers(group),
                 StringComparer.Ordinal);
         IReadOnlyDictionary<string, int> typeCountsByFile = facts.Types
             .SelectMany(type => type.Declarations)
@@ -43,9 +44,20 @@ public static class SyntaxMetricProjector
             1,
             1,
             LineAggregate.FromFiles(uniqueFiles));
+        AddScopeAggregateMetrics(
+            results,
+            "solution",
+            TargetIds.SolutionRoot,
+            "syntax_fallback",
+            ".",
+            1,
+            1,
+            UniqueMembers(facts.Members),
+            UniqueTypes(facts.Types));
 
         foreach (var projectPath in facts.ProjectPaths.Order(StringComparer.Ordinal))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var projectKey = ProjectIdentity.Key(projectPath);
             var projectFilePaths = facts.GetProjectFileMemberships()
                 .Where(membership => membership.ProjectKey == projectKey)
@@ -63,6 +75,16 @@ public static class SyntaxMetricProjector
                     .Where(file => projectFilePaths.Contains(file.FilePath))
                     .GroupBy(file => file.FilePath, StringComparer.Ordinal)
                     .Select(group => group.First())));
+            AddScopeAggregateMetrics(
+                results,
+                "project",
+                ProjectIdentity.TargetId(projectPath),
+                "syntax_fallback",
+                projectPath,
+                1,
+                1,
+                UniqueMembers(facts.Members.Where(member => member.ProjectKey == projectKey)),
+                UniqueTypes(facts.Types.Where(type => type.ProjectKey == projectKey)));
         }
 
         foreach (FileFacts file in uniqueFiles)
@@ -92,7 +114,18 @@ public static class SyntaxMetricProjector
             AddNumericMetric(results, "lines_of_code", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.LinesOfCode);
             AddNumericMetric(results, "token_line_count", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.TokenLineCount);
             AddNumericMetric(results, "member_count", "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.MemberCount);
-            AddMemberAggregateMetrics(results, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, membersByType.GetValueOrDefault(type.TargetId, []));
+            IReadOnlyList<MemberFacts> typeMembers = membersByType.GetValueOrDefault(type.TargetId, []);
+            AddMemberAggregateMetrics(results, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, typeMembers);
+            AddNumericMetric(
+                results,
+                "weighted_member_complexity",
+                "type",
+                type.TargetId,
+                type.TargetIdStability,
+                type.FilePath,
+                type.StartLine,
+                type.EndLine,
+                typeMembers.Sum(member => member.ControlFlow.CyclomaticComplexity));
         }
 
         foreach (MemberFacts member in facts.Members.OrderBy(member => member.TargetId, StringComparer.Ordinal))
@@ -172,6 +205,8 @@ public static class SyntaxMetricProjector
         int endLine,
         IReadOnlyList<MemberFacts> members)
     {
+        AddNumericMetric(results, "max_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.MethodLength));
+        AddNumericMetric(results, "p95_member_length", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.MethodLength, 0.95));
         AddNumericMetric(results, "max_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CyclomaticComplexity));
         AddNumericMetric(results, "p95_member_cyclomatic_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(members, member => member.ControlFlow.CyclomaticComplexity, 0.95));
         AddNumericMetric(results, "max_member_cognitive_complexity", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.CognitiveComplexity));
@@ -179,19 +214,49 @@ public static class SyntaxMetricProjector
         AddNumericMetric(results, "max_member_nesting_depth", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(members, member => member.ControlFlow.NestingDepth));
     }
 
-    private static int Max(IReadOnlyList<MemberFacts> members, Func<MemberFacts, int> selector)
+    private static void AddScopeAggregateMetrics(
+        List<MetricResultLine> results,
+        string targetKind,
+        string targetId,
+        string targetIdStability,
+        string filePath,
+        int startLine,
+        int endLine,
+        IReadOnlyList<MemberFacts> members,
+        IReadOnlyList<TypeFacts> types)
     {
-        return members.Count == 0 ? 0 : members.Max(selector);
+        AddMemberAggregateMetrics(results, targetKind, targetId, targetIdStability, filePath, startLine, endLine, members);
+        AddNumericMetric(results, "max_type_lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Max(types, type => type.LinesOfCode));
+        AddNumericMetric(results, "p95_type_lines_of_code", targetKind, targetId, targetIdStability, filePath, startLine, endLine, Percentile(types, type => type.LinesOfCode, 0.95));
     }
 
-    private static int Percentile(IReadOnlyList<MemberFacts> members, Func<MemberFacts, int> selector, double percentile)
+    private static MemberFacts[] UniqueMembers(IEnumerable<MemberFacts> members)
     {
-        if (members.Count == 0)
+        return members
+            .DistinctBy(member => member.TargetId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static TypeFacts[] UniqueTypes(IEnumerable<TypeFacts> types)
+    {
+        return types
+            .DistinctBy(type => type.TargetId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static int Max<T>(IReadOnlyList<T> values, Func<T, int> selector)
+    {
+        return values.Count == 0 ? 0 : values.Max(selector);
+    }
+
+    private static int Percentile<T>(IReadOnlyList<T> values, Func<T, int> selector, double percentile)
+    {
+        if (values.Count == 0)
         {
             return 0;
         }
 
-        var ordered = members
+        var ordered = values
             .Select(selector)
             .Order()
             .ToArray();

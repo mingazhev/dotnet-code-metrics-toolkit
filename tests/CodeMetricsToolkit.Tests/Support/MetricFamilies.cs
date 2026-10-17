@@ -28,7 +28,12 @@ internal static class MetricFamilies
         "p95_member_cyclomatic_complexity",
         "max_member_cognitive_complexity",
         "p95_member_cognitive_complexity",
-        "max_member_nesting_depth"
+        "max_member_nesting_depth",
+        "weighted_member_complexity",
+        "max_member_length",
+        "p95_member_length",
+        "max_type_lines_of_code",
+        "p95_type_lines_of_code"
     };
 
     public static IReadOnlySet<string> Graph { get; } = new HashSet<string>(StringComparer.Ordinal)

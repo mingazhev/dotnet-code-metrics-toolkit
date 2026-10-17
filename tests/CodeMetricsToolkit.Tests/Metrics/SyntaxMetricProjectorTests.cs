@@ -97,6 +97,127 @@ public sealed class SyntaxMetricProjectorTests
         Assert.Equal(0, Metric(metrics, type.TargetId, "max_member_cognitive_complexity").NumericValue);
         Assert.Equal(0, Metric(metrics, type.TargetId, "p95_member_cognitive_complexity").NumericValue);
         Assert.Equal(0, Metric(metrics, type.TargetId, "max_member_nesting_depth").NumericValue);
+        Assert.Equal(0, Metric(metrics, type.TargetId, "max_member_length").NumericValue);
+        Assert.Equal(0, Metric(metrics, type.TargetId, "p95_member_length").NumericValue);
+        Assert.Equal(0, Metric(metrics, type.TargetId, "weighted_member_complexity").NumericValue);
+    }
+
+    [Fact]
+    public void ProjectPublishesExtendedAggregatesForProjectAndSolutionPopulations()
+    {
+        const string firstProjectPath = "First.csproj";
+        const string secondProjectPath = "Second.csproj";
+        var firstProjectKey = ProjectIdentity.Key(firstProjectPath);
+        var secondProjectKey = ProjectIdentity.Key(secondProjectPath);
+        FileFacts sharedFirst = TestFacts.File("file:shared-first", "Shared.cs", firstProjectKey);
+        FileFacts sharedSecond = TestFacts.File("file:shared-second", "Shared.cs", secondProjectKey);
+        FileFacts other = TestFacts.File("file:other", "Other.cs", firstProjectKey);
+        TypeFacts[] types = Enumerable.Range(1, 21)
+            .Select(index =>
+            {
+                TypeFacts type = TestFacts.Type($"type:{index:D2}", sharedFirst.TargetId, sharedFirst.FilePath, firstProjectKey);
+                return type with
+                {
+                    LinesOfCode = index,
+                    Declarations = index == 21
+                        ? [TestFacts.Span(sharedFirst.FilePath, 1, 10), TestFacts.Span(other.FilePath, 1, 11)]
+                        : type.Declarations
+                };
+            })
+            .ToArray();
+        MemberFacts[] firstProjectMembers = Enumerable.Range(1, 20)
+            .Select(index =>
+            {
+                MemberFacts member = TestFacts.Member(
+                    $"member:{index:D2}",
+                    "type:01",
+                    sharedFirst.FilePath,
+                    firstProjectKey,
+                    startLine: 1,
+                    endLine: index,
+                    cyclomatic: index,
+                    decisions: index - 1,
+                    cognitive: index * 2,
+                    nesting: index);
+                return member with
+                {
+                    Declarations = index == 20
+                        ? [TestFacts.Span(sharedFirst.FilePath, 1, 10), TestFacts.Span(other.FilePath, 1, 10)]
+                        : member.Declarations
+                };
+            })
+            .ToArray();
+        MemberFacts sharedMemberInSecondProject = firstProjectMembers[^1] with { ProjectKey = secondProjectKey };
+        TypeFacts sharedTypeInSecondProject = types[^1] with
+        {
+            ParentFileTargetId = sharedSecond.TargetId,
+            ProjectKey = secondProjectKey
+        };
+        SyntaxAnalysisFacts facts = TestFacts.Analysis(
+            files: [sharedFirst, sharedSecond, other],
+            types: [.. types, sharedTypeInSecondProject],
+            members: [.. firstProjectMembers, sharedMemberInSecondProject],
+            projects: [firstProjectPath, secondProjectPath]);
+
+        IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts, CancellationToken.None);
+        var firstProjectTarget = ProjectIdentity.TargetId(firstProjectPath);
+        var secondProjectTarget = ProjectIdentity.TargetId(secondProjectPath);
+
+        Assert.Equal(210, Metric(metrics, "type:01", "weighted_member_complexity").NumericValue);
+        Assert.Equal(20, Metric(metrics, "type:01", "max_member_length").NumericValue);
+        Assert.Equal(19, Metric(metrics, "type:01", "p95_member_length").NumericValue);
+        Assert.Equal(20, Metric(metrics, sharedFirst.TargetId, "max_member_length").NumericValue);
+        Assert.Equal(19, Metric(metrics, sharedFirst.TargetId, "p95_member_length").NumericValue);
+        Assert.Equal(20, Metric(metrics, firstProjectTarget, "max_member_length").NumericValue);
+        Assert.Equal(19, Metric(metrics, firstProjectTarget, "p95_member_length").NumericValue);
+        Assert.Equal(20, Metric(metrics, firstProjectTarget, "max_member_cyclomatic_complexity").NumericValue);
+        Assert.Equal(19, Metric(metrics, firstProjectTarget, "p95_member_cyclomatic_complexity").NumericValue);
+        Assert.Equal(40, Metric(metrics, firstProjectTarget, "max_member_cognitive_complexity").NumericValue);
+        Assert.Equal(38, Metric(metrics, firstProjectTarget, "p95_member_cognitive_complexity").NumericValue);
+        Assert.Equal(20, Metric(metrics, firstProjectTarget, "max_member_nesting_depth").NumericValue);
+        Assert.Equal(20, Metric(metrics, secondProjectTarget, "p95_member_length").NumericValue);
+        Assert.Equal(20, Metric(metrics, secondProjectTarget, "p95_member_cyclomatic_complexity").NumericValue);
+        Assert.Equal(40, Metric(metrics, secondProjectTarget, "max_member_cognitive_complexity").NumericValue);
+        Assert.Equal(40, Metric(metrics, secondProjectTarget, "p95_member_cognitive_complexity").NumericValue);
+        Assert.Equal(20, Metric(metrics, secondProjectTarget, "max_member_nesting_depth").NumericValue);
+        Assert.Equal(21, Metric(metrics, firstProjectTarget, "max_type_lines_of_code").NumericValue);
+        Assert.Equal(20, Metric(metrics, firstProjectTarget, "p95_type_lines_of_code").NumericValue);
+        Assert.Equal(21, Metric(metrics, secondProjectTarget, "max_type_lines_of_code").NumericValue);
+        Assert.Equal(21, Metric(metrics, secondProjectTarget, "p95_type_lines_of_code").NumericValue);
+
+        Assert.Equal(20, Metric(metrics, "solution", "max_member_length").NumericValue);
+        Assert.Equal(19, Metric(metrics, "solution", "p95_member_length").NumericValue);
+        Assert.Equal(20, Metric(metrics, "solution", "max_member_cyclomatic_complexity").NumericValue);
+        Assert.Equal(19, Metric(metrics, "solution", "p95_member_cyclomatic_complexity").NumericValue);
+        Assert.Equal(40, Metric(metrics, "solution", "max_member_cognitive_complexity").NumericValue);
+        Assert.Equal(38, Metric(metrics, "solution", "p95_member_cognitive_complexity").NumericValue);
+        Assert.Equal(20, Metric(metrics, "solution", "max_member_nesting_depth").NumericValue);
+        Assert.Equal(21, Metric(metrics, "solution", "max_type_lines_of_code").NumericValue);
+        Assert.Equal(20, Metric(metrics, "solution", "p95_type_lines_of_code").NumericValue);
+        Assert.Equal(0, Metric(metrics, other.TargetId, "max_member_length").NumericValue);
+        Assert.Equal(0, Metric(metrics, other.TargetId, "p95_member_length").NumericValue);
+    }
+
+    [Fact]
+    public void ProjectReportsZeroForNewAggregatesWhenPopulationsAreEmpty()
+    {
+        const string projectPath = "Empty.csproj";
+        SyntaxAnalysisFacts facts = TestFacts.Analysis(projects: [projectPath]);
+
+        IReadOnlyList<MetricResultLine> metrics = SyntaxMetricProjector.Project(facts, CancellationToken.None);
+
+        foreach (var target in new[] { "solution", ProjectIdentity.TargetId(projectPath) })
+        {
+            Assert.Equal(0, Metric(metrics, target, "max_member_length").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "p95_member_length").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "max_member_cyclomatic_complexity").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "p95_member_cyclomatic_complexity").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "max_member_cognitive_complexity").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "p95_member_cognitive_complexity").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "max_member_nesting_depth").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "max_type_lines_of_code").NumericValue);
+            Assert.Equal(0, Metric(metrics, target, "p95_type_lines_of_code").NumericValue);
+        }
     }
 
     [Fact]
