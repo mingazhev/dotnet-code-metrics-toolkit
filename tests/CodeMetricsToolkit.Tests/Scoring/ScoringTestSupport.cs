@@ -30,7 +30,7 @@ internal static class ScoringTestSupport
               "schemaVersion": "1.0.0",
               "id": "maintainability-baseline",
               "version": "1.0.0",
-              "artifactContractVersion": "0.1.0",
+              "artifactContractVersion": "0.2.0",
               "allowedAnalysisModes": ["semantic"],
               "allowedTargetIdStabilities": ["semantic"],
               "selectors": {
@@ -197,7 +197,7 @@ internal static class ScoringTestSupport
             : $",\"tags\":{JsonSerializer.Serialize(tags)}";
 
         return $$"""
-            {"schemaVersion":"0.1.0","metricId":"{{metricId}}","metricVersion":"{{metricVersion}}","targetId":"{{targetId}}","targetKind":"{{targetKind}}","targetIdStability":"{{stability}}","valueKind":"integer","numericValue":{{value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}},"filePath":"{{filePath}}"{{tagsJson}}}
+            {"schemaVersion":"0.2.0","metricId":"{{metricId}}","metricVersion":"{{metricVersion}}","targetId":"{{targetId}}","targetKind":"{{targetKind}}","targetIdStability":"{{stability}}","valueKind":"integer","numericValue":{{value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}},"filePath":"{{filePath}}"{{tagsJson}}}
             """;
     }
 
@@ -215,7 +215,7 @@ internal static class ScoringTestSupport
             return CreateWithOptions(
                 analysisQuality,
                 trustedDiagnostics: true,
-                artifactSchemaVersion: "0.1.0",
+                artifactSchemaVersion: "0.2.0",
                 metrics);
         }
 
@@ -300,7 +300,7 @@ internal static class ScoringTestSupport
                     startLine = 1,
                     endLine = 1,
                     declarations = target.HasCompleteDeclarationPaths &&
-                        target.TargetKind is "type" or "member"
+                        target.TargetKind is "type" or "member" or "namespace"
                         ? target.FilePaths
                             .Select(filePath => new { filePath, startLine = 1, endLine = 1 })
                             .ToArray()

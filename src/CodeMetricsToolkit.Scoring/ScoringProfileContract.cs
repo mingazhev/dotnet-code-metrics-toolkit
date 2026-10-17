@@ -10,5 +10,5 @@ public static class ScoringProfileContract
     /// The CodeMetricsToolkit artifact contract that every profile must declare and every input
     /// artifact must match exactly. Scoring never guesses compatibility across contract versions.
     /// </summary>
-    public const string SupportedArtifactContractVersion = "0.1.0";
+    public const string SupportedArtifactContractVersion = "0.2.0";
 }

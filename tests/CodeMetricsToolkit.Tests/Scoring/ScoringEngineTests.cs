@@ -59,7 +59,7 @@ public sealed class ScoringEngineTests
         Assert.Equal(
             Sha256(System.IO.Path.Combine(artifacts.Path, "graph.json")),
             result.Provenance.GraphSha256);
-        Assert.Equal("0.1.0", result.Provenance.ExpectedArtifactContractVersion);
+        Assert.Equal("0.2.0", result.Provenance.ExpectedArtifactContractVersion);
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class ScoringEngineTests
         using var artifacts = TestArtifacts.CreateWithOptions(
             analysisQuality: "trusted",
             trustedDiagnostics: false,
-            artifactSchemaVersion: "0.1.0",
+            artifactSchemaVersion: "0.2.0",
             Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 15),
             Metric("member:a", "src/A.cs", "member_length", "1.0.0", 55));
         await using Stream profile = ProfileStream(ValidProfile());
@@ -181,7 +181,7 @@ public sealed class ScoringEngineTests
                 "\"targetIdStability\":\"syntax_fallback\"",
                 StringComparison.Ordinal));
         artifacts.WriteGraph(
-            "0.1.0",
+            "0.2.0",
             new GraphFixtureTarget(
                 "member:a",
                 "member",
@@ -229,7 +229,7 @@ public sealed class ScoringEngineTests
         using var artifacts = TestArtifacts.CreateWithOptions(
             analysisQuality: "trusted",
             trustedDiagnostics: false,
-            artifactSchemaVersion: "0.1.0",
+            artifactSchemaVersion: "0.2.0",
             Metric("member:a", "src/A.cs", "cyclomatic_complexity", "1.0.0", 15),
             Metric("member:a", "src/A.cs", "member_length", "1.0.0", 55));
         var profileJson = ValidProfile().Replace(
@@ -404,7 +404,7 @@ public sealed class ScoringEngineTests
                 "1.0.0",
                 100));
         artifacts.WriteGraph(
-            "0.1.0",
+            "0.2.0",
             new GraphFixtureTarget(
                 "type:partial",
                 "type",
@@ -436,7 +436,7 @@ public sealed class ScoringEngineTests
                 "1.0.0",
                 100));
         artifacts.WriteGraph(
-            "0.1.0",
+            "0.2.0",
             new GraphFixtureTarget(
                 "type:incomplete",
                 "type",

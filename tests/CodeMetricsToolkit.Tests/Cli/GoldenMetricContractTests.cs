@@ -89,7 +89,7 @@ public sealed class GoldenMetricContractTests
                 .Order(),
             expectedTargets.Select(target => target.GetProperty("targetId").GetString()).Order());
         Assert.Equal(
-            ["file", "member", "project", "solution", "type"],
+            ["file", "member", "namespace", "project", "solution", "type"],
             expectedTargets
                 .Select(target => target.GetProperty("targetKind").GetString())
                 .Distinct()

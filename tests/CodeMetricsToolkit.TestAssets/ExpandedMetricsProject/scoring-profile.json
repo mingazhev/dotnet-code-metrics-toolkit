@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "id": "expanded-metrics-e2e",
   "version": "1.0.0",
-  "artifactContractVersion": "0.1.0",
+  "artifactContractVersion": "0.2.0",
   "allowedAnalysisModes": ["semantic"],
   "allowedTargetIdStabilities": ["semantic"],
   "selectors": {

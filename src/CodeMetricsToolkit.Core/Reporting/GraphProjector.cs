@@ -17,6 +17,9 @@ public static class GraphProjector
             .Concat(facts.ProjectPaths
             .Order(StringComparer.Ordinal)
             .Select(CreateProjectNode))
+            .Concat(facts.Namespaces
+                .OrderBy(namespaceFacts => namespaceFacts.TargetId, StringComparer.Ordinal)
+                .Select(CreateNamespaceNode))
             .Concat(facts.Files
             .OrderBy(file => file.TargetId, StringComparer.Ordinal)
             .Select(CreateFileNode))
@@ -30,6 +33,9 @@ public static class GraphProjector
 
         GraphEdgeLine[] edges = CreateSolutionProjectEdges(facts)
             .Concat(CreateProjectFileEdges(facts))
+            .Concat(CreateProjectNamespaceEdges(facts))
+            .Concat(CreateNamespaceTypeEdges(facts))
+            .Concat(CreateProjectDependencyEdges(facts))
             .Concat(facts.GraphEdges.Select(edge =>
                 new GraphEdgeLine(edge.From, edge.To, edge.Kind, edge.Confidence)))
             .OrderBy(edge => edge.From, StringComparer.Ordinal)
@@ -98,6 +104,32 @@ public static class GraphProjector
         }
     }
 
+    private static IEnumerable<GraphEdgeLine> CreateProjectNamespaceEdges(AnalysisFacts facts)
+    {
+        return facts.Namespaces.Select(namespaceFacts =>
+            new GraphEdgeLine(
+                ProjectIdentity.TargetId(namespaceFacts.ProjectPath),
+                namespaceFacts.TargetId,
+                "contains",
+                "exact"));
+    }
+
+    private static IEnumerable<GraphEdgeLine> CreateNamespaceTypeEdges(AnalysisFacts facts)
+    {
+        return facts.Namespaces.SelectMany(namespaceFacts => namespaceFacts.TypeTargetIds.Select(typeTargetId =>
+            new GraphEdgeLine(namespaceFacts.TargetId, typeTargetId, "contains", "exact")));
+    }
+
+    private static IEnumerable<GraphEdgeLine> CreateProjectDependencyEdges(AnalysisFacts facts)
+    {
+        return facts.ProjectDependencies.Select(dependency =>
+            new GraphEdgeLine(
+                ProjectIdentity.TargetId(dependency.FromProjectPath),
+                ProjectIdentity.TargetId(dependency.ToProjectPath),
+                "depends_on",
+                "exact"));
+    }
+
     private static GraphNodeLine CreateFileNode(FileFacts file)
     {
         return new GraphNodeLine
@@ -109,6 +141,23 @@ public static class GraphProjector
             FilePath = file.FilePath,
             StartLine = file.StartLine,
             EndLine = file.EndLine
+        };
+    }
+
+    private static GraphNodeLine CreateNamespaceNode(NamespaceFacts namespaceFacts)
+    {
+        return new GraphNodeLine
+        {
+            Id = namespaceFacts.TargetId,
+            Kind = "namespace",
+            Name = namespaceFacts.Name.Length == 0 ? "(global)" : namespaceFacts.Name,
+            TargetIdStability = "syntax_fallback",
+            FilePath = namespaceFacts.ProjectPath,
+            StartLine = 1,
+            EndLine = 1,
+            Declarations = namespaceFacts.Declarations
+                .Select(span => new GraphSourceSpanLine(span.FilePath, span.StartLine, span.EndLine))
+                .ToArray()
         };
     }
 

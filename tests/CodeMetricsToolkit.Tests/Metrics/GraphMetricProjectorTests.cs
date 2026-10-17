@@ -1,6 +1,7 @@
 using CodeMetricsToolkit.Core.Metrics;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Reporting;
+using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Tests.Support;
 
 namespace CodeMetricsToolkit.Tests.Metrics;
@@ -34,7 +35,18 @@ public sealed class GraphMetricProjectorTests
             CancellationToken.None);
 
         Assert.Equal(
-            MetricFamilies.Graph.Order(StringComparer.Ordinal),
+            MetricFamilies.Graph.Except(
+                    [
+                        "outgoing_project_dependency_count",
+                        "incoming_project_dependency_count",
+                        "project_dependency_cycle_membership",
+                        "project_dependency_component_size",
+                        "outgoing_namespace_dependency_count",
+                        "incoming_namespace_dependency_count",
+                        "namespace_dependency_cycle_membership",
+                        "namespace_dependency_component_size"
+                    ])
+                .Order(StringComparer.Ordinal),
             metrics.Select(metric => metric.MetricId).Distinct().Order(StringComparer.Ordinal));
         AssertMetric(metrics, typeA.TargetId, "outgoing_type_dependency_count", 1);
         AssertMetric(metrics, typeA.TargetId, "incoming_type_dependency_count", 1);
@@ -114,13 +126,73 @@ public sealed class GraphMetricProjectorTests
     public void ProjectSuppressesTrustedOnlyGraphMetricsForDegradedAnalysis()
     {
         TypeFacts type = TestFacts.Type("type:a", "file:a", "A.cs");
-        AnalysisFacts facts = TestFacts.Analysis(types: [type], trusted: false);
+        AnalysisFacts facts = TestFacts.Analysis(types: [type], trusted: false) with
+        {
+            AnalyzedProjectPaths = ["A.csproj"],
+            ProjectDependencies = [new ProjectDependencyFacts("A.csproj", "B.csproj")],
+            Namespaces =
+            [
+                new NamespaceFacts(
+                    "namespace:a/N:A",
+                    "a",
+                    "A.csproj",
+                    "A",
+                    [type.TargetId],
+                    [])
+            ]
+        };
 
         IReadOnlyList<MetricResultLine> metrics = GraphMetricProjector.Project(
             facts,
             CancellationToken.None);
 
         Assert.Empty(metrics);
+    }
+
+    [Fact]
+    public void ProjectComputesDirectProjectAndNamespaceDependencyCountsAndCycles()
+    {
+        const string projectAPath = "/repo/A.csproj";
+        const string projectBPath = "/repo/B.csproj";
+        const string namespaceAId = "namespace:a/N:A";
+        const string namespaceBId = "namespace:b/N:B";
+        TypeFacts typeA = TestFacts.Type("type:a", "file:a", "A.cs", projectKey: "a");
+        TypeFacts typeB = TestFacts.Type("type:b", "file:b", "B.cs", projectKey: "b");
+        AnalysisFacts facts = TestFacts.Analysis(
+            types: [typeA, typeB],
+            edges:
+            [
+                TestFacts.Edge(typeA.TargetId, typeB.TargetId, "uses_type"),
+                TestFacts.Edge(typeB.TargetId, typeA.TargetId, "uses_type"),
+                TestFacts.Edge(namespaceAId, namespaceBId, "depends_on"),
+                TestFacts.Edge(namespaceBId, namespaceAId, "depends_on")
+            ]) with
+        {
+            AnalyzedProjectPaths = [projectAPath, projectBPath],
+            ProjectDependencies =
+            [
+                new ProjectDependencyFacts(projectAPath, projectBPath),
+                new ProjectDependencyFacts(projectBPath, projectAPath)
+            ],
+            Namespaces =
+            [
+                new NamespaceFacts(namespaceAId, "a", projectAPath, "A", [typeA.TargetId], []),
+                new NamespaceFacts(namespaceBId, "b", projectBPath, "B", [typeB.TargetId], [])
+            ]
+        };
+
+        IReadOnlyList<MetricResultLine> metrics = GraphMetricProjector.Project(
+            facts,
+            CancellationToken.None);
+
+        AssertMetric(metrics, ProjectIdentity.TargetId(projectAPath), "outgoing_project_dependency_count", 1);
+        AssertMetric(metrics, ProjectIdentity.TargetId(projectAPath), "incoming_project_dependency_count", 1);
+        AssertMetric(metrics, ProjectIdentity.TargetId(projectAPath), "project_dependency_cycle_membership", 1);
+        AssertMetric(metrics, ProjectIdentity.TargetId(projectAPath), "project_dependency_component_size", 2);
+        AssertMetric(metrics, namespaceAId, "outgoing_namespace_dependency_count", 1);
+        AssertMetric(metrics, namespaceAId, "incoming_namespace_dependency_count", 1);
+        AssertMetric(metrics, namespaceAId, "namespace_dependency_cycle_membership", 1);
+        AssertMetric(metrics, namespaceAId, "namespace_dependency_component_size", 2);
     }
 
     private static void AssertMetric(

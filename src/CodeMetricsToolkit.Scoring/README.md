@@ -9,16 +9,22 @@ The engine supports a deliberately small, deterministic profile language:
 Profiles must pin the artifact contract and every metric version they consume.
 
 They must also state which analysis modes and target-id stability classes are accepted.
-`allowedTargetIdStabilities` is applied to selected `type` and `member` rows after file
-selectors. File, project, and solution rows are structural (`syntax_fallback`) and do
-not relax the identity pin, so a semantic-only profile can still score files.
+`allowedTargetIdStabilities` is applied to selected `type`, `member`, and `namespace`
+rows after file selectors. File, project, and solution rows are structural
+(`syntax_fallback`) and do not relax the identity pin, so a semantic-only profile can
+still score these targets.
+
+Artifact contract `0.2.0` adds project and project-scoped namespace dependency metrics
+and graph targets. Scoring profiles keep schema version `1.0.0` and must pin the exact
+artifact contract version. Namespace file selectors match source declaration spans in
+`graph.json`; their primary `filePath` remains the owning project path.
 
 ```json
 {
   "schemaVersion": "1.0.0",
   "id": "example-quality-debt",
   "version": "1.0.0",
-  "artifactContractVersion": "0.1.0",
+  "artifactContractVersion": "0.2.0",
   "allowedAnalysisModes": ["semantic"],
   "allowedTargetIdStabilities": ["semantic"],
   "selectors": {

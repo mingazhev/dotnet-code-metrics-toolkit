@@ -46,7 +46,15 @@ internal static class MetricFamilies
         "recursive_component_size",
         "dependency_component_size",
         "transitive_type_dependency_count",
-        "transitive_type_dependent_count"
+        "transitive_type_dependent_count",
+        "outgoing_project_dependency_count",
+        "incoming_project_dependency_count",
+        "project_dependency_cycle_membership",
+        "project_dependency_component_size",
+        "outgoing_namespace_dependency_count",
+        "incoming_namespace_dependency_count",
+        "namespace_dependency_cycle_membership",
+        "namespace_dependency_component_size"
     };
 
     public static IReadOnlySet<string> Duplication { get; } = new HashSet<string>(StringComparer.Ordinal)

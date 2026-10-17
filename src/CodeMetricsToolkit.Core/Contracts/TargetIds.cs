@@ -24,6 +24,11 @@ public static class TargetIds
         return $"type:{projectKey}/{typeName}@{relativePath}";
     }
 
+    public static string Namespace(string projectKey, string namespaceName)
+    {
+        return $"namespace:{projectKey}/N:{(string.IsNullOrEmpty(namespaceName) ? "(global)" : namespaceName)}";
+    }
+
     public static string Member(
         string projectKey,
         string containingTypeName,

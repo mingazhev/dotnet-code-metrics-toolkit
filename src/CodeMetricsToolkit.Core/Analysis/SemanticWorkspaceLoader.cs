@@ -231,6 +231,8 @@ internal static class SemanticWorkspaceLoader
         CancellationToken cancellationToken)
     {
         var contexts = new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal);
+        var projectIdsByPath = new Dictionary<string, ProjectId>(StringComparer.Ordinal);
+        var pathsByProjectId = new Dictionary<ProjectId, string>();
 
         foreach (Project project in solution.Projects.Where(project => project.Language == LanguageNames.CSharp))
         {
@@ -256,7 +258,10 @@ internal static class SemanticWorkspaceLoader
             contexts[projectRelativePath] = new ProjectSemanticContext(
                 project.AssemblyName ?? ResolveAssemblyName(projectRelativePath),
                 csharpCompilation,
-                syntaxTreesByFullPath);
+                syntaxTreesByFullPath,
+                []);
+            projectIdsByPath[projectRelativePath] = project.Id;
+            pathsByProjectId[project.Id] = projectRelativePath;
             if (collectCompilationDiagnostics)
             {
                 AddCompilationDiagnostics(
@@ -267,6 +272,26 @@ internal static class SemanticWorkspaceLoader
                     diagnostics,
                     cancellationToken);
             }
+        }
+
+        ProjectDependencyGraph dependencyGraph = solution.GetProjectDependencyGraph();
+        foreach (KeyValuePair<string, ProjectId> projectEntry in projectIdsByPath)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var projectPath = projectEntry.Key;
+            ProjectId projectId = projectEntry.Value;
+
+            var directDependencies = dependencyGraph
+                .GetProjectsThatThisProjectDirectlyDependsOn(projectId)
+                .Where(pathsByProjectId.ContainsKey)
+                .Select(dependencyId => pathsByProjectId[dependencyId])
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            contexts[projectPath] = contexts[projectPath] with
+            {
+                DirectProjectDependencyPaths = directDependencies
+            };
         }
 
         return contexts;

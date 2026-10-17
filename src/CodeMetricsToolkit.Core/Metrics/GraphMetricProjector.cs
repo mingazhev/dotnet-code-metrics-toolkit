@@ -1,5 +1,6 @@
 using CodeMetricsToolkit.Core.Reporting;
 using CodeMetricsToolkit.Core.Facts;
+using CodeMetricsToolkit.Core.Discovery;
 
 namespace CodeMetricsToolkit.Core.Metrics;
 
@@ -28,6 +29,17 @@ public static class GraphMetricProjector
         Dictionary<string, HashSet<string>> typeIncoming = CreateAdjacency(typesById.Keys);
         Dictionary<string, HashSet<string>> callOutgoing = CreateAdjacency(membersById.Keys);
         Dictionary<string, HashSet<string>> callIncoming = CreateAdjacency(membersById.Keys);
+        var projectTargetIds = facts.AnalyzedProjectPaths
+            .Select(ProjectIdentity.TargetId)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Dictionary<string, HashSet<string>> projectOutgoing = CreateAdjacency(projectTargetIds);
+        Dictionary<string, HashSet<string>> projectIncoming = CreateAdjacency(projectTargetIds);
+        Dictionary<string, HashSet<string>> namespaceOutgoing = CreateAdjacency(
+            facts.Namespaces.Select(namespaceFacts => namespaceFacts.TargetId));
+        Dictionary<string, HashSet<string>> namespaceIncoming = CreateAdjacency(
+            facts.Namespaces.Select(namespaceFacts => namespaceFacts.TargetId));
         IReadOnlyDictionary<string, IReadOnlyList<string>> memberIdsByType = facts.Members
             .GroupBy(member => member.ParentTypeTargetId, StringComparer.Ordinal)
             .ToDictionary(
@@ -57,6 +69,27 @@ public static class GraphMetricProjector
                 callOutgoing[edge.From].Add(edge.To);
                 callIncoming[edge.To].Add(edge.From);
             }
+
+            if (string.Equals(edge.Kind, "depends_on", StringComparison.Ordinal) &&
+                namespaceOutgoing.TryGetValue(edge.From, out HashSet<string>? sourceNamespaceDependencies) &&
+                namespaceIncoming.TryGetValue(edge.To, out HashSet<string>? targetNamespaceDependents))
+            {
+                sourceNamespaceDependencies.Add(edge.To);
+                targetNamespaceDependents.Add(edge.From);
+            }
+        }
+
+        foreach (ProjectDependencyFacts dependency in facts.ProjectDependencies)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var from = ProjectIdentity.TargetId(dependency.FromProjectPath);
+            var to = ProjectIdentity.TargetId(dependency.ToProjectPath);
+            if (projectOutgoing.TryGetValue(from, out HashSet<string>? sourceProjectDependencies) &&
+                projectIncoming.TryGetValue(to, out HashSet<string>? targetProjectDependents))
+            {
+                sourceProjectDependencies.Add(to);
+                targetProjectDependents.Add(from);
+            }
         }
 
         if (!string.Equals(facts.Health.AnalysisQuality, "trusted", StringComparison.Ordinal))
@@ -70,6 +103,51 @@ public static class GraphMetricProjector
             includeReachability: true,
             cancellationToken);
         var metrics = new List<MetricResultLine>();
+
+        DirectedGraphAnalysis projectDependencyGraph = DirectedGraphAnalyzer.Analyze(
+            projectOutgoing,
+            projectIncoming,
+            includeReachability: false,
+            cancellationToken);
+        foreach (var projectPath in facts.AnalyzedProjectPaths.Order(StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var targetId = ProjectIdentity.TargetId(projectPath);
+            metrics.Add(CreateProjectMetric(projectPath, "outgoing_project_dependency_count", projectOutgoing[targetId].Count));
+            metrics.Add(CreateProjectMetric(projectPath, "incoming_project_dependency_count", projectIncoming[targetId].Count));
+            var componentSize = projectDependencyGraph.GetCyclicComponentSize(targetId);
+            metrics.Add(CreateProjectMetric(projectPath, "project_dependency_cycle_membership", componentSize > 0 ? 1 : 0));
+            metrics.Add(CreateProjectMetric(projectPath, "project_dependency_component_size", componentSize));
+        }
+
+        DirectedGraphAnalysis namespaceDependencyGraph = DirectedGraphAnalyzer.Analyze(
+            namespaceOutgoing,
+            namespaceIncoming,
+            includeReachability: false,
+            cancellationToken);
+        foreach (NamespaceFacts namespaceFacts in facts.Namespaces.OrderBy(
+                     namespaceFacts => namespaceFacts.TargetId,
+                     StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            metrics.Add(CreateNamespaceMetric(
+                namespaceFacts,
+                "outgoing_namespace_dependency_count",
+                namespaceOutgoing[namespaceFacts.TargetId].Count));
+            metrics.Add(CreateNamespaceMetric(
+                namespaceFacts,
+                "incoming_namespace_dependency_count",
+                namespaceIncoming[namespaceFacts.TargetId].Count));
+            var componentSize = namespaceDependencyGraph.GetCyclicComponentSize(namespaceFacts.TargetId);
+            metrics.Add(CreateNamespaceMetric(
+                namespaceFacts,
+                "namespace_dependency_cycle_membership",
+                componentSize > 0 ? 1 : 0));
+            metrics.Add(CreateNamespaceMetric(
+                namespaceFacts,
+                "namespace_dependency_component_size",
+                componentSize));
+        }
 
         foreach (TypeFacts type in facts.Types.OrderBy(type => type.TargetId, StringComparer.Ordinal))
         {
@@ -183,6 +261,35 @@ public static class GraphMetricProjector
             member.FilePath,
             member.StartLine,
             member.EndLine,
+            value);
+    }
+
+    private static MetricResultLine CreateProjectMetric(string projectPath, string metricId, int value)
+    {
+        return MetricResultFactory.Numeric(
+            metricId,
+            "project",
+            ProjectIdentity.TargetId(projectPath),
+            "syntax_fallback",
+            projectPath,
+            1,
+            1,
+            value);
+    }
+
+    private static MetricResultLine CreateNamespaceMetric(
+        NamespaceFacts namespaceFacts,
+        string metricId,
+        int value)
+    {
+        return MetricResultFactory.Numeric(
+            metricId,
+            "namespace",
+            namespaceFacts.TargetId,
+            "syntax_fallback",
+            namespaceFacts.ProjectPath,
+            1,
+            1,
             value);
     }
 

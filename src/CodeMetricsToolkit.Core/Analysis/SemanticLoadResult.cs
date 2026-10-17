@@ -7,7 +7,8 @@ namespace CodeMetricsToolkit.Core.Analysis;
 internal sealed record ProjectSemanticContext(
     string AssemblyName,
     CSharpCompilation Compilation,
-    IReadOnlyDictionary<string, SyntaxTree> SyntaxTreesByFullPath);
+    IReadOnlyDictionary<string, SyntaxTree> SyntaxTreesByFullPath,
+    IReadOnlyList<string> DirectProjectDependencyPaths);
 
 internal sealed record SemanticLoadResult(
     IReadOnlyDictionary<string, ProjectSemanticContext> Contexts,

@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [ "schemaVersion", "id", "severity", "message" ],
   "properties": {
-    "schemaVersion": { "const": "0.1.0" },
+    "schemaVersion": { "const": "0.2.0" },
     "id": { "type": "string", "minLength": 1 },
     "severity": { "enum": [ "info", "warning", "error", "critical" ] },
     "message": { "type": "string", "minLength": 1 },

@@ -13,6 +13,9 @@ public sealed record AnalysisFacts
     public required IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; }
     internal DuplicationFacts? Duplication { get; init; }
     internal IReadOnlyList<ProjectFileMembershipFacts>? ProjectFileMemberships { get; init; }
+    internal IReadOnlyList<string> AnalyzedProjectPaths { get; init; } = [];
+    internal IReadOnlyList<ProjectDependencyFacts> ProjectDependencies { get; init; } = [];
+    internal IReadOnlyList<NamespaceFacts> Namespaces { get; init; } = [];
     internal IReadOnlyDictionary<string, string> SourceTextSnapshots { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 

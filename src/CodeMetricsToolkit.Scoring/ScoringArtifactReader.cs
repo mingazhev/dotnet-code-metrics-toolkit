@@ -9,7 +9,7 @@ namespace CodeMetricsToolkit.Scoring;
 internal static class ScoringArtifactReader
 {
     private static readonly HashSet<string> TargetKinds =
-        new(["solution", "project", "file", "type", "member"], StringComparer.Ordinal);
+        new(["solution", "project", "namespace", "file", "type", "member"], StringComparer.Ordinal);
     private static readonly HashSet<string> TargetIdStabilities =
         new(["semantic", "syntax_fallback", "line_fallback"], StringComparer.Ordinal);
 
@@ -280,7 +280,7 @@ internal static class ScoringArtifactReader
 
         if (!node.TryGetProperty("declarations", out JsonElement declarations))
         {
-            return primaryFilePath is null
+            return primaryFilePath is null || targetKind == "namespace"
                 ? new ParsedGraphFilePaths([], false)
                 : new ParsedGraphFilePaths([primaryFilePath], false);
         }
@@ -306,7 +306,7 @@ internal static class ScoringArtifactReader
             throw InvalidArtifacts($"{context}.declarations must contain at least one source span.");
         }
 
-        if (primaryFilePath is not null && !filePaths.Contains(primaryFilePath))
+        if (targetKind != "namespace" && primaryFilePath is not null && !filePaths.Contains(primaryFilePath))
         {
             throw InvalidArtifacts(
                 $"{context}.filePath '{primaryFilePath}' is not present in declarations.");
@@ -518,6 +518,7 @@ internal static class ScoringArtifactReader
             }
 
             if (metric.FilePath is not null &&
+                target.TargetKind != "namespace" &&
                 target.FilePaths.Count > 0 &&
                 !target.FilePaths.Contains(metric.FilePath, StringComparer.Ordinal))
             {

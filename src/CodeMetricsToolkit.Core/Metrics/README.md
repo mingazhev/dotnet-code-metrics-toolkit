@@ -256,7 +256,7 @@ For targets with no contained members or types, aggregate values are `0`.
 
 ## dependency metrics
 
-### outgoing_type_dependency_count@1.0.0
+### outgoing_type_dependency_count@1.1.0
 
 Formula:
 
@@ -265,10 +265,14 @@ outgoing_type_dependency_count =
   count(distinct internal target types reached by inherits, implements, uses_type)
 ```
 
-`uses_type` edges are member-to-type edges. For this metric they are attributed
-to the containing type of the member.
+`uses_type` edges come from both member declarations and type declarations. Member
+edges are attributed to the containing type; type-declaration edges are attributed to
+their source type. Type-declaration usage includes referenced field and signature types,
+generic arguments, attributes, and resolved static member use.
+These six existing type-dependency metrics use version `1.1.0` because their source
+population now includes type-declaration edges; their count and SCC formulas are unchanged.
 
-### incoming_type_dependency_count@1.0.0
+### incoming_type_dependency_count@1.1.0
 
 Formula:
 
@@ -277,7 +281,7 @@ incoming_type_dependency_count =
   count(distinct internal source types depending on the target type)
 ```
 
-### dependency_cycle_membership@1.0.0
+### dependency_cycle_membership@1.1.0
 
 Formula:
 
@@ -288,20 +292,62 @@ dependency_cycle_membership = 1 if target type belongs to a type dependency SCC,
 The MVP reports strongly-connected-component membership, not the exact count of
 all simple cycles in the graph.
 
-### dependency_component_size@1.0.0
+### dependency_component_size@1.1.0
 
 ```text
 dependency_component_size = size(type dependency SCC) when cyclic, otherwise 0
 ```
 
-### transitive dependency metrics
+### transitive_type_dependency_count@1.1.0
 
 ```text
 transitive_type_dependency_count = distinct internal types reachable from target
+```
+
+### transitive_type_dependent_count@1.1.0
+
+```text
 transitive_type_dependent_count = distinct internal types that can reach target
 ```
 
 The target itself is excluded, including when it belongs to a cycle.
+
+### project dependency metrics
+
+```text
+outgoing_project_dependency_count = distinct analyzed projects directly referenced by the project
+incoming_project_dependency_count = distinct analyzed projects that directly reference the project
+project_dependency_cycle_membership = 1 when the project belongs to a direct-reference SCC, else 0
+project_dependency_component_size = size of that cyclic SCC, or 0 outside a cycle
+```
+
+Only declared project references with both endpoints in the successful semantic
+workspace are included. Package, assembly, and source-level type references do not add
+project edges. Cycle values describe strongly connected components, not a count of
+simple cycles.
+
+### namespace dependency metrics
+
+Namespaces are identified within a project, including its global namespace. Their
+dependency graph aggregates internal type dependency edges and excludes dependencies
+within the same namespace:
+
+```text
+outgoing_namespace_dependency_count = distinct other analyzed namespaces reached by internal type edges
+incoming_namespace_dependency_count = distinct other analyzed namespaces with incoming internal type edges
+namespace_dependency_cycle_membership = 1 when the namespace belongs to a dependency SCC, else 0
+namespace_dependency_component_size = size of that cyclic SCC, or 0 outside a cycle
+```
+
+Type usage edges include declarations such as fields, signatures, generic arguments,
+attributes, and resolved static member use. External types are excluded from the internal
+dependency graph. Nested types remain assigned to their lexical namespace; they do not
+create additional namespace nodes. Namespace metrics and all eight project/namespace
+dependency metrics require a trusted semantic analysis.
+
+Namespace graph nodes use the project path as primary metadata and carry source
+declaration spans separately. Consumers selecting namespaces by source file must use
+those declarations.
 
 ## call graph metrics
 
@@ -319,8 +365,7 @@ The static call graph contains explicit invocations and object construction reso
 source members. It is not complete for reflection, `dynamic`, delegates, framework
 callbacks, dependency injection, generated dispatch, or external members.
 
-New graph metrics are emitted only for a trusted semantic analysis. The three original
-type dependency metrics retain their legacy best-effort behavior for compatibility.
+All graph metrics are emitted only for a trusted semantic analysis.
 
 ## semantic symbol metrics
 

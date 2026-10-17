@@ -19,7 +19,7 @@
     "relatedTargetIds"
   ],
   "properties": {
-    "schemaVersion": { "const": "0.1.0" },
+    "schemaVersion": { "const": "0.2.0" },
     "chunkId": { "type": "string", "minLength": 1 },
     "targetId": { "type": "string", "minLength": 1 },
     "targetKind": { "enum": [ "file", "type", "member" ] },

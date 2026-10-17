@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [ "schemaVersion", "nodes", "edges" ],
   "properties": {
-    "schemaVersion": { "const": "0.1.0" },
+    "schemaVersion": { "const": "0.2.0" },
     "nodes": {
       "type": "array",
       "items": { "$ref": "#/$defs/node" }
@@ -33,7 +33,7 @@
       "required": [ "id", "kind", "name", "targetIdStability" ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "kind": { "enum": [ "solution", "project", "file", "type", "member" ] },
+        "kind": { "enum": [ "solution", "project", "namespace", "file", "type", "member" ] },
         "name": { "type": "string", "minLength": 1 },
         "targetIdStability": { "enum": [ "semantic", "syntax_fallback", "line_fallback" ] },
         "filePath": { "type": "string", "minLength": 1 },
@@ -54,7 +54,7 @@
         "from": { "type": "string", "minLength": 1 },
         "to": { "type": "string", "minLength": 1 },
         "kind": {
-          "enum": [ "declares", "contains", "inherits", "implements", "uses_type", "calls" ]
+          "enum": [ "declares", "contains", "depends_on", "inherits", "implements", "uses_type", "calls" ]
         },
         "confidence": { "enum": [ "exact", "partial" ] }
       }

@@ -302,13 +302,13 @@ public sealed class OutputValidatorTests
     public void ArtifactSchemaVersionMismatchIsRejected()
     {
         using var output = TemporaryOutput.Create();
-        UpdateJson(output.File("summary.json"), root => root["schemaVersion"] = "0.2.0");
+        UpdateJson(output.File("summary.json"), root => root["schemaVersion"] = "0.3.0");
 
         OutputValidationResult result = OutputValidator.Validate(output.Path, CancellationToken.None);
 
         Assert.False(result.IsValid);
         Assert.Contains(
-            "summary.json schemaVersion '0.2.0' does not match manifest schemaVersion '0.1.0'.",
+            "summary.json schemaVersion '0.3.0' does not match manifest schemaVersion '0.2.0'.",
             result.Errors);
     }
 

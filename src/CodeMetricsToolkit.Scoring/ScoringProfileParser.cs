@@ -5,7 +5,7 @@ namespace CodeMetricsToolkit.Scoring;
 internal static class ScoringProfileParser
 {
     private static readonly HashSet<string> TargetKinds =
-        new(["file", "type", "member"], StringComparer.Ordinal);
+        new(["file", "type", "member", "project", "namespace"], StringComparer.Ordinal);
     private static readonly HashSet<string> AnalysisModes =
         new(["syntax", "semantic", "partial_semantic"], StringComparer.Ordinal);
     private static readonly HashSet<string> TargetIdStabilities =
@@ -208,7 +208,7 @@ internal static class ScoringProfileParser
         {
             throw InvalidProfile(
                 $"{context}.targetKind '{targetKind}' is not supported. " +
-                "Expected a source-linked target kind: file, type, or member.");
+                "Expected target kind: file, type, member, project, or namespace.");
         }
 
         IReadOnlyList<MetricThreshold> thresholds = ParseThresholds(

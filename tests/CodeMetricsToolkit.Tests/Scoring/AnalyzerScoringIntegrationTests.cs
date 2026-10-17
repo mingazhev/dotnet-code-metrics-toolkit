@@ -48,8 +48,8 @@ public sealed class AnalyzerScoringIntegrationTests
         Assert.Equal("expanded-metrics-e2e", provenance.ProfileId);
         Assert.Equal("1.0.0", provenance.ProfileVersion);
         Assert.Equal(Sha256(profilePath), provenance.ProfileSha256);
-        Assert.Equal("0.1.0", provenance.ExpectedArtifactContractVersion);
-        Assert.Equal("0.1.0", provenance.ArtifactSchemaVersion);
+        Assert.Equal("0.2.0", provenance.ExpectedArtifactContractVersion);
+        Assert.Equal("0.2.0", provenance.ArtifactSchemaVersion);
         Assert.Equal(Sha256(Path.Combine(output.Path, "manifest.json")), provenance.ManifestSha256);
         Assert.Equal(Sha256(Path.Combine(output.Path, "summary.json")), provenance.SummarySha256);
         Assert.Equal(Sha256(Path.Combine(output.Path, "metrics.ndjson")), provenance.MetricsSha256);

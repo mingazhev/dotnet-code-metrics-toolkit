@@ -232,7 +232,7 @@ public static class ScoringEngine
         var scoredIdentityKinds = profile.Operations
             .OfType<ThresholdDebtOperation>()
             .Select(operation => operation.TargetKind)
-            .Where(kind => kind is "type" or "member")
+            .Where(kind => kind is "type" or "member" or "namespace")
             .ToHashSet(StringComparer.Ordinal);
 
         var unexpectedStabilities = selectedMetrics
@@ -279,7 +279,7 @@ public static class ScoringEngine
         if (!hasFileSelectors)
         {
             return metrics
-                .Where(metric => metric.TargetKind is "file" or "type" or "member")
+                .Where(metric => metric.TargetKind is "file" or "type" or "member" or "project" or "namespace")
                 .ToArray();
         }
 
@@ -288,7 +288,7 @@ public static class ScoringEngine
             .ToHashSet(StringComparer.Ordinal);
         ArtifactTargetPaths? incompleteTarget = graph.Targets.Values.FirstOrDefault(target =>
             metricTargetIds.Contains(target.TargetId) &&
-            target.TargetKind is "file" or "type" or "member" &&
+            target.TargetKind is "file" or "type" or "member" or "namespace" &&
             !target.HasCompleteDeclarationPaths);
         if (incompleteTarget is not null)
         {

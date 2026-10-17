@@ -1,5 +1,4 @@
 using CodeMetricsToolkit.Core.Syntax;
-using System.Diagnostics.CodeAnalysis;
 using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
@@ -73,10 +72,12 @@ public static class AnalysisFactsCollector
             .OrderBy(type => type.TargetId, StringComparer.Ordinal)
             .ToArray();
 
-        GraphEdgeFacts[] graphEdges = CreateGraphEdges(
+        IReadOnlyList<NamespaceFacts> namespaces = CreateNamespaceFacts(typeDeclarations);
+        GraphEdgeFacts[] graphEdges = SemanticGraphCollector.CreateGraphEdges(
             typeDeclarations,
             memberDeclarations,
             memberFactsById,
+            namespaces,
             cancellationToken);
 
         return new AnalysisFacts
@@ -90,6 +91,15 @@ public static class AnalysisFactsCollector
             Members = members,
             GraphEdges = graphEdges,
             Duplication = duplication,
+            AnalyzedProjectPaths = semanticLoad.Contexts.Keys.Order(StringComparer.Ordinal).ToArray(),
+            ProjectDependencies = semanticLoad.Contexts
+                .SelectMany(entry => entry.Value.DirectProjectDependencyPaths.Select(dependencyPath =>
+                    new ProjectDependencyFacts(entry.Key, dependencyPath)))
+                .Distinct()
+                .OrderBy(dependency => dependency.FromProjectPath, StringComparer.Ordinal)
+                .ThenBy(dependency => dependency.ToProjectPath, StringComparer.Ordinal)
+                .ToArray(),
+            Namespaces = namespaces,
             ProjectFileMemberships = analysisSourceFiles
                 .Select(source => new ProjectFileMembershipFacts(
                     source.ProjectKey,
@@ -197,6 +207,46 @@ public static class AnalysisFactsCollector
         return typeDeclarations;
     }
 
+    private static NamespaceFacts[] CreateNamespaceFacts(
+        IReadOnlyList<TypeDeclarationInfo> typeDeclarations)
+    {
+        return typeDeclarations
+            .GroupBy(
+                declaration => (declaration.ProjectKey, declaration.NamespaceName),
+                EqualityComparer<(string ProjectKey, string NamespaceName)>.Default)
+            .Select(group =>
+            {
+                TypeDeclarationInfo first = group.First();
+                TypeDeclarationInfo[] declarations = group
+                    .OrderBy(declaration => declaration.FilePath, StringComparer.Ordinal)
+                    .ThenBy(declaration => declaration.StartLine)
+                    .ToArray();
+
+                return new NamespaceFacts(
+                    TargetIds.Namespace(first.ProjectKey, first.NamespaceName),
+                    first.ProjectKey,
+                    first.Context.SourceFile.ProjectPath,
+                    first.NamespaceName,
+                    declarations
+                        .Select(declaration => declaration.TargetId)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray(),
+                    declarations
+                        .Select(declaration => new SourceSpanFacts
+                        {
+                            FilePath = declaration.FilePath,
+                            StartLine = declaration.StartLine,
+                            StartColumn = declaration.Context.SyntaxTree.GetLineSpan(declaration.Declaration.Span).StartLinePosition.Character + 1,
+                            EndLine = declaration.EndLine
+                        })
+                        .ToArray());
+            })
+            .OrderBy(namespaceFacts => namespaceFacts.ProjectPath, StringComparer.Ordinal)
+            .ThenBy(namespaceFacts => namespaceFacts.Name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static TypeDeclarationInfo CreateTypeDeclarationInfo(
         BaseTypeDeclarationSyntax typeDeclaration,
         SourceFileContext context,
@@ -208,6 +258,7 @@ public static class AnalysisFactsCollector
         var name = symbol?.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) ?? fallbackName;
         var documentationCommentId = GetDocumentationCommentId(symbol);
         var assemblyName = symbol?.ContainingAssembly?.Name ?? fallbackAssemblyName;
+        var namespaceName = GetNamespaceName(typeDeclaration, symbol);
         var targetId = documentationCommentId is null || symbol is null
             ? TargetIds.Type(context.SourceFile.ProjectKey, fallbackName, context.SourceFile.RelativePath)
             : TargetIds.TypeSemantic(assemblyName, documentationCommentId);
@@ -223,12 +274,32 @@ public static class AnalysisFactsCollector
             targetId,
             targetIdStability,
             context.SourceFile.ProjectKey,
+            namespaceName,
             name,
             context.SourceFile.RelativePath,
             ToOneBasedLine(lineSpan.StartLinePosition.Line),
             ToOneBasedLine(lineSpan.EndLinePosition.Line),
             CountLines(span, context.SyntaxTree),
             LineFactsCollector.CollectTokenLines(context.Root, span, context.SyntaxTree).Count);
+    }
+
+    private static string GetNamespaceName(
+        BaseTypeDeclarationSyntax typeDeclaration,
+        INamedTypeSymbol? symbol)
+    {
+        if (symbol is not null)
+        {
+            return symbol.ContainingNamespace.IsGlobalNamespace
+                ? string.Empty
+                : symbol.ContainingNamespace.ToDisplayString();
+        }
+
+        return string.Join(
+            ".",
+            typeDeclaration.Ancestors()
+                .OfType<BaseNamespaceDeclarationSyntax>()
+                .Reverse()
+                .Select(namespaceDeclaration => namespaceDeclaration.Name.WithoutTrivia().ToString()));
     }
 
     private static Dictionary<string, TypeFacts> CreateTypeFacts(
@@ -412,173 +483,6 @@ public static class AnalysisFactsCollector
                 StringComparer.Ordinal);
     }
 
-    private static GraphEdgeFacts[] CreateGraphEdges(
-        IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
-        IReadOnlyList<MemberDeclarationInfo> memberDeclarations,
-        Dictionary<string, MemberFacts> memberFactsById,
-        CancellationToken cancellationToken)
-    {
-        var edges = new List<GraphEdgeFacts>();
-        var seenEdges = new HashSet<string>(StringComparer.Ordinal);
-        var typeTargetsBySymbol = typeDeclarations
-            .Select(declaration => new
-            {
-                Key = GetSymbolMapKey(declaration.Symbol),
-                declaration.TargetId
-            })
-            .Where(entry => entry.Key is not null)
-            .GroupBy(entry => entry.Key!, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().TargetId, StringComparer.Ordinal);
-        var memberTargetsBySymbol = memberDeclarations
-            .Select(declaration => new
-            {
-                Key = GetSymbolMapKey(declaration.Symbol),
-                TargetId = memberFactsById[declaration.TargetId].TargetId
-            })
-            .Where(entry => entry.Key is not null)
-            .GroupBy(entry => entry.Key!, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().TargetId, StringComparer.Ordinal);
-
-        foreach (TypeDeclarationInfo typeDeclaration in typeDeclarations)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            AddEdge(
-                edges,
-                seenEdges,
-                TargetIds.File(typeDeclaration.FilePath),
-                typeDeclaration.TargetId,
-                "declares",
-                "exact");
-
-            if (typeDeclaration.Symbol is null)
-            {
-                continue;
-            }
-
-            if (TryGetTypeTarget(typeDeclaration.Symbol.BaseType, typeTargetsBySymbol, out var baseTypeTargetId) &&
-                !IsObject(typeDeclaration.Symbol.BaseType))
-            {
-                AddEdge(edges, seenEdges, typeDeclaration.TargetId, baseTypeTargetId, "inherits", "exact");
-            }
-
-            foreach (INamedTypeSymbol interfaceSymbol in typeDeclaration.Symbol.Interfaces)
-            {
-                if (TryGetTypeTarget(interfaceSymbol, typeTargetsBySymbol, out var interfaceTargetId))
-                {
-                    AddEdge(edges, seenEdges, typeDeclaration.TargetId, interfaceTargetId, "implements", "exact");
-                }
-            }
-        }
-
-        foreach (MemberDeclarationInfo memberDeclaration in memberDeclarations)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            MemberFacts member = memberFactsById[memberDeclaration.TargetId];
-            AddEdge(
-                edges,
-                seenEdges,
-                member.ParentTypeTargetId,
-                member.TargetId,
-                "contains",
-                "exact");
-
-            if (memberDeclaration.SemanticModel is null)
-            {
-                continue;
-            }
-
-            AddUsesTypeEdges(memberDeclaration, member, typeTargetsBySymbol, edges, seenEdges, cancellationToken);
-            AddCallEdges(memberDeclaration, member, memberTargetsBySymbol, edges, seenEdges, cancellationToken);
-        }
-
-        return edges
-            .OrderBy(edge => edge.From, StringComparer.Ordinal)
-            .ThenBy(edge => edge.Kind, StringComparer.Ordinal)
-            .ThenBy(edge => edge.To, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private static void AddUsesTypeEdges(
-        MemberDeclarationInfo memberDeclaration,
-        MemberFacts member,
-        IReadOnlyDictionary<string, string> typeTargetsBySymbol,
-        List<GraphEdgeFacts> edges,
-        HashSet<string> seenEdges,
-        CancellationToken cancellationToken)
-    {
-        foreach (TypeSyntax typeSyntax in memberDeclaration.Declaration.DescendantNodes().OfType<TypeSyntax>())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            ITypeSymbol? type = memberDeclaration.SemanticModel!.GetTypeInfo(typeSyntax, cancellationToken).Type;
-            if (TryGetTypeTarget(type, typeTargetsBySymbol, out var typeTargetId) &&
-                typeTargetId != member.ParentTypeTargetId)
-            {
-                AddEdge(edges, seenEdges, member.TargetId, typeTargetId, "uses_type", "exact");
-            }
-        }
-    }
-
-    private static void AddCallEdges(
-        MemberDeclarationInfo memberDeclaration,
-        MemberFacts member,
-        IReadOnlyDictionary<string, string> memberTargetsBySymbol,
-        List<GraphEdgeFacts> edges,
-        HashSet<string> seenEdges,
-        CancellationToken cancellationToken)
-    {
-        foreach (InvocationExpressionSyntax invocation in memberDeclaration.Declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            ISymbol? symbol = memberDeclaration.SemanticModel!.GetSymbolInfo(invocation, cancellationToken).Symbol;
-            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId))
-            {
-                AddEdge(edges, seenEdges, member.TargetId, targetId, "calls", "exact");
-            }
-        }
-
-        foreach (ObjectCreationExpressionSyntax objectCreation in memberDeclaration.Declaration.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            ISymbol? symbol = memberDeclaration.SemanticModel!.GetSymbolInfo(objectCreation, cancellationToken).Symbol;
-            if (TryGetMemberTarget(symbol, memberTargetsBySymbol, out var targetId))
-            {
-                AddEdge(edges, seenEdges, member.TargetId, targetId, "calls", "exact");
-            }
-        }
-    }
-
-    private static void AddEdge(
-        List<GraphEdgeFacts> edges,
-        HashSet<string> seenEdges,
-        string from,
-        string to,
-        string kind,
-        string confidence)
-    {
-        var key = $"{from}\n{to}\n{kind}\n{confidence}";
-
-        if (seenEdges.Add(key))
-        {
-            if (edges.Count >= ArtifactLimits.MaxRecords)
-            {
-                throw new InvalidDataException(
-                    $"Analysis produced more than {ArtifactLimits.MaxRecords} graph edges.");
-            }
-
-            edges.Add(new GraphEdgeFacts
-            {
-                From = from,
-                To = to,
-                Kind = kind,
-                Confidence = confidence
-            });
-        }
-    }
 
     private static FileFacts CreateFileFacts(SourceFileContext context)
     {
@@ -786,62 +690,6 @@ public static class AnalysisFactsCollector
     private static string? GetDocumentationCommentId(ISymbol? symbol)
     {
         return symbol?.OriginalDefinition.GetDocumentationCommentId();
-    }
-
-    private static string? GetSymbolMapKey(ISymbol? symbol)
-    {
-        if (symbol is null)
-        {
-            return null;
-        }
-
-        var documentationCommentId = GetDocumentationCommentId(symbol);
-        var assemblyName = symbol.OriginalDefinition.ContainingAssembly?.Name;
-
-        return documentationCommentId is null || assemblyName is null
-            ? null
-            : $"{assemblyName}/{documentationCommentId}";
-    }
-
-    private static bool TryGetTypeTarget(
-        ITypeSymbol? symbol,
-        IReadOnlyDictionary<string, string> typeTargetsBySymbol,
-        [NotNullWhen(true)]
-        out string? targetId)
-    {
-        targetId = null;
-
-        if (symbol is not INamedTypeSymbol namedType)
-        {
-            return false;
-        }
-
-        var key = GetSymbolMapKey(namedType.OriginalDefinition);
-
-        return key is not null && typeTargetsBySymbol.TryGetValue(key, out targetId);
-    }
-
-    private static bool TryGetMemberTarget(
-        ISymbol? symbol,
-        IReadOnlyDictionary<string, string> memberTargetsBySymbol,
-        [NotNullWhen(true)]
-        out string? targetId)
-    {
-        targetId = null;
-
-        if (symbol is null)
-        {
-            return false;
-        }
-
-        var key = GetSymbolMapKey(symbol.OriginalDefinition);
-
-        return key is not null && memberTargetsBySymbol.TryGetValue(key, out targetId);
-    }
-
-    private static bool IsObject(INamedTypeSymbol? symbol)
-    {
-        return symbol?.SpecialType == SpecialType.System_Object;
     }
 
 }

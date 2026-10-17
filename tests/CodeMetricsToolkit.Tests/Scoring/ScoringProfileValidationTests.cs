@@ -60,7 +60,7 @@ public sealed class ScoringProfileValidationTests
     public async Task RejectsUnsupportedArtifactContractInProfile()
     {
         var profileJson = ValidProfile().Replace(
-            "\"artifactContractVersion\": \"0.1.0\"",
+            "\"artifactContractVersion\": \"0.2.0\"",
             "\"artifactContractVersion\": \"9.9.9\"",
             StringComparison.Ordinal);
         await using Stream profile = ProfileStream(profileJson);
@@ -80,13 +80,13 @@ public sealed class ScoringProfileValidationTests
             "src/A.cs",
             "cyclomatic_complexity",
             "1.0.0",
-            15).Replace("\"schemaVersion\":\"0.1.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
+            15).Replace("\"schemaVersion\":\"0.2.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
         var secondMetric = Metric(
             "member:a",
             "src/A.cs",
             "member_length",
             "1.0.0",
-            55).Replace("\"schemaVersion\":\"0.1.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
+            55).Replace("\"schemaVersion\":\"0.2.0\"", "\"schemaVersion\":\"9.9.9\"", StringComparison.Ordinal);
         using var artifacts = TestArtifacts.CreateWithOptions(
             analysisQuality: "trusted",
             trustedDiagnostics: true,
@@ -99,7 +99,7 @@ public sealed class ScoringProfileValidationTests
             () => ScoringEngine.EvaluateAsync(artifacts.Path, profile));
 
         Assert.Equal(ScoringFailureKind.InvalidArtifacts, exception.FailureKind);
-        Assert.Contains("profile requires artifactContractVersion '0.1.0'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("profile requires artifactContractVersion '0.2.0'", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

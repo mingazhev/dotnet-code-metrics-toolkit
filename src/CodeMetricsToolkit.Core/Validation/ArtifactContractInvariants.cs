@@ -365,7 +365,7 @@ internal static class ArtifactContractInvariants
 
     private static bool RequiresGraphNode(string targetKind)
     {
-        return targetKind is "solution" or "project" or "file" or "type" or "member";
+        return targetKind is "solution" or "project" or "namespace" or "file" or "type" or "member";
     }
 
     private static void ValidateEdgeEndpoint(

@@ -20,6 +20,7 @@ internal sealed record TypeDeclarationInfo(
     string TargetId,
     string TargetIdStability,
     string ProjectKey,
+    string NamespaceName,
     string Name,
     string FilePath,
     int StartLine,
