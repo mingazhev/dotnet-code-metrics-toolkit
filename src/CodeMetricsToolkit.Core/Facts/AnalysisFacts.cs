@@ -11,6 +11,7 @@ public sealed record AnalysisFacts
     public required IReadOnlyList<MemberFacts> Members { get; init; }
     public required IReadOnlyList<GraphEdgeFacts> GraphEdges { get; init; }
     public required IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; }
+    internal DuplicationFacts? Duplication { get; init; }
     internal IReadOnlyList<ProjectFileMembershipFacts>? ProjectFileMemberships { get; init; }
     internal IReadOnlyDictionary<string, string> SourceTextSnapshots { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);

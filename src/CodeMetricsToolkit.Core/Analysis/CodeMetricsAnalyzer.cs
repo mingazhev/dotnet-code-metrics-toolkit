@@ -62,6 +62,7 @@ public static class CodeMetricsAnalyzer
             }
 
             MetricResultLine[] metricRows = SyntaxMetricProjector.Project(facts, cancellationToken)
+                .Concat(DuplicationMetricProjector.Project(facts, cancellationToken))
                 .Concat(GraphMetricProjector.Project(facts, cancellationToken))
                 .Concat(SemanticMetricProjector.Project(facts, cancellationToken))
                 .Concat(DiagnosticMetricProjector.Project(facts, cancellationToken))

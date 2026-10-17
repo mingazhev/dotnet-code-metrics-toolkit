@@ -41,6 +41,7 @@ public static class AnalysisFactsCollector
                 diagnostics,
                 cancellationToken)
             .ConfigureAwait(false);
+        DuplicationFacts duplication = DuplicationFactsCollector.Collect(sourceFiles, cancellationToken);
 
         IReadOnlyList<FileFacts> files = sourceFiles
             .Select(context => CreateFileFacts(context))
@@ -88,6 +89,7 @@ public static class AnalysisFactsCollector
             Types = types,
             Members = members,
             GraphEdges = graphEdges,
+            Duplication = duplication,
             ProjectFileMemberships = analysisSourceFiles
                 .Select(source => new ProjectFileMembershipFacts(
                     source.ProjectKey,

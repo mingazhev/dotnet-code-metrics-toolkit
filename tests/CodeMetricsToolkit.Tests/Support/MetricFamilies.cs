@@ -49,6 +49,13 @@ internal static class MetricFamilies
         "transitive_type_dependent_count"
     };
 
+    public static IReadOnlySet<string> Duplication { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "duplicated_block_count",
+        "duplicated_line_count",
+        "duplicated_line_ratio"
+    };
+
     public static IReadOnlySet<string> Semantic { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "inheritance_depth",
@@ -74,6 +81,7 @@ internal static class MetricFamilies
         new HashSet<string>(StringComparer.Ordinal) { "hotspot_rank" };
 
     public static IReadOnlySet<string> All { get; } = Syntax
+        .Concat(Duplication)
         .Concat(Graph)
         .Concat(Semantic)
         .Concat(Diagnostics)

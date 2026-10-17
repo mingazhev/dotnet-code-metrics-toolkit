@@ -41,12 +41,15 @@ public sealed partial class CliAnalyzeTests
         Assert.Equal(0, listExitCode);
         Assert.Equal(0, explainExitCode);
         Assert.Equal(
-            50,
+            53,
             listOutput.ToString().Split(
                 Environment.NewLine,
                 StringSplitOptions.RemoveEmptyEntries).Length);
         Assert.Contains("diagnostic_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("cfg_cyclomatic_complexity@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("duplicated_block_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("duplicated_line_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("duplicated_line_ratio@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("Formula: number of diagnostics whose span overlaps the target", explainOutput.ToString(), StringComparison.Ordinal);
     }
 

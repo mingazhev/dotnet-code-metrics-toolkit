@@ -110,6 +110,32 @@ token_line_count = distinct source lines containing C# syntax tokens
 
 Target kinds: `solution`, `project`, `file`, `type`.
 
+### duplicated_block_count@1.0.0, duplicated_line_count@1.0.0, and duplicated_line_ratio@1.0.0
+
+The duplication pass uses exact syntax-token identity: token kind and source text must
+match. It ignores trivia, including whitespace and comments, while preserving identifier
+spelling and literal text. It does not claim semantic or rename-equivalent clone matching.
+
+A qualifying occurrence is a window of 100 consecutive nonmissing C# tokens whose
+inclusive physical line span is at least 10 lines. Every counted window has a matching
+occurrence in another file or a same-file occurrence at least 100 tokens away. Overlapping
+qualifying token windows are merged within each file. Therefore
+`duplicated_block_count` counts merged regions, not clone pairs or clone groups.
+`duplicated_line_count` counts the union of physical lines intersecting those regions, so
+each line contributes at most once per file. `duplicated_line_ratio` is
+`duplicated_line_count / lines_of_code` and is omitted when the denominator is zero.
+
+Solution totals use unique physical file paths. Project totals follow project-file
+membership, so a linked physical file can contribute to each project that includes it
+while contributing once to the solution. Every file region also emits a tagged
+`duplicated_block_count=1` metric row. Its `startLine` and `endLine` identify the region;
+the deterministic `duplication_block:NNNNNN` tag distinguishes it from the untagged file
+aggregate and from other regions. Project and solution rows remain untagged aggregates.
+
+Analysis with duplication is bounded to 500,000 nonmissing tokens across unique physical
+source files, 500,000 candidate windows, and 20,000,000 work units. Exceeding a bound
+fails analysis with a clear error instead of emitting truncated or zero-valued results.
+
 ### line classification and ratios
 
 The file line pass builds two sets from Roslyn: lines containing syntax tokens and lines

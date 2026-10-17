@@ -40,6 +40,34 @@ public sealed class AnalysisFactsCollectorTests
         Assert.Equal(11, type.TokenLineCount);
     }
 
+    [Fact]
+    public async Task CollectAttachesDuplicationFactsForParsedPhysicalFiles()
+    {
+        using var directory = new TemporaryDirectory();
+        var source = string.Join(
+            '\n',
+            Enumerable.Range(0, 25).Select(index => $"int v{index:D3} = {index};"));
+        File.WriteAllText(Path.Combine(directory.Path, "A.cs"), source);
+        File.WriteAllText(Path.Combine(directory.Path, "B.cs"), source);
+        DiscoveredSources sources = SourceFileDiscovery.Discover(
+            directory.Path,
+            includeGeneratedCode: false);
+
+        AnalysisFacts facts = await AnalysisFactsCollector.CollectAsync(
+            sources,
+            useSemantic: false,
+            noRestore: true,
+            CancellationToken.None);
+
+        Assert.NotNull(facts.Duplication);
+        Assert.Equal(2, facts.Duplication.Files.Count);
+        Assert.All(facts.Duplication.Files, file =>
+        {
+            Assert.Equal(25, file.DuplicatedLineCount);
+            Assert.Single(file.Regions);
+        });
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
         public TemporaryDirectory()
