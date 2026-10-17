@@ -53,13 +53,11 @@ internal sealed record TypeDeclarationInfo(
     int StartLine,
     int EndLine,
     int LinesOfCode,
-    int NonCommentLinesOfCode,
-    int MemberCount);
+    int NonCommentLinesOfCode);
 
 internal sealed record MemberDeclarationInfo(
     MemberDeclarationSyntax Declaration,
     string ParentTypeTargetId,
-    SourceFileContext Context,
     SemanticModel? SemanticModel,
     ISymbol? Symbol,
     string TargetId,

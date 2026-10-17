@@ -227,9 +227,11 @@ public sealed partial class CliAnalyzeTests
         JsonElement[] graphNodes = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "nodes");
         JsonElement[] graphEdges = ReadJsonArray(Path.Combine(output.Path, "graph.json"), "edges");
         const string partialTypeId = "type:PartialTypesProject/T:PartialTypesProject.PartialOrder";
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
 
         JsonElement partialType = Assert.Single(graphNodes, node => HasPropertyValue(node, "id", partialTypeId));
         Assert.Equal(2, partialType.GetProperty("declarations").GetArrayLength());
+        Assert.Equal(9, MetricInt(metrics, partialTypeId, "member_count"));
         Assert.Equal(2, graphEdges.Count(edge =>
             HasPropertyValue(edge, "kind", "declares") &&
             HasPropertyValue(edge, "to", partialTypeId)));

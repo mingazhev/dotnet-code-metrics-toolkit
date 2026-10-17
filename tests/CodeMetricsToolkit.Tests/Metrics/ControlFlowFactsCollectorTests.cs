@@ -40,6 +40,9 @@ public sealed class ControlFlowFactsCollectorTests
     [InlineData("_ = value is < 0 or > 10;", 3)]
     [InlineData("_ = value is > 0;", 2)]
     [InlineData("_ = obj is string textValue;", 2)]
+    [InlineData("_ = obj is string;", 2)]
+    [InlineData("_ = obj is not string;", 2)]
+    [InlineData("_ = obj is string or int;", 3)]
     public void CyclomaticComplexityCountsDocumentedDecisionPoints(string body, int expectedComplexity)
     {
         MethodDeclarationSyntax method = ParseTargetMethod(body);
@@ -47,6 +50,7 @@ public sealed class ControlFlowFactsCollectorTests
         ControlFlowFacts facts = ControlFlowFactsCollector.Collect(method, CancellationToken.None);
 
         Assert.Equal(expectedComplexity, facts.CyclomaticComplexity);
+        Assert.Equal(expectedComplexity - 1, facts.DecisionPointCount);
     }
 
     [Fact]
@@ -57,6 +61,12 @@ public sealed class ControlFlowFactsCollectorTests
             int[] values = [1, 2];
             var query = from item in values select item;
             _ = text?.Length;
+            _ = obj is null;
+            _ = obj is not null;
+            _ = obj as string;
+            const int marker = 1;
+            _ = obj is marker;
+            _ = obj is not marker;
             int result = 0;
             result = value;
             text ??= "fallback";
@@ -83,6 +93,7 @@ public sealed class ControlFlowFactsCollectorTests
             {
                 while (value > 10)
                 {
+                    _ = obj is not string;
                     value--;
                 }
             }
@@ -90,8 +101,9 @@ public sealed class ControlFlowFactsCollectorTests
 
         ControlFlowFacts facts = ControlFlowFactsCollector.Collect(method, CancellationToken.None);
 
-        Assert.Equal(3, facts.CyclomaticComplexity);
-        Assert.Equal(3, facts.CognitiveComplexity);
+        Assert.Equal(4, facts.CyclomaticComplexity);
+        Assert.Equal(3, facts.DecisionPointCount);
+        Assert.Equal(4, facts.CognitiveComplexity);
         Assert.Equal(2, facts.NestingDepth);
     }
 

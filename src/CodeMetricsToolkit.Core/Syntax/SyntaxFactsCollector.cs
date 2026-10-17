@@ -1,8 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
+using CodeMetricsToolkit.Abstractions;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 using CodeMetricsToolkit.Core.Metrics;
-using CodeMetricsToolkit.Core.Validation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -25,10 +25,9 @@ public static class SyntaxFactsCollector
     {
         ArgumentNullException.ThrowIfNull(sources);
 
-        var diagnostics = new List<AnalysisDiagnostic>();
-        var diagnosticKeys = new HashSet<string>(StringComparer.Ordinal);
+        var diagnostics = new AnalysisDiagnosticCollector();
         SemanticLoadResult semanticLoad = useSemantic
-            ? await SemanticWorkspaceLoader.LoadAsync(sources, noRestore, diagnostics, diagnosticKeys, cancellationToken)
+            ? await SemanticWorkspaceLoader.LoadAsync(sources, noRestore, diagnostics, cancellationToken)
                 .ConfigureAwait(false)
             : SemanticLoadResult.SyntaxOnly(
                 semanticInitializationFailure ?? "Syntax-only analysis was requested.");
@@ -40,7 +39,6 @@ public static class SyntaxFactsCollector
                 analysisSourceFiles,
                 semanticLoad.Contexts,
                 diagnostics,
-                diagnosticKeys,
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -55,20 +53,23 @@ public static class SyntaxFactsCollector
             sourceFiles,
             semanticLoad.Contexts,
             cancellationToken);
-        Dictionary<string, TypeFacts> typeFactsById = CreateTypeFacts(
-            typeDeclarations,
-            cancellationToken);
-        IReadOnlyList<TypeFacts> types = typeFactsById.Values
-            .OrderBy(type => type.TargetId, StringComparer.Ordinal)
-            .ToArray();
-
         List<MemberDeclarationInfo> memberDeclarations = CollectMemberDeclarations(
             typeDeclarations,
-            typeFactsById,
             cancellationToken);
         Dictionary<string, MemberFacts> memberFactsById = CreateMemberFacts(memberDeclarations);
         IReadOnlyList<MemberFacts> members = memberFactsById.Values
             .OrderBy(member => member.TargetId, StringComparer.Ordinal)
+            .ToArray();
+        var memberCountsByType = members
+            .GroupBy(member => member.ParentTypeTargetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        Dictionary<string, TypeFacts> typeFactsById = CreateTypeFacts(
+            typeDeclarations,
+            memberCountsByType,
+            cancellationToken);
+
+        IReadOnlyList<TypeFacts> types = typeFactsById.Values
+            .OrderBy(type => type.TargetId, StringComparer.Ordinal)
             .ToArray();
 
         GraphEdgeFacts[] graphEdges = CreateGraphEdges(
@@ -102,6 +103,7 @@ public static class SyntaxFactsCollector
                     group => group.First().SourceText.ToString(),
                     StringComparer.Ordinal),
             Diagnostics = diagnostics
+                .Diagnostics
                 .OrderBy(diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
                 .ThenBy(diagnostic => diagnostic.StartLine ?? int.MaxValue)
                 .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
@@ -114,8 +116,7 @@ public static class SyntaxFactsCollector
     private static async Task<List<SourceFileContext>> ParseSourceFilesAsync(
         IReadOnlyList<DiscoveredSourceFile> sourceFiles,
         IReadOnlyDictionary<string, ProjectSemanticContext> semanticContexts,
-        List<AnalysisDiagnostic> diagnostics,
-        HashSet<string> diagnosticKeys,
+        AnalysisDiagnosticCollector diagnostics,
         CancellationToken cancellationToken)
     {
         var contexts = new List<SourceFileContext>();
@@ -156,10 +157,7 @@ public static class SyntaxFactsCollector
 
             foreach (Diagnostic diagnostic in syntaxTree.GetDiagnostics(cancellationToken))
             {
-                AnalysisDiagnosticCollector.Add(
-                    diagnostics,
-                    diagnosticKeys,
-                    AnalysisDiagnosticCollector.FromSyntax(diagnostic, sourceFile));
+                diagnostics.Add(AnalysisDiagnosticCollector.FromSyntax(diagnostic, sourceFile));
             }
         }
 
@@ -228,12 +226,12 @@ public static class SyntaxFactsCollector
             ToOneBasedLine(lineSpan.StartLinePosition.Line),
             ToOneBasedLine(lineSpan.EndLinePosition.Line),
             CountLines(span, context.SyntaxTree),
-            CountTokenLines(span, context.Root, context.SyntaxTree),
-            GetSupportedMembers(typeDeclaration).Count());
+            LineFactsCollector.CollectTokenLines(context.Root, span, context.SyntaxTree).Count);
     }
 
     private static Dictionary<string, TypeFacts> CreateTypeFacts(
         IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
+        Dictionary<string, int> memberCountsByType,
         CancellationToken cancellationToken)
     {
         return typeDeclarations
@@ -268,7 +266,9 @@ public static class SyntaxFactsCollector
                             .ToArray(),
                         LinesOfCode = declarations.Sum(declaration => declaration.LinesOfCode),
                         NonCommentLinesOfCode = declarations.Sum(declaration => declaration.NonCommentLinesOfCode),
-                        MemberCount = declarations.Sum(declaration => declaration.MemberCount),
+                        MemberCount = memberCountsByType.TryGetValue(group.Key, out var memberCount)
+                            ? memberCount
+                            : 0,
                         Semantic = CreateTypeSemanticFacts(declarations, cancellationToken)
                     };
                 },
@@ -294,7 +294,6 @@ public static class SyntaxFactsCollector
 
     private static List<MemberDeclarationInfo> CollectMemberDeclarations(
         IReadOnlyList<TypeDeclarationInfo> typeDeclarations,
-        Dictionary<string, TypeFacts> typeFactsById,
         CancellationToken cancellationToken)
     {
         var memberDeclarations = new List<MemberDeclarationInfo>();
@@ -303,15 +302,11 @@ public static class SyntaxFactsCollector
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            TypeFacts parentType = typeFactsById[typeDeclaration.TargetId];
-
             foreach (MemberDeclarationSyntax memberDeclaration in GetSupportedMembers(typeDeclaration.Declaration))
             {
                 memberDeclarations.Add(CreateMemberDeclarationInfo(
                     memberDeclaration,
-                    parentType,
-                    typeDeclaration.Context,
-                    typeDeclaration.SemanticModel,
+                    typeDeclaration,
                     cancellationToken));
             }
         }
@@ -321,11 +316,11 @@ public static class SyntaxFactsCollector
 
     private static MemberDeclarationInfo CreateMemberDeclarationInfo(
         MemberDeclarationSyntax memberDeclaration,
-        TypeFacts parentType,
-        SourceFileContext context,
-        SemanticModel? semanticModel,
+        TypeDeclarationInfo parentType,
         CancellationToken cancellationToken)
     {
+        SourceFileContext context = parentType.Context;
+        SemanticModel? semanticModel = parentType.SemanticModel;
         ISymbol? symbol = GetDeclaredSymbol(memberDeclaration, semanticModel);
         var memberName = GetMemberName(memberDeclaration);
         var parameterCount = GetParameterCount(memberDeclaration);
@@ -352,7 +347,6 @@ public static class SyntaxFactsCollector
         return new MemberDeclarationInfo(
             memberDeclaration,
             parentType.TargetId,
-            context,
             semanticModel,
             symbol,
             targetId,
@@ -566,10 +560,10 @@ public static class SyntaxFactsCollector
 
         if (seenEdges.Add(key))
         {
-            if (edges.Count >= ValidationInputLimits.DefaultMaxNdjsonRecords)
+            if (edges.Count >= ArtifactLimits.MaxRecords)
             {
                 throw new InvalidDataException(
-                    $"Analysis produced more than {ValidationInputLimits.DefaultMaxNdjsonRecords} graph edges.");
+                    $"Analysis produced more than {ArtifactLimits.MaxRecords} graph edges.");
             }
 
             edges.Add(new GraphEdgeFacts
@@ -584,7 +578,6 @@ public static class SyntaxFactsCollector
 
     private static FileFacts CreateFileFacts(SourceFileContext context)
     {
-        var fullSpan = new TextSpan(0, context.SourceText.Length);
         LineFacts lineCounts = LineFactsCollector.Collect(
             context.SyntaxTree,
             context.Root,
@@ -606,23 +599,6 @@ public static class SyntaxFactsCollector
             MixedCodeCommentLineCount = lineCounts.MixedCodeCommentLineCount,
             DocumentationCommentLineCount = lineCounts.DocumentationCommentLineCount
         };
-    }
-
-    private static PortableExecutableReference[] CreateDefaultReferences()
-    {
-        var trustedPlatformAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-
-        if (string.IsNullOrWhiteSpace(trustedPlatformAssemblies))
-        {
-            return [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)];
-        }
-
-        return trustedPlatformAssemblies
-            .Split(Path.PathSeparator)
-            .Where(path => path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.Ordinal)
-            .Select(path => MetadataReference.CreateFromFile(path))
-            .ToArray();
     }
 
     private static string ResolveAssemblyName(string projectPath)
@@ -761,17 +737,6 @@ public static class SyntaxFactsCollector
         FileLinePositionSpan lineSpan = syntaxTree.GetLineSpan(span);
 
         return Math.Max(1, lineSpan.EndLinePosition.Line - lineSpan.StartLinePosition.Line + 1);
-    }
-
-    private static int CountTokenLines(TextSpan span, SyntaxNode root, SyntaxTree syntaxTree)
-    {
-        var tokenLines = root
-            .DescendantTokens(span)
-            .Where(token => token.Span.Length > 0)
-            .Select(token => syntaxTree.GetLineSpan(token.Span).StartLinePosition.Line)
-            .ToHashSet();
-
-        return tokenLines.Count;
     }
 
     private static int ToOneBasedLine(int zeroBasedLine)

@@ -68,6 +68,33 @@ public sealed class LineFactsCollectorTests
     }
 
     [Fact]
+    public void CollectCountsEveryLineOccupiedByMultilineStringTokens()
+    {
+        var source = string.Join(
+            '\n',
+            "class Sample",
+            "{",
+            "    string Raw = \"\"\"",
+            "        raw first",
+            "",
+            "        raw last",
+            "        \"\"\";",
+            "    string Verbatim = @\"verbatim first",
+            "",
+            "verbatim last\";",
+            "}");
+        var context = RoslynTestCompilation.Create(source);
+
+        LineFacts facts = LineFactsCollector.Collect(
+            context.SyntaxTree,
+            context.Root,
+            SourceText.From(source));
+
+        Assert.Equal(11, facts.NonCommentLinesOfCode);
+        Assert.Equal(0, facts.BlankLineCount);
+    }
+
+    [Fact]
     public void CollectReportsOneBlankPhysicalLineForEmptyFile()
     {
         const string source = "";

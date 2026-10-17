@@ -25,11 +25,7 @@ internal static class LineFactsCollector
         ArgumentNullException.ThrowIfNull(sourceText);
 
         var fullSpan = new TextSpan(0, sourceText.Length);
-        var tokenLines = root
-            .DescendantTokens(fullSpan)
-            .Where(token => token.Span.Length > 0)
-            .Select(token => syntaxTree.GetLineSpan(token.Span).StartLinePosition.Line)
-            .ToHashSet();
+        HashSet<int> tokenLines = CollectTokenLines(root, fullSpan, syntaxTree);
         var commentLines = new HashSet<int>();
         var documentationCommentLines = new HashSet<int>();
 
@@ -68,6 +64,7 @@ internal static class LineFactsCollector
 
         var blankLineCount = sourceText.Lines.Count(line =>
             IsBlankLine(sourceText, line) &&
+            !tokenLines.Contains(line.LineNumber) &&
             !commentLines.Contains(line.LineNumber));
 
         return new LineFacts(
@@ -78,6 +75,31 @@ internal static class LineFactsCollector
             commentLines.Count,
             commentLines.Count(tokenLines.Contains),
             documentationCommentLines.Count);
+    }
+
+    internal static HashSet<int> CollectTokenLines(
+        SyntaxNode root,
+        TextSpan span,
+        SyntaxTree syntaxTree)
+    {
+        var lines = new HashSet<int>();
+
+        foreach (SyntaxToken token in root.DescendantTokens(span).Where(token => token.Span.Length > 0))
+        {
+            FileLinePositionSpan lineSpan = syntaxTree.GetLineSpan(token.Span);
+            var endLine = lineSpan.EndLinePosition.Line;
+            if (endLine > lineSpan.StartLinePosition.Line && lineSpan.EndLinePosition.Character == 0)
+            {
+                endLine--;
+            }
+
+            for (var line = lineSpan.StartLinePosition.Line; line <= endLine; line++)
+            {
+                lines.Add(line);
+            }
+        }
+
+        return lines;
     }
 
     private static bool IsBlankLine(SourceText sourceText, TextLine line)

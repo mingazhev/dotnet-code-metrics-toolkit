@@ -142,9 +142,11 @@ internal static class ControlFlowFactsCollector
 
         public override void VisitBinaryExpression(BinaryExpressionSyntax node)
         {
+            // shortcut: name syntax can bind to constants; resolve it only in a versioned semantic rule.
             if (node.IsKind(SyntaxKind.LogicalAndExpression) ||
                 node.IsKind(SyntaxKind.LogicalOrExpression) ||
-                node.IsKind(SyntaxKind.CoalesceExpression))
+                node.IsKind(SyntaxKind.CoalesceExpression) ||
+                (node.IsKind(SyntaxKind.IsExpression) && node.Right is not NameSyntax))
             {
                 AddDecision();
             }
@@ -200,6 +202,7 @@ internal static class ControlFlowFactsCollector
                 .DescendantNodesAndSelf()
                 .Any(node =>
                     node is RelationalPatternSyntax ||
+                    node is TypePatternSyntax ||
                     node is DeclarationPatternSyntax ||
                     node is RecursivePatternSyntax);
         }

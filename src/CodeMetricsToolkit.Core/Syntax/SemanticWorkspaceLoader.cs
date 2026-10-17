@@ -12,8 +12,7 @@ internal static class SemanticWorkspaceLoader
     public static async Task<SemanticLoadResult> LoadAsync(
         DiscoveredSources sources,
         bool noRestore,
-        List<AnalysisDiagnostic> diagnostics,
-        HashSet<string> diagnosticKeys,
+        AnalysisDiagnosticCollector diagnostics,
         CancellationToken cancellationToken)
     {
         var messages = DetectAmbientBuildFiles(sources.RootPath).ToList();
@@ -52,7 +51,6 @@ internal static class SemanticWorkspaceLoader
                     includedSourcePaths,
                     collectCompilationDiagnostics: restore.Status != "failed",
                     diagnostics,
-                    diagnosticKeys,
                     cancellationToken)
                 .ConfigureAwait(false);
             DiscoveredSourceFile[] projectSourceFiles = CreateProjectSourceFiles(sources, contexts);
@@ -77,10 +75,7 @@ internal static class SemanticWorkspaceLoader
 
             foreach (WorkspaceDiagnostic workspaceDiagnostic in workspaceDiagnostics)
             {
-                AnalysisDiagnosticCollector.Add(
-                    diagnostics,
-                    diagnosticKeys,
-                    FromWorkspace(workspaceDiagnostic));
+                diagnostics.Add(FromWorkspace(workspaceDiagnostic));
             }
 
             var workspaceHadFailures = workspaceDiagnostics.Any(
@@ -90,7 +85,6 @@ internal static class SemanticWorkspaceLoader
                 AddProjectLoadFailureDiagnostics(
                     sources,
                     diagnostics,
-                    diagnosticKeys,
                     "MSBuildWorkspace reported project load failures; see workspace_load diagnostics for details.");
             }
 
@@ -115,7 +109,7 @@ internal static class SemanticWorkspaceLoader
         catch (Exception exception) when (IsOperationalWorkspaceException(exception))
         {
             messages.Add($"MSBuildWorkspace failed: {exception.Message}");
-            AddProjectLoadFailureDiagnostics(sources, diagnostics, diagnosticKeys, exception.Message);
+            AddProjectLoadFailureDiagnostics(sources, diagnostics, exception.Message);
             return Unavailable(restore.Status, messages);
         }
     }
@@ -232,8 +226,7 @@ internal static class SemanticWorkspaceLoader
         Solution solution,
         IReadOnlySet<string> includedSourcePaths,
         bool collectCompilationDiagnostics,
-        List<AnalysisDiagnostic> diagnostics,
-        HashSet<string> diagnosticKeys,
+        AnalysisDiagnosticCollector diagnostics,
         CancellationToken cancellationToken)
     {
         var contexts = new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal);
@@ -271,7 +264,6 @@ internal static class SemanticWorkspaceLoader
                     csharpCompilation,
                     includedSourcePaths,
                     diagnostics,
-                    diagnosticKeys,
                     cancellationToken);
             }
         }
@@ -324,13 +316,12 @@ internal static class SemanticWorkspaceLoader
 
     private static void AddProjectLoadFailureDiagnostics(
         DiscoveredSources sources,
-        List<AnalysisDiagnostic> diagnostics,
-        HashSet<string> diagnosticKeys,
+        AnalysisDiagnosticCollector diagnostics,
         string message)
     {
         foreach (var projectPath in sources.ProjectPaths.DefaultIfEmpty(sources.RootPath))
         {
-            AnalysisDiagnosticCollector.Add(diagnostics, diagnosticKeys, new AnalysisDiagnostic
+            diagnostics.Add(new AnalysisDiagnostic
             {
                 Id = "project_load_failed",
                 Severity = "critical",
@@ -408,8 +399,7 @@ internal static class SemanticWorkspaceLoader
         string projectPath,
         CSharpCompilation compilation,
         IReadOnlySet<string> includedSourcePaths,
-        List<AnalysisDiagnostic> diagnostics,
-        HashSet<string> diagnosticKeys,
+        AnalysisDiagnosticCollector diagnostics,
         CancellationToken cancellationToken)
     {
         foreach (Diagnostic diagnostic in compilation.GetDiagnostics(cancellationToken))
@@ -428,10 +418,7 @@ internal static class SemanticWorkspaceLoader
                 continue;
             }
 
-            AnalysisDiagnosticCollector.Add(
-                diagnostics,
-                diagnosticKeys,
-                AnalysisDiagnosticCollector.FromCompilation(rootPath, projectPath, diagnostic));
+            diagnostics.Add(AnalysisDiagnosticCollector.FromCompilation(rootPath, projectPath, diagnostic));
         }
     }
 
