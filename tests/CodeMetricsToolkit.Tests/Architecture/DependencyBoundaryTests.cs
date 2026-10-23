@@ -8,6 +8,20 @@ namespace CodeMetricsToolkit.Tests.Architecture;
 
 public sealed class DependencyBoundaryTests
 {
+    [Theory]
+    [InlineData("CodeMetricsToolkit.Core.Reporting", "CodeMetricsToolkit.Core.Analysis")]
+    [InlineData("CodeMetricsToolkit.Core.Validation", "CodeMetricsToolkit.Core.Discovery")]
+    public void SharedModelsAndFileChecksDoNotRequireHigherLayers(string sourceNamespace, string forbiddenNamespace)
+    {
+        Type[] types = typeof(FileFacts).Assembly.GetTypes()
+            .Where(type => type.Namespace == sourceNamespace)
+            .ToArray();
+
+        Assert.NotEmpty(types);
+        Assert.All(types, type => Assert.DoesNotContain(ReferencedTypes(type), dependency =>
+            dependency.Namespace == forbiddenNamespace));
+    }
+
     private static readonly Dictionary<short, OpCode> OpCodesByValue = typeof(OpCodes)
         .GetFields(BindingFlags.Public | BindingFlags.Static)
         .Where(field => field.FieldType == typeof(OpCode))

@@ -1,3 +1,5 @@
+using CodeMetricsToolkit.Core.Facts;
+
 namespace CodeMetricsToolkit.Core.Analysis;
 
 public sealed record AnalysisRunResult

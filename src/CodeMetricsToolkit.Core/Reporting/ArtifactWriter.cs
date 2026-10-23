@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using System.Security.Cryptography;
 using System.Text;
 using CodeMetricsToolkit.Core.Contracts;
-using CodeMetricsToolkit.Core.Analysis;
 using CodeMetricsToolkit.Core.Discovery;
 using CodeMetricsToolkit.Core.Facts;
 

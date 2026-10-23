@@ -1,0 +1,189 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Замена существующего поколения артефактов",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "Этап процесса"
+        },
+        "security": {
+          "label": "Обработка ошибки"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Публикация"
+    },
+    {
+      "id": "error",
+      "label": "Восстановление",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "write",
+    "validate",
+    "backup",
+    "move",
+    "cleanup"
+  ],
+  "nodes": [
+    {
+      "id": "write",
+      "lane": "main",
+      "col": 0,
+      "type": "backend",
+      "label": "Staging",
+      "sublabel": "manifest записывается последним",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "validate",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "Валидация",
+      "sublabel": "Схемы + инварианты",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "backup",
+      "lane": "main",
+      "col": 2,
+      "type": "backend",
+      "label": "Старый output",
+      "sublabel": "Перенос в backup",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "move",
+      "lane": "main",
+      "col": 3,
+      "type": "backend",
+      "label": "Новый output",
+      "sublabel": "Перенос из staging",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "cleanup",
+      "lane": "main",
+      "col": 4,
+      "type": "backend",
+      "label": "Очистка",
+      "sublabel": "Удаление backup",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "rollback",
+      "lane": "error",
+      "col": 3,
+      "type": "security",
+      "label": "Откат",
+      "sublabel": "backup → output",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "stop",
+      "lane": "error",
+      "col": 4,
+      "type": "security",
+      "label": "Ошибка наружу",
+      "sublabel": "Очистка staging",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "reject",
+      "lane": "error",
+      "col": 1,
+      "type": "security",
+      "label": "Отклонение",
+      "sublabel": "Старый output сохранён",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    }
+  ],
+  "edges": [
+    {
+      "id": "write-validate",
+      "from": "write",
+      "to": "validate"
+    },
+    {
+      "id": "validate-backup",
+      "from": "validate",
+      "to": "backup",
+      "label": "валидно"
+    },
+    {
+      "id": "backup-move",
+      "from": "backup",
+      "to": "move"
+    },
+    {
+      "id": "move-cleanup",
+      "from": "move",
+      "to": "cleanup",
+      "label": "успех"
+    },
+    {
+      "id": "validate-reject",
+      "from": "validate",
+      "to": "reject",
+      "label": "невалидно",
+      "role": "error",
+      "variant": "security"
+    },
+    {
+      "id": "move-rollback",
+      "from": "move",
+      "to": "rollback",
+      "label": "сбой переноса",
+      "role": "error",
+      "variant": "security"
+    },
+    {
+      "id": "rollback-stop",
+      "from": "rollback",
+      "to": "stop",
+      "label": "исход отката",
+      "role": "error"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Откат не повторяет публикацию",
+      "items": [
+        "Восстановление завершается ошибкой. При сбое отката старые данные остаются в backup."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Граница чтения",
+      "items": [
+        "Читать после завершения analyze; при первом запуске backup не создаётся."
+      ]
+    }
+  ]
+}

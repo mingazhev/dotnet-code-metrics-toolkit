@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Границы системы и обмен данными",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1160,
+      620
+    ]
+  },
+  "components": [
+    {
+      "id": "cli",
+      "type": "frontend",
+      "label": "CLI",
+      "sublabel": "Команды и коды выхода",
+      "pos": [
+        50,
+        240
+      ],
+      "size": [
+        205,
+        76
+      ]
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "Core",
+      "sublabel": "Факты, метрики, публикация",
+      "pos": [
+        460,
+        240
+      ],
+      "size": [
+        205,
+        76
+      ]
+    },
+    {
+      "id": "files",
+      "type": "database",
+      "label": "Артефакты",
+      "sublabel": "JSON / NDJSON · 0.2.0",
+      "pos": [
+        870,
+        240
+      ],
+      "size": [
+        205,
+        76
+      ]
+    },
+    {
+      "id": "source",
+      "type": "external",
+      "label": "Исходный код",
+      "sublabel": "C# / проекты / решения",
+      "pos": [
+        460,
+        50
+      ],
+      "size": [
+        205,
+        76
+      ]
+    },
+    {
+      "id": "scoring",
+      "type": "backend",
+      "label": "Scoring",
+      "sublabel": "Необязательная политика",
+      "pos": [
+        870,
+        460
+      ],
+      "size": [
+        205,
+        76
+      ]
+    },
+    {
+      "id": "profile",
+      "type": "external",
+      "label": "Профиль",
+      "sublabel": "Версии и пороги",
+      "pos": [
+        460,
+        460
+      ],
+      "size": [
+        205,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "cli-core",
+      "from": "cli",
+      "to": "core",
+      "label": "ProjectReference"
+    },
+    {
+      "id": "source-core",
+      "from": "source",
+      "to": "core",
+      "label": "анализ",
+      "labelDy": 60
+    },
+    {
+      "id": "core-files",
+      "from": "core",
+      "to": "files",
+      "label": "запись поколения"
+    },
+    {
+      "id": "files-scoring",
+      "from": "files",
+      "to": "scoring",
+      "label": "чтение после завершения",
+      "labelDy": 70
+    },
+    {
+      "id": "profile-scoring",
+      "from": "profile",
+      "to": "scoring",
+      "label": "оценка по профилю"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Граница зависимости",
+      "items": [
+        "CLI → Core — единственная ссылка между production-проектами."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Граница политики",
+      "items": [
+        "Scoring читает файлы; ссылки на Core и Roslyn отсутствуют."
+      ]
+    }
+  ]
+}

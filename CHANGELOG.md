@@ -23,6 +23,9 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Changed
 
+- Shared Core models now live in `Core.Contracts.AnalyzeRequest` and
+  `Core.Facts.AnalysisSummary`, removing the Reporting-to-Analysis dependency.
+  Source consumers must update imports; CLI and artifact contracts are unchanged.
 - Artifact/tool version 0.2.0 adds namespace and module dependency vocabulary; Scoring
   profiles must declare `artifactContractVersion: "0.2.0"` and consume regenerated output.
 - Existing type-dependency metrics use version 1.1.0 for the expanded graph coverage of
@@ -46,6 +49,9 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Fixed
 
+- Recursive generic constraints such as `T : IComparable<T>` no longer cause a
+  stack overflow during semantic type-coupling collection. Constructed generic
+  arguments are still traversed independently before named definitions are deduplicated.
 - Metric validation and Scoring agree that tags are unique unordered sets; distinct tag
   sets containing separator characters no longer collide in metric or threshold identity.
 - Partial method definitions and implementations count as one logical type member.

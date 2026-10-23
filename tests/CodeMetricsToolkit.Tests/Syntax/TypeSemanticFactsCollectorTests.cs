@@ -9,6 +9,34 @@ namespace CodeMetricsToolkit.Tests.Syntax;
 public sealed class TypeSemanticFactsCollectorTests
 {
     [Fact]
+    public void CollectCountsDistinctArgumentsOfRepeatedGenericDefinitions()
+    {
+        var context = RoslynTestCompilation.Create(
+            """
+            using Coupled = Pair<Box<First[]>, Box<Second>>;
+            public class First { }
+            public class Second { }
+            public class Box<T> { }
+            public class Pair<T, U> { }
+            public sealed class Sample
+            {
+                public Coupled Transform(Coupled value) => value;
+            }
+            """);
+        ClassDeclarationSyntax declaration = context.Root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .Single(type => type.Identifier.ValueText == "Sample");
+        var symbol = (INamedTypeSymbol)context.SemanticModel.GetDeclaredSymbol(declaration)!;
+
+        TypeSemanticFacts? facts = TypeSemanticFactsCollector.Collect(
+            [new SemanticTypeDeclaration(declaration, context.SemanticModel, symbol)],
+            CancellationToken.None);
+
+        Assert.NotNull(facts);
+        Assert.Equal(4, facts.ClassCoupling);
+    }
+
+    [Fact]
     public void CollectComputesInheritanceCouplingAndDocumentedPublicApiExactly()
     {
         var context = RoslynTestCompilation.Create(

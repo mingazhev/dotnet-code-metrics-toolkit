@@ -1,0 +1,74 @@
+[
+  {
+    "output": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/01-system.html",
+    "diagram_type": "architecture",
+    "specification_sha256": "00a8234ede62f1263bfa5886d13d4fc9003364205284061a563093ca7aeadfe8",
+    "artifact_sha256": "43e563b5678c15a1f323c4eda625eb747661e660a3c71a1195576b3d8313db7c",
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_evidence": "passed",
+    "visual_review": "passed",
+    "visual_review_scope": "Rendered screenshots: 1440x900 and 2048x1320, both themes across the two sizes; readability, routes, labels, containment. Viewer interactions and exports were not exercised.",
+    "correction_rounds": 2
+  },
+  {
+    "output": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/02-core-cycle.html",
+    "diagram_type": "architecture",
+    "specification_sha256": "fd533de7f6ba15922426129f1a70aa4ef3f73eeda08ccad760f5fac438a96283",
+    "artifact_sha256": "4487822cb4a1d60788bbbb3970ad6eb447f3e4821919f9ac6723bd0929534144",
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_evidence": "passed",
+    "visual_review": "passed",
+    "visual_review_scope": "Rendered screenshots: 1440x900 and 2048x1320, both themes across the two sizes; readability, routes, labels, containment. Viewer interactions and exports were not exercised.",
+    "correction_rounds": 1
+  },
+  {
+    "output": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/03-analysis.html",
+    "diagram_type": "workflow",
+    "specification_sha256": "9484995401c83228837de1ac657efb43cb421583bf5cf891740354db7ee8bac7",
+    "artifact_sha256": "e7e107b825d3ad695fb247e277af821efd91a3e06a4b87dff7c13b1692595245",
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_evidence": "passed",
+    "visual_review": "passed",
+    "visual_review_scope": "Rendered screenshots: 1440x900 and 2048x1320, both themes across the two sizes; readability, routes, labels, containment. Viewer interactions and exports were not exercised.",
+    "correction_rounds": 2
+  },
+  {
+    "output": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/04-publication.html",
+    "diagram_type": "workflow",
+    "specification_sha256": "c2ee89e1f6404c1ddad828d841c8ba8935ccbdf1c490daa56911364eac60ecc4",
+    "artifact_sha256": "a0e27fdda8108036e4ac7e0f360d39b301b08f33982a106f473ca495d08d266e",
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_evidence": "passed",
+    "visual_review": "passed",
+    "visual_review_scope": "Rendered screenshots: 1440x900 and 2048x1320, both themes across the two sizes; readability, routes, labels, containment. Viewer interactions and exports were not exercised.",
+    "correction_rounds": 1
+  }
+]

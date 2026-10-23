@@ -1,6 +1,4 @@
-namespace CodeMetricsToolkit.Core.Analysis;
-
-using CodeMetricsToolkit.Core.Facts;
+namespace CodeMetricsToolkit.Core.Facts;
 
 public sealed record AnalysisSummary
 {
