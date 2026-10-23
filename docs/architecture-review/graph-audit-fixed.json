@@ -1,0 +1,354 @@
+{
+  "source_sha256": "7209e13c1a30b9c8e940fac3813d9e609063c176e3af57fb36e6751eb0ed4af9",
+  "node_kinds": {
+    "solution": 1,
+    "project": 3,
+    "namespace": 11,
+    "file": 86,
+    "type": 159,
+    "member": 699
+  },
+  "edge_kinds": {
+    "declares": 159,
+    "calls": 661,
+    "uses_type": 1145,
+    "contains": 958,
+    "depends_on": 28,
+    "inherits": 2
+  },
+  "duplicate_edges": 0,
+  "project": {
+    "nodes": 3,
+    "edges": 1,
+    "cycles_scc": [],
+    "self_loops": [],
+    "isolates": [
+      "CodeMetricsToolkit.Scoring"
+    ],
+    "degrees": {
+      "CodeMetricsToolkit.Core": {
+        "in": 1,
+        "out": 0
+      },
+      "CodeMetricsToolkit.Cli": {
+        "in": 0,
+        "out": 1
+      },
+      "CodeMetricsToolkit.Scoring": {
+        "in": 0,
+        "out": 0
+      }
+    },
+    "alternate_path_edges": [],
+    "edges_named": [
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core"
+      ]
+    ]
+  },
+  "namespace": {
+    "nodes": 11,
+    "edges": 27,
+    "cycles_scc": [],
+    "self_loops": [],
+    "isolates": [
+      "CodeMetricsToolkit.Scoring"
+    ],
+    "degrees": {
+      "CodeMetricsToolkit.Core": {
+        "in": 5,
+        "out": 0
+      },
+      "CodeMetricsToolkit.Core.Analysis": {
+        "in": 1,
+        "out": 7
+      },
+      "CodeMetricsToolkit.Core.Contracts": {
+        "in": 7,
+        "out": 0
+      },
+      "CodeMetricsToolkit.Core.Discovery": {
+        "in": 3,
+        "out": 2
+      },
+      "CodeMetricsToolkit.Core.Facts": {
+        "in": 5,
+        "out": 0
+      },
+      "CodeMetricsToolkit.Core.Metrics": {
+        "in": 2,
+        "out": 2
+      },
+      "CodeMetricsToolkit.Core.Reporting": {
+        "in": 1,
+        "out": 5
+      },
+      "CodeMetricsToolkit.Core.Syntax": {
+        "in": 1,
+        "out": 3
+      },
+      "CodeMetricsToolkit.Core.Validation": {
+        "in": 2,
+        "out": 2
+      },
+      "CodeMetricsToolkit.Cli": {
+        "in": 0,
+        "out": 6
+      },
+      "CodeMetricsToolkit.Scoring": {
+        "in": 0,
+        "out": 0
+      }
+    },
+    "alternate_path_edges": [
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Discovery"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Facts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Reporting",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Reporting",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Syntax",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Facts"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Metrics"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Validation"
+      ]
+    ],
+    "edges_named": [
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Analysis"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Facts"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Metrics"
+      ],
+      [
+        "CodeMetricsToolkit.Cli",
+        "CodeMetricsToolkit.Core.Validation"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Discovery"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Facts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Metrics"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Reporting"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Analysis",
+        "CodeMetricsToolkit.Core.Syntax"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Discovery",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Discovery",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Metrics",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Metrics",
+        "CodeMetricsToolkit.Core.Facts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Reporting",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Reporting",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Reporting",
+        "CodeMetricsToolkit.Core.Discovery"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Reporting",
+        "CodeMetricsToolkit.Core.Facts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Reporting",
+        "CodeMetricsToolkit.Core.Validation"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Syntax",
+        "CodeMetricsToolkit.Core.Contracts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Syntax",
+        "CodeMetricsToolkit.Core.Discovery"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Syntax",
+        "CodeMetricsToolkit.Core.Facts"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Validation",
+        "CodeMetricsToolkit.Core"
+      ],
+      [
+        "CodeMetricsToolkit.Core.Validation",
+        "CodeMetricsToolkit.Core.Contracts"
+      ]
+    ]
+  },
+  "member": {
+    "nodes": 699,
+    "edges": 661,
+    "cycles_scc": [],
+    "self_loops": [
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Discovery.InputIsolator.CopyDirectory(System.String,System.String,System.String,System.Int32,CodeMetricsToolkit.Core.Discovery.InputIsolationLimits,CodeMetricsToolkit.Core.Discovery.InputIsolator.IsolationCopyState,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Core.Discovery.InputIsolator.CopyDirectory",
+        "file": "CodeMetricsToolkit.Core/Discovery/InputIsolator.cs",
+        "line": 78
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Validation.EmbeddedSchemaValidator.EnumerateResults(Json.Schema.EvaluationResults)",
+        "name": "CodeMetricsToolkit.Core.Validation.EmbeddedSchemaValidator.EnumerateResults",
+        "file": "CodeMetricsToolkit.Core/Validation/EmbeddedSchemaValidator.cs",
+        "line": 87
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Scoring/M:CodeMetricsToolkit.Scoring.GlobMatcher.Match(System.String,System.String,System.Int32,System.Int32,System.Collections.Generic.Dictionary{System.ValueTuple{System.Int32,System.Int32},System.Boolean})",
+        "name": "CodeMetricsToolkit.Scoring.GlobMatcher.Match",
+        "file": "CodeMetricsToolkit.Scoring/GlobMatcher.cs",
+        "line": 17
+      }
+    ],
+    "top_out_degree": [
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Analysis.CodeMetricsAnalyzer.AnalyzeAsync(CodeMetricsToolkit.Core.Contracts.AnalyzeRequest,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Core.Analysis.CodeMetricsAnalyzer.AnalyzeAsync",
+        "in": 1,
+        "out": 16
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Analysis.SemanticWorkspaceLoader.LoadAsync(CodeMetricsToolkit.Core.Discovery.DiscoveredSources,System.Boolean,CodeMetricsToolkit.Core.Syntax.AnalysisDiagnosticCollector,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Core.Analysis.SemanticWorkspaceLoader.LoadAsync",
+        "in": 1,
+        "out": 14
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Analysis.AnalysisFactsCollector.CollectAsync(CodeMetricsToolkit.Core.Discovery.DiscoveredSources,System.Boolean,System.Boolean,System.Threading.CancellationToken,System.String)",
+        "name": "CodeMetricsToolkit.Core.Analysis.AnalysisFactsCollector.CollectAsync",
+        "in": 1,
+        "out": 13
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Scoring/M:CodeMetricsToolkit.Scoring.ScoringProfileParser.Parse(System.String,System.Int32)",
+        "name": "CodeMetricsToolkit.Scoring.ScoringProfileParser.Parse",
+        "in": 1,
+        "out": 13
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Analysis.AnalysisFactsCollector.CreateMemberDeclarationInfo(Microsoft.CodeAnalysis.CSharp.Syntax.MemberDeclarationSyntax,CodeMetricsToolkit.Core.Syntax.TypeDeclarationInfo,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Core.Analysis.AnalysisFactsCollector.CreateMemberDeclarationInfo",
+        "in": 1,
+        "out": 12
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Scoring/M:CodeMetricsToolkit.Scoring.ScoringArtifactReader.ReadAsync(System.String,CodeMetricsToolkit.Scoring.ScoringInputLimits,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Scoring.ScoringArtifactReader.ReadAsync",
+        "in": 1,
+        "out": 12
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Metrics.GraphMetricProjector.Project(CodeMetricsToolkit.Core.Facts.AnalysisFacts,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Core.Metrics.GraphMetricProjector.Project",
+        "in": 1,
+        "out": 11
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Core/M:CodeMetricsToolkit.Core.Metrics.SyntaxMetricProjector.Project(CodeMetricsToolkit.Core.Facts.AnalysisFacts,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Core.Metrics.SyntaxMetricProjector.Project",
+        "in": 1,
+        "out": 11
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Scoring/M:CodeMetricsToolkit.Scoring.ScoringEngine.EvaluateAsync(System.String,System.Byte[],CodeMetricsToolkit.Scoring.ScoringInputLimits,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Scoring.ScoringEngine.EvaluateAsync",
+        "in": 2,
+        "out": 10
+      },
+      {
+        "id": "member:CodeMetricsToolkit.Cli/M:CodeMetricsToolkit.Cli.CliApplication.RunAsync(System.String[],System.IO.TextWriter,System.IO.TextWriter,System.Threading.CancellationToken)",
+        "name": "CodeMetricsToolkit.Cli.CliApplication.RunAsync",
+        "in": 0,
+        "out": 9
+      }
+    ],
+    "alternate_path_edge_count": 87,
+    "isolate_count": 268
+  }
+}

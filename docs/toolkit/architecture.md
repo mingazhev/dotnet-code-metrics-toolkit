@@ -2,6 +2,9 @@
 
 CodeMetricsToolkit separates source facts from consumer gates and objectives.
 
+See the [architecture diagrams and graph audit](../architecture-review/README.md)
+for the source-backed audit from 2026-10-23, process flows, and before/after cycle checks.
+
 ## Components
 
 ### `CodeMetricsToolkit.Core`
@@ -61,10 +64,14 @@ version, analysis mode, or trust state changed unexpectedly.
   counts. Ranking receives already projected component values; it does not run projectors
   or implement their formulas again.
 - `Reporting` projects graph/chunk artifacts and publishes one complete generation.
+  It consumes `Contracts.AnalyzeRequest` and `Facts.AnalysisSummary` without depending
+  on the Analysis orchestrator.
 - `Contracts` owns target identities, metric/hotspot result records, artifact names,
   versions and shared resource ceilings. Metrics and Reporting use these records directly;
   metric calculations do not depend on publication or discovery.
 - `Validation` checks untrusted artifact input against schemas and cross-artifact rules.
+  It shares the root Core `FileKind` primitive with discovery and source reading;
+  these filesystem checks do not require a dependency on Discovery.
 
 A physical file can belong to several projects. Project membership is represented once;
 solution line totals count unique physical paths, while semantic targets remain scoped to
@@ -78,7 +85,8 @@ keeps its own small contract reader instead of taking a dependency on Core/Rosly
 The cleanup renames public Core C# types and namespaces to match these responsibilities.
 Core is not a separately published package; callers compiling against its source must
 update imports and renamed members. `MetricResultLine`, `HotspotLine` and
-`HotspotComponentLine` now live in `Core.Contracts`. `HotspotRanker.Rank` requires the
+`HotspotComponentLine` now live in `Core.Contracts`, along with `AnalyzeRequest`.
+`AnalysisSummary` lives in `Core.Facts`. `HotspotRanker.Rank` requires the
 projected metric rows, and `MetricDescriptor` declares `ValueKind`. Wire metric IDs and
 serialized result fields are independent of these C# changes.
 

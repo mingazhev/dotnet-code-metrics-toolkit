@@ -189,45 +189,59 @@ internal static class TypeSemanticFactsCollector
         INamedTypeSymbol ownType,
         HashSet<string> couplingKeys)
     {
-        switch (referencedType)
-        {
-            case null:
-                return;
-            case IArrayTypeSymbol arrayType:
-                AddCoupledType(arrayType.ElementType, ownType, couplingKeys);
-                return;
-            case IPointerTypeSymbol pointerType:
-                AddCoupledType(pointerType.PointedAtType, ownType, couplingKeys);
-                return;
-            case ITypeParameterSymbol typeParameter:
-                foreach (ITypeSymbol constraintType in typeParameter.ConstraintTypes)
-                {
-                    AddCoupledType(constraintType, ownType, couplingKeys);
-                }
-
-                return;
-        }
-
-        if (referencedType is not INamedTypeSymbol namedType)
+        if (referencedType is null)
         {
             return;
         }
 
-        foreach (ITypeSymbol typeArgument in namedType.TypeArguments)
+        var pending = new Stack<ITypeSymbol>();
+        var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        pending.Push(referencedType);
+        while (pending.TryPop(out ITypeSymbol? current))
         {
-            AddCoupledType(typeArgument, ownType, couplingKeys);
-        }
+            if (!visited.Add(current))
+            {
+                continue;
+            }
 
-        INamedTypeSymbol originalDefinition = namedType.OriginalDefinition;
-        if (originalDefinition.SpecialType != SpecialType.None ||
-            originalDefinition.TypeKind == TypeKind.Error ||
-            SymbolEqualityComparer.Default.Equals(originalDefinition, ownType))
-        {
-            return;
-        }
+            switch (current)
+            {
+                case IArrayTypeSymbol arrayType:
+                    pending.Push(arrayType.ElementType);
+                    continue;
+                case IPointerTypeSymbol pointerType:
+                    pending.Push(pointerType.PointedAtType);
+                    continue;
+                case ITypeParameterSymbol typeParameter:
+                    foreach (ITypeSymbol constraintType in typeParameter.ConstraintTypes)
+                    {
+                        pending.Push(constraintType);
+                    }
 
-        var assemblyName = originalDefinition.ContainingAssembly?.Identity.Name ?? "<source>";
-        couplingKeys.Add(
-            $"{assemblyName}/{originalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
+                    continue;
+            }
+
+            if (current is not INamedTypeSymbol namedType)
+            {
+                continue;
+            }
+
+            foreach (ITypeSymbol typeArgument in namedType.TypeArguments)
+            {
+                pending.Push(typeArgument);
+            }
+
+            INamedTypeSymbol originalDefinition = namedType.OriginalDefinition;
+            if (originalDefinition.SpecialType != SpecialType.None ||
+                originalDefinition.TypeKind == TypeKind.Error ||
+                SymbolEqualityComparer.Default.Equals(originalDefinition, ownType))
+            {
+                continue;
+            }
+
+            var assemblyName = originalDefinition.ContainingAssembly?.Identity.Name ?? "<source>";
+            couplingKeys.Add(
+                $"{assemblyName}/{originalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
+        }
     }
 }

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace CodeMetricsToolkit.Core.Discovery;
+namespace CodeMetricsToolkit.Core;
 
 internal static class FileKind
 {

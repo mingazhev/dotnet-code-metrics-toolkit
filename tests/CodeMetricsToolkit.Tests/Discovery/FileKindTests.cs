@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using CodeMetricsToolkit.Core.Discovery;
+using CodeMetricsToolkit.Core;
 
 namespace CodeMetricsToolkit.Tests.Discovery;
 

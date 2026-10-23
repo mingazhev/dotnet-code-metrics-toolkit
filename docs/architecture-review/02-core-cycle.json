@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Core после устранения цикла",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1320,
+      650
+    ]
+  },
+  "components": [
+    {
+      "id": "analysis",
+      "type": "backend",
+      "label": "Analysis",
+      "sublabel": "CodeMetricsAnalyzer",
+      "pos": [
+        100,
+        100
+      ],
+      "size": [
+        250,
+        90
+      ]
+    },
+    {
+      "id": "reporting",
+      "type": "backend",
+      "label": "Reporting",
+      "sublabel": "ArtifactWriter",
+      "pos": [
+        750,
+        100
+      ],
+      "size": [
+        250,
+        90
+      ]
+    },
+    {
+      "id": "contracts",
+      "type": "backend",
+      "label": "Contracts",
+      "sublabel": "AnalyzeRequest",
+      "pos": [
+        200,
+        450
+      ],
+      "size": [
+        250,
+        90
+      ]
+    },
+    {
+      "id": "facts",
+      "type": "backend",
+      "label": "Facts",
+      "sublabel": "AnalysisSummary",
+      "pos": [
+        850,
+        450
+      ],
+      "size": [
+        250,
+        90
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "invoke",
+      "from": "analysis",
+      "to": "reporting",
+      "label": "ArtifactWriter.WriteAsync",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "request",
+      "from": "reporting",
+      "to": "contracts",
+      "label": "AnalyzeRequest",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "summary",
+      "from": "reporting",
+      "to": "facts",
+      "label": "AnalysisSummary.Create",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDx": 20
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Общие модели",
+      "items": [
+        "Reporting использует нижние слои; обратной зависимости на Analysis больше нет."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Фрагмент графа",
+      "items": [
+        "Показаны изменённые связи. Полный граф пространств имён приведён в отчёте."
+      ]
+    }
+  ]
+}

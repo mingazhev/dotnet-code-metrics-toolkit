@@ -1,5 +1,6 @@
 using CodeMetricsToolkit.Core;
 using CodeMetricsToolkit.Core.Analysis;
+using CodeMetricsToolkit.Core.Contracts;
 using CodeMetricsToolkit.Core.Metrics;
 using CodeMetricsToolkit.Core.Validation;
 

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/04-publication.json",
+  "output": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/04-publication.html",
+  "specification": {
+    "sha256": "c2ee89e1f6404c1ddad828d841c8ba8935ccbdf1c490daa56911364eac60ecc4",
+    "bytes": 4174
+  },
+  "artifact": {
+    "sha256": "a0e27fdda8108036e4ac7e0f360d39b301b08f33982a106f473ca495d08d266e",
+    "bytes": 710147
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

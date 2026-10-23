@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/02-core-cycle.json",
+  "output": "/Users/mingazhev/Repos/SideProjects/dotnet-code-metrics-toolkit/docs/architecture-review/02-core-cycle.html",
+  "specification": {
+    "sha256": "fd533de7f6ba15922426129f1a70aa4ef3f73eeda08ccad760f5fac438a96283",
+    "bytes": 2215
+  },
+  "artifact": {
+    "sha256": "4487822cb4a1d60788bbbb3970ad6eb447f3e4821919f9ac6723bd0929534144",
+    "bytes": 701500
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

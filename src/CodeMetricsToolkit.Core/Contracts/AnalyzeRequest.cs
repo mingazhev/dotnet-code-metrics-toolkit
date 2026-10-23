@@ -1,4 +1,4 @@
-namespace CodeMetricsToolkit.Core.Analysis;
+namespace CodeMetricsToolkit.Core.Contracts;
 
 public sealed record AnalyzeRequest
 {

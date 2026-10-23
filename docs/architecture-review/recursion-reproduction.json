@@ -1,0 +1,14 @@
+{
+  "returncode": -6,
+  "log_head": [
+    "Stack overflow.",
+    "   at System.Collections.Immutable.ImmutableArray.CreateRange[[Microsoft.CodeAnalysis.CSharp.Symbols.TypeWithAnnotations, Microsoft.CodeAnalysis.CSharp, Version=5.6.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35],[System.__Canon, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]](System.Collections.Immutable.ImmutableArray`1<Microsoft.CodeAnalysis.CSharp.Symbols.TypeWithAnnotations>, System.Func`2<Microsoft.CodeAnalysis.CSharp.Symbols.TypeWithAnnotations,System.__Canon>)",
+    "   at Microsoft.CodeAnalysis.ImmutableArrayExtensions.SelectAsArray[[Microsoft.CodeAnalysis.CSharp.Symbols.TypeWithAnnotations, Microsoft.CodeAnalysis.CSharp, Version=5.6.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35],[System.__Canon, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]](System.Collections.Immutable.ImmutableArray`1<Microsoft.CodeAnalysis.CSharp.Symbols.TypeWithAnnotations>, System.Func`2<Microsoft.CodeAnalysis.CSharp.Symbols.TypeWithAnnotations,System.__Canon>)",
+    "   at Microsoft.CodeAnalysis.CSharp.NullableAnnotationExtensions.GetPublicSymbols(System.Collections.Immutable.ImmutableArray`1<Microsoft.CodeAnalysis.CSharp.Symbols.TypeWithAnnotations>)",
+    "   at Microsoft.CodeAnalysis.CSharp.Symbols.PublicModel.NamedTypeSymbol.Microsoft.CodeAnalysis.INamedTypeSymbol.get_TypeArguments()",
+    "   at CodeMetricsToolkit.Core.Syntax.TypeSemanticFactsCollector.AddCoupledType(Microsoft.CodeAnalysis.ITypeSymbol, Microsoft.CodeAnalysis.INamedTypeSymbol, System.Collections.Generic.HashSet`1<System.String>)",
+    "   at CodeMetricsToolkit.Core.Syntax.TypeSemanticFactsCollector.AddCoupledType(Microsoft.CodeAnalysis.ITypeSymbol, Microsoft.CodeAnalysis.INamedTypeSymbol, System.Collections.Generic.HashSet`1<System.String>)",
+    "   at CodeMetricsToolkit.Core.Syntax.TypeSemanticFactsCollector.AddCoupledType(Microsoft.CodeAnalysis.ITypeSymbol, Microsoft.CodeAnalysis.INamedTypeSymbol, System.Collections.Generic.HashSet`1<System.String>)"
+  ],
+  "stack_overflow": true
+}

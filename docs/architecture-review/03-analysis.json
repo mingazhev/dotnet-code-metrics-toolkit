@@ -1,0 +1,194 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Процесс анализа и решение CLI",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "Этап процесса"
+        },
+        "security": {
+          "label": "Обработка ошибки"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Анализ"
+    },
+    {
+      "id": "alt",
+      "label": "Ветви",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "discover",
+    "load",
+    "facts",
+    "metrics",
+    "publish",
+    "gate"
+  ],
+  "nodes": [
+    {
+      "id": "discover",
+      "lane": "main",
+      "col": 0,
+      "type": "backend",
+      "label": "Discovery",
+      "sublabel": "Выбор исходников",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "load",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "Загрузка",
+      "sublabel": "restore + MSBuild",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "facts",
+      "lane": "main",
+      "col": 2,
+      "type": "backend",
+      "label": "AnalysisFacts",
+      "sublabel": "Сбор и нормализация",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "metrics",
+      "lane": "main",
+      "col": 3,
+      "type": "backend",
+      "label": "Метрики",
+      "sublabel": "5 проекторов + ranking",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "publish",
+      "lane": "main",
+      "col": 4,
+      "type": "backend",
+      "label": "Публикация",
+      "sublabel": "staging → validate → output",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "gate",
+      "lane": "main",
+      "col": 5,
+      "type": "backend",
+      "label": "Решение CLI",
+      "sublabel": "trust / empty → код 0 или 3",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "syntax",
+      "lane": "alt",
+      "col": 1,
+      "type": "backend",
+      "label": "Syntax-only",
+      "sublabel": "Без restore и MSBuild",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    },
+    {
+      "id": "failed",
+      "lane": "alt",
+      "col": 4,
+      "type": "security",
+      "label": "Ошибка",
+      "sublabel": "Отмена / неверные артефакты",
+      "width": 148,
+      "height": 84,
+      "yOffset": 48
+    }
+  ],
+  "edges": [
+    {
+      "id": "discover-load",
+      "from": "discover",
+      "to": "load",
+      "label": "semantic"
+    },
+    {
+      "id": "load-facts",
+      "from": "load",
+      "to": "facts",
+      "label": "полный / degraded"
+    },
+    {
+      "id": "facts-metrics",
+      "from": "facts",
+      "to": "metrics"
+    },
+    {
+      "id": "metrics-publish",
+      "from": "metrics",
+      "to": "publish"
+    },
+    {
+      "id": "publish-gate",
+      "from": "publish",
+      "to": "gate"
+    },
+    {
+      "id": "discover-syntax",
+      "from": "discover",
+      "to": "syntax",
+      "label": "--syntax-only",
+      "role": "branch"
+    },
+    {
+      "id": "syntax-facts",
+      "from": "syntax",
+      "to": "facts",
+      "label": "разбор C#",
+      "role": "branch"
+    },
+    {
+      "id": "publish-failed",
+      "from": "publish",
+      "to": "failed",
+      "label": "сбой",
+      "role": "error",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Degraded — данные с ограничениями",
+      "items": [
+        "Сбой регистрации / restore / загрузки отражается в health; доступные файлы анализируются."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Проверка CLI после публикации",
+      "items": [
+        "Код 3 сохраняет артефакты; --allow-degraded и --allow-empty изменяют решение CLI."
+      ]
+    }
+  ]
+}
