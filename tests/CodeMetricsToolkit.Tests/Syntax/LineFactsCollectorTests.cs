@@ -6,6 +6,20 @@ namespace CodeMetricsToolkit.Tests.Syntax;
 
 public sealed class LineFactsCollectorTests
 {
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    [InlineData("\r")]
+    public void DirectivesAndDisabledTextArePhysicalLinesButNotTokensOrComments(string newline)
+    {
+        var source = string.Join(newline, "#if false", "class Disabled { } // disabled", "#endif", "class Active { } // comment", "");
+        var context = RoslynTestCompilation.Create(source);
+
+        LineFacts facts = LineFactsCollector.Collect(context.SyntaxTree, context.Root, SourceText.From(source));
+
+        Assert.Equal(new LineFacts(5, 1, 1, 0, 1, 1, 0), facts);
+    }
+
     [Fact]
     public void CollectClassifiesEveryLineCategoryWithoutDoubleCountingComponents()
     {

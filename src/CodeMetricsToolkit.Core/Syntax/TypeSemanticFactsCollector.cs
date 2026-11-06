@@ -55,6 +55,11 @@ internal static class TypeSemanticFactsCollector
 
     private static int GetInheritanceDepth(INamedTypeSymbol typeSymbol)
     {
+        if (typeSymbol.TypeKind != TypeKind.Class)
+        {
+            return 0;
+        }
+
         var depth = 0;
 
         for (INamedTypeSymbol? current = typeSymbol.BaseType;

@@ -3,6 +3,9 @@
 These formulas are part of the public output contract. Changing a formula
 requires a new metric version.
 
+For purpose, interpretation and relationship graphs, start with the
+[metric guide](../../../docs/toolkit/metrics-guide.md).
+
 ## cyclomatic_complexity@1.0.0
 
 Formula:
@@ -52,9 +55,11 @@ lock
 Sonar-inspired, not Sonar-compatible.
 
 The MVP uses the same shared control-flow facts pass as cyclomatic complexity.
-Each structural decision adds one point, plus the current nesting depth. Boolean,
-coalesce, conditional, pattern, catch-filter, and switch-when decision points add
-one point without an additional nesting multiplier.
+Each structural decision adds one point, plus the current nesting depth. Conditional
+expressions, case labels and switch-expression arms are structural decisions. Boolean,
+coalesce, pattern, catch-filter and switch-when decisions add one point without an
+additional nesting multiplier. Switches introduce nesting without themselves adding a
+decision; switch-expression arms also introduce nesting for their bodies.
 
 The metric stays at `0.1.0` until golden samples cover enough SonarSource rules
 to claim compatibility.
@@ -78,6 +83,7 @@ do
 catch
 switch statement
 switch expression
+switch expression arm
 conditional expression
 ```
 
@@ -373,7 +379,7 @@ All graph metrics are emitted only for a trusted semantic analysis.
 
 ## semantic symbol metrics
 
-### inheritance_depth@1.0.0
+### inheritance_depth@1.0.1
 
 ```text
 inheritance_depth = count(non-System.Object base classes)
@@ -424,7 +430,7 @@ basic_block_count = all CFG blocks, including entry and exit
 reachable_basic_block_count = blocks where BasicBlock.IsReachable is true
 unreachable_basic_block_count = basic_block_count - reachable_basic_block_count
 control_flow_edge_count = non-null fall-through + conditional successors
-cfg_cyclomatic_complexity = E - N + 2P
+cfg_cyclomatic_complexity = max(1, E - N + 2P)
 ```
 
 In the CFG formula, `E` is `control_flow_edge_count`, `N` is
@@ -433,19 +439,33 @@ Roslyn cannot construct a graph. It does not replace `cyclomatic_complexity@1.0.
 remains syntax-based and independently versioned.
 
 Properties can contribute multiple accessor graphs. Auto-properties with no authored
-executable body do not emit operation/CFG observations. Static allocation counts are
-source sites, not bytes or runtime frequency. All operation/CFG metrics require a trusted
-semantic analysis.
+executable body do not emit operation/CFG observations. Explicit operation traversal
+includes nested lambda/local-function bodies, but their separate CFGs are not collected.
+Implicit constructor calls can add CFG blocks without adding explicit operations.
+Exception branches can have no destination block, making the unclamped expression less
+than 1. This is a bounded topology heuristic, not a full exception-aware path count.
+The clamp was already implemented in version 1.0.0; documenting it does not change output.
+See Roslyn's [CFG](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.flowanalysis.controlflowgraph)
+and [basic block](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.flowanalysis.basicblock)
+contracts (the toolkit uses Roslyn 5.6.0).
 
-## diagnostic_count@1.0.0
+Static allocation counts are source sites, not bytes or runtime frequency.
+All operation/CFG metrics require a trusted semantic analysis.
+
+## diagnostic_count@1.1.0
 
 Formula:
 
 ```text
-diagnostic_count = count(diagnostics whose source span overlaps the target span)
+diagnostic_count = count(diagnostics overlapping any declaration span of the target)
 ```
 
 Target kinds: `file`, `type`, `member`.
+
+Partial types and members use the union of all their declaration spans across files.
+Each diagnostic counts once per target even when spans overlap. Output location metadata
+continues to identify the primary declaration. Matching uses inclusive line spans, not
+columns; a diagnostic may therefore belong to multiple same-line declarations.
 
 The untagged metric is the total count. Additional rows with the same metric id
 may include `tags`, for example:
@@ -458,10 +478,12 @@ project_load
 ```
 
 Project-load diagnostics without a source span remain first-class diagnostics in
-`diagnostics.ndjson`, but are not attributed to file/type/member metric targets.
+`diagnostics.ndjson`, but are not attributed to file/type/member metric targets. A complete
+span (path, start line and end line) is required for attribution.
 
 `diagnostic_count` is emitted only when `summary.json.analysisHealth.trustedDiagnostics`
-is `true`. If restore or MSBuild project loading fails, compiler diagnostics are
+is `true`. If restore or MSBuild project loading fails, or a loaded compilation cannot
+resolve the framework's `System.Object`, compiler diagnostics are
 not treated as code-quality metrics because they may reflect a broken analysis
 environment instead of broken source code.
 

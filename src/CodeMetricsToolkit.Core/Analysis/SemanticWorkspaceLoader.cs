@@ -65,7 +65,15 @@ internal static class SemanticWorkspaceLoader
                     : StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .ToArray();
-            var hasCompleteSemanticCoverage = externalWorkspaceSources.Length == 0;
+            var hasFrameworkReferences = contexts.Values.All(context =>
+                context.Compilation.GetSpecialType(SpecialType.System_Object).TypeKind != TypeKind.Error);
+            var hasCompleteSemanticCoverage = externalWorkspaceSources.Length == 0 && hasFrameworkReferences;
+
+            if (!hasFrameworkReferences)
+            {
+                messages.Add("A loaded compilation cannot resolve System.Object; framework references are missing. " +
+                    "Restore the projects and verify the target SDK before trusting semantic results or compiler diagnostics.");
+            }
 
             if (externalWorkspaceSources.Length > 0)
             {

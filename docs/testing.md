@@ -5,7 +5,7 @@ CodeMetricsToolkit treats metric output as a versioned product contract. A metri
 Every catalog metric must pass both gates:
 
 1. A unit test exercises the collector or projector formula, including relevant trust and empty-input behavior.
-2. `GoldenMetricContractTests` analyzes the checked-in `ExpandedMetricsProject`, validates every artifact schema and cross-artifact invariant, and compares one exact target/value/version/kind/unit expectation for every metric ID.
+2. `GoldenMetricContractTests` analyzes the checked-in `ExpandedMetricsProject`, validates every artifact schema and cross-artifact invariant, compares one exact target/value/version/kind/unit expectation for every metric ID, and verifies observations exist for every catalog-declared target kind.
 
 `MetricCatalogCoverageTests` compares `MetricCatalog.All` with the explicitly unit-tested metric families. The golden test independently compares the catalog with `expected-metrics.json`. Adding a metric to the catalog therefore fails both gates until both levels are updated.
 
@@ -15,7 +15,7 @@ Every catalog metric must pass both gates:
 | --- | --- | --- |
 | Physical, token and comment LOC | `LineFactsCollectorTests`, `SyntaxMetricProjectorTests` | exact file/project/solution results in `ExpandedMetricsProject` |
 | Syntax complexity and aggregates | `ControlFlowFactsCollectorTests`, `SyntaxMetricProjectorTests` | exact member/file targets in the golden contract; `ComplexityProject` stress sample |
-| Type/call graphs, SCCs and transitive counts | `GraphMetricProjectorTests` | exact semantic IDs and graph-derived values in the golden contract; `SemanticGraphProject` relationship sample |
+| Type/call graphs, SCCs and transitive counts | `GraphMetricProjectorTests`, `DirectedGraphAnalyzerTests` | exact semantic IDs and graph-derived values in the golden contract; `SemanticGraphProject` relationship sample |
 | Inheritance, coupling and API documentation | `TypeSemanticFactsCollectorTests`, `SemanticMetricProjectorTests` | exact type/project values in the golden contract |
 | IOperation and CFG | `OperationFactsCollectorTests`, `SemanticMetricProjectorTests` | exact operations, allocations, awaits, blocks, edges and CFG complexity in the golden contract |
 | Diagnostics | `DiagnosticMetricProjectorTests` | exact zero-diagnostic contract row; diagnostic-producing fixtures in `NullableDiagnosticsProject` and `BrokenProject` |
@@ -26,3 +26,25 @@ Every catalog metric must pass both gates:
 | Scoring profiles and provenance | `ScoringEngineTests` | `AnalyzerScoringIntegrationTests` runs the analyzer on `ExpandedMetricsProject`, validates the emitted artifacts, and asserts an exact score plus complete provenance |
 
 The golden file is intentionally reviewed source, not regenerated during a test. A formula or Roslyn-version change must produce an explicit expectation diff and, when semantics change, a metric version change.
+
+## Independent and boundary checks
+
+- A Floyd–Warshall reference checks SCC membership and both reachability directions for
+  all 512 directed three-node graphs (including self-loops) and 200 seeded larger graphs.
+  The reference does not reuse the production SCC/condensation implementation.
+- Golden observations check seven ratio identities, complexity versus decision points,
+  CFG block partition and clamp, comment-set relationships, and cycle-size/flag agreement
+  across emitted targets. These complement, rather than replace, exact expected values.
+- Roslyn-backed tests cover classes, records, interfaces, structs and enums; executable
+  member/accessor forms; nested allocations; exception CFGs; and LF/CRLF/CR line endings.
+- Diagnostic tests cover partial declarations across files, overlapping spans without
+  double counting, missing source coordinates, and untrusted analysis. A CLI regression
+  loads a project without framework references and checks degraded output and exit code 3;
+  an ordinary broken-source fixture remains trusted when its framework is available.
+- Ranking tests distinguish measured zero from unavailable values and verify deterministic
+  ties and the separation between summary `--top` and complete rank metrics.
+- IL-based architecture tests reject Core namespace cycles and Metrics dependencies on
+  pipeline, Roslyn traversal, validation, discovery or publication layers.
+
+The 2026-11-07 review ran 318 tests without skips on macOS arm64. This is behavioral
+coverage, not a claim of 100% branch coverage or support for every C# language feature.

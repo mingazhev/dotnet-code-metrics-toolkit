@@ -4,6 +4,8 @@ CodeMetricsToolkit separates source facts from consumer gates and objectives.
 
 See the [architecture diagrams and graph audit](../architecture-review/README.md)
 for the source-backed audit from 2026-10-23, process flows, and before/after cycle checks.
+The [2026-11-07 review](../architecture-review/2026-11-07-review.md) assesses suitability,
+metric correctness, tested boundaries and remaining limits.
 
 ## Components
 
@@ -39,6 +41,11 @@ universal meanings of cyclomatic complexity or dependency counts.
 Semantic mode restores and loads projects with `MSBuildWorkspace`. It provides stable
 symbol ids, internal dependency edges, and compiler diagnostics when loading succeeds.
 Any restore or project-load failure degrades the run and makes diagnostics untrusted.
+A loaded compilation must also resolve `System.Object`; missing framework references
+degrade the run even when MSBuild successfully opens the project. Raw diagnostics remain
+available, while semantic, graph and diagnostic metric rows are omitted. Syntax metrics
+remain useful. These checks do not prove that all external packages resolve: inspect raw
+compiler diagnostics before interpreting semantic results, especially with `--no-restore`.
 
 Syntax-only mode parses discovered C# files directly. It is safer and more portable, but
 target ids and dependency information are less stable/complete. Every observation carries

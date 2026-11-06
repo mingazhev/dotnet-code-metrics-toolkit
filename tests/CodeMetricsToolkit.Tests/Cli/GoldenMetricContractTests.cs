@@ -81,6 +81,11 @@ public sealed class GoldenMetricContractTests
             Assert.Contains(
                 catalogExpectation.GetProperty("targetKind").GetString(),
                 metric.TargetKinds);
+            Assert.Equal(
+                metric.TargetKinds.Order(StringComparer.Ordinal),
+                actual.Where(row => row.GetProperty("metricId").GetString() == metric.Id)
+                    .Select(row => row.GetProperty("targetKind").GetString())
+                    .Distinct().Order(StringComparer.Ordinal));
         }
         Assert.Equal(
             expected
@@ -134,6 +139,64 @@ public sealed class GoldenMetricContractTests
                 .ToArray();
             Assert.NotEmpty(targetMetrics);
             Assert.All(targetMetrics, metric => AssertTargetMetadata(expectedTarget, metric));
+        }
+
+        AssertRelationships(actual);
+    }
+
+    private static void AssertRelationships(IEnumerable<JsonElement> rows)
+    {
+        (string Ratio, string Numerator, string Denominator)[] ratios =
+        [
+            ("token_line_ratio", "token_line_count", "lines_of_code"),
+            ("blank_line_ratio", "blank_line_count", "lines_of_code"),
+            ("comment_only_line_ratio", "comment_only_line_count", "lines_of_code"),
+            ("commented_line_ratio", "commented_line_count", "lines_of_code"),
+            ("documentation_comment_ratio", "documentation_comment_line_count", "lines_of_code"),
+            ("duplicated_line_ratio", "duplicated_line_count", "lines_of_code"),
+            ("public_api_documentation_ratio", "documented_public_api_count", "public_api_count")
+        ];
+        foreach (IGrouping<string, JsonElement> target in rows
+                     .Where(row => !row.TryGetProperty("tags", out _))
+                     .GroupBy(row => row.GetProperty("targetId").GetString()!))
+        {
+            var values = target.ToDictionary(
+                row => row.GetProperty("metricId").GetString()!,
+                row => row.GetProperty("numericValue").GetDouble());
+            foreach ((var ratio, var numerator, var denominator) in ratios)
+            {
+                if (values.TryGetValue(ratio, out var value))
+                {
+                    Assert.True(values[denominator] > 0);
+                    Assert.InRange(value, 0, 1);
+                    Assert.Equal(values[numerator] / values[denominator], value, 12);
+                }
+            }
+
+            if (values.TryGetValue("cyclomatic_complexity", out var cyclomatic))
+            {
+                Assert.Equal(1 + values["decision_point_count"], cyclomatic);
+            }
+            if (values.TryGetValue("basic_block_count", out var blocks))
+            {
+                Assert.Equal(blocks, values["reachable_basic_block_count"] + values["unreachable_basic_block_count"]);
+            }
+            if (values.TryGetValue("cfg_cyclomatic_complexity", out var cfgComplexity))
+            {
+                Assert.Equal(Math.Max(1, values["control_flow_edge_count"] - blocks + (2 * values["control_flow_graph_count"])), cfgComplexity);
+            }
+            if (values.TryGetValue("commented_line_count", out var comments))
+            {
+                Assert.Equal(comments, values["comment_only_line_count"] + values["mixed_code_comment_line_count"]);
+                Assert.InRange(values["documentation_comment_line_count"], 0, comments);
+            }
+            foreach (var prefix in new[] { "", "project_", "namespace_" })
+            {
+                if (values.TryGetValue(prefix + "dependency_component_size", out var size))
+                {
+                    Assert.Equal(size > 0 ? 1 : 0, values[prefix + "dependency_cycle_membership"]);
+                }
+            }
         }
     }
 

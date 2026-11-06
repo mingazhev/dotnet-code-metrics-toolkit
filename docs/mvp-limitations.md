@@ -16,10 +16,16 @@ Impact:
 semantic ids, dependency edges and compiler diagnostics are trusted only when analysisHealth.trustedDiagnostics is true
 ```
 
-If restore fails or MSBuild reports project-load failures, the run is marked
+If restore fails, MSBuild reports project-load failures, or a compilation cannot resolve
+the framework's `System.Object`, the run is marked
 `analysisQuality=degraded`. In degraded runs compiler diagnostics are suppressed
 from `diagnostic_count` metrics and excluded from `hotspot_rank` so failed
 environment setup does not look like code quality.
+
+`trusted` is not a successful-build guarantee. Missing package symbols can still appear
+as compiler errors in a loaded compilation with valid framework references. Inspect
+`diagnostics.ndjson` and restore dependencies before treating them as source defects.
+This is especially relevant to `--no-restore`; the framework check does not replace restore.
 
 MSBuild can still be affected by files above the analyzed root, such as
 `Directory.Build.props`, `Directory.Packages.props`, and `NuGet.config`. The
@@ -43,13 +49,26 @@ context.
 ## Project-Load Diagnostic Attribution
 
 `diagnostics.ndjson` includes project-load diagnostics even when they do not
-have a source span. `diagnostic_count@1.0.0` is only emitted for source-linked
+have a source span. `diagnostic_count@1.1.0` is only emitted for source-linked
 file/type/member targets, so source-less project-load diagnostics are not
 attributed to that metric.
 
-When diagnostics are not trusted, `diagnostic_count@1.0.0` is not emitted at
+When diagnostics are not trusted, `diagnostic_count@1.1.0` is not emitted at
 all. Consumers must check `summary.json.analysisHealth.trustedDiagnostics`
 before comparing diagnostic metrics across runs.
+
+Partial declarations contribute all their source spans, with each diagnostic counted
+once per target. Attribution uses line overlap; it cannot distinguish two declarations
+on the same line. Records without both start and end lines are not attributed.
+
+## Member and control-flow populations
+
+Member metrics cover declared methods, constructors, destructors, operators, properties
+and indexers. Top-level statements and field/event initializers do not receive member
+targets. Delegate declarations do not receive type targets. Nested lambdas/local functions
+contribute to their enclosing member's syntax/operation metrics, but separate nested CFGs
+are not collected. CFG complexity clamps `E - N + 2P` to at least 1 and is not a complete
+exception-aware path count. See the [metric guide](toolkit/metrics-guide.md).
 
 ## Call Graph Precision
 
