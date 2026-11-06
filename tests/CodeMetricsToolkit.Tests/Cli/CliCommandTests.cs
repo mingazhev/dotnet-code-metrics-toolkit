@@ -53,7 +53,7 @@ public sealed partial class CliAnalyzeTests
         Assert.Contains("outgoing_type_dependency_count@1.1.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("outgoing_namespace_dependency_count@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("weighted_member_complexity@1.0.0", listOutput.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Formula: number of diagnostics whose span overlaps the target", explainOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Formula: number of diagnostics overlapping any declaration span of the target", explainOutput.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
