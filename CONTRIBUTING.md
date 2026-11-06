@@ -51,3 +51,8 @@ tests should be used when semantic loading is irrelevant to the behavior under t
 Keep changes focused and explain intent, relevant decisions, rejected alternatives, and
 compatibility impact. A pull request is ready only when Release build, tests, package
 installation smoke, and output validation pass from a clean checkout.
+
+Commit source, reusable product documentation and intentional test fixtures. Keep local
+analysis reports, benchmark output, screenshots, generated diagrams, diagnostic dumps
+and session notes under the ignored `artifacts/` directory. Put validation summaries in
+the PR description; do not force-add local artifacts or environment files.

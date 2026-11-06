@@ -11,3 +11,10 @@ BenchmarkDotNet.Artifacts/
 TestResults/
 coverage/
 .DS_Store
+*.log
+*.trx
+*.binlog
+*.coverage
+.env
+.env.*
+!.env.example

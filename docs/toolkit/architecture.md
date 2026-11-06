@@ -2,10 +2,10 @@
 
 CodeMetricsToolkit separates source facts from consumer gates and objectives.
 
-See the [architecture diagrams and graph audit](../architecture-review/README.md)
-for the source-backed audit from 2026-10-23, process flows, and before/after cycle checks.
-The [2026-11-07 review](../architecture-review/2026-11-07-review.md) assesses suitability,
-metric correctness, tested boundaries and remaining limits.
+The design serves a deterministic CLI with versioned file artifacts and an independent
+scoring consumer. Source collection, metric projection and consumer policy have separate
+owners. The [metric guide](metrics-guide.md) explains how the resulting measurements
+relate; [known limitations](../mvp-limitations.md) describe their practical boundaries.
 
 ## Components
 

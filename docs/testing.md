@@ -47,5 +47,5 @@ The golden file is intentionally reviewed source, not regenerated during a test.
 - IL-based architecture tests reject Core namespace cycles and Metrics dependencies on
   pipeline, Roslyn traversal, validation, discovery or publication layers.
 
-The 2026-11-07 review and duplication follow-up ran 317 tests without skips on macOS arm64. This is behavioral
-coverage, not a claim of 100% branch coverage or support for every C# language feature.
+This is behavioral coverage, not a claim of 100% branch coverage or support for every
+C# language feature. Use the CI result for the exact commit when assessing test status.
