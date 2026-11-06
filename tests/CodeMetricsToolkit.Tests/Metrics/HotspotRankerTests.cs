@@ -8,6 +8,43 @@ namespace CodeMetricsToolkit.Tests.Metrics;
 public sealed class HotspotRankerTests
 {
     [Fact]
+    public void RankTiesAreStableAndTopOnlyLimitsSummaryRows()
+    {
+        MemberFacts first = TestFacts.Member("member:a", "type:a", "A.cs");
+        MemberFacts second = first with { TargetId = "member:b" };
+        AnalysisFacts facts = TestFacts.Analysis(members: [second, first], diagnosticsInHotspots: false);
+        MetricResultLine[] metrics = ProjectMetrics(facts);
+
+        HotspotRanking ranking = HotspotRanker.Rank(facts, metrics, 1, CancellationToken.None);
+        HotspotRanking reversed = HotspotRanker.Rank(facts with { Members = [first, second] }, metrics.Reverse().ToArray(), 0, CancellationToken.None);
+
+        Assert.Equal(first.TargetId, Assert.Single(ranking.Hotspots).TargetId);
+        Assert.Empty(reversed.Hotspots);
+        Assert.Equal(ranking.Metrics, reversed.Metrics);
+        Assert.Equal([1d, 2d], ranking.Metrics.Select(metric => metric.NumericValue));
+    }
+
+    [Fact]
+    public void RankKeepsMeasuredZeroSeparateFromMissingComponents()
+    {
+        MemberFacts member = TestFacts.Member("member:a", "type:a", "A.cs");
+        AnalysisFacts facts = TestFacts.Analysis(members: [member], diagnosticsInHotspots: false);
+        MetricResultLine[] rows =
+        [
+            MetricResultFactory.Create("cognitive_complexity", "member", member.TargetId, "semantic", "A.cs", 1, 2, 0),
+            MetricResultFactory.Create("member_length", "member", member.TargetId, "semantic", "A.cs", 1, 2, 2)
+        ];
+
+        HotspotLine hotspot = Assert.Single(HotspotRanker.Rank(facts, rows, 1, CancellationToken.None).Hotspots);
+
+        Assert.Equal(2, hotspot.Components.Count);
+        HotspotComponentLine zero = Assert.Single(hotspot.Components, component => component.MetricId == "cognitive_complexity");
+        Assert.Equal(0, zero.Percentile);
+        Assert.Equal(2d / 3, zero.Weight, 12);
+        Assert.Equal(0.333333, hotspot.RankScore);
+    }
+
+    [Fact]
     public void RankPublishesOneStableRankMetricPerCandidateAndOrdersHighestMemberFirst()
     {
         FileFacts file = TestFacts.File("file:a", "A.cs", lines: 40, tokenLines: 30);

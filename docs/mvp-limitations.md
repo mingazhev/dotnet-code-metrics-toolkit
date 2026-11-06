@@ -16,10 +16,22 @@ Impact:
 semantic ids, dependency edges and compiler diagnostics are trusted only when analysisHealth.trustedDiagnostics is true
 ```
 
-If restore fails or MSBuild reports project-load failures, the run is marked
+If restore fails, MSBuild reports project-load failures, or a compilation cannot resolve
+the framework's `System.Object`, the run is marked
 `analysisQuality=degraded`. In degraded runs compiler diagnostics are suppressed
 from `diagnostic_count` metrics and excluded from `hotspot_rank` so failed
 environment setup does not look like code quality.
+
+`trusted` is not a successful-build guarantee. Missing package symbols can still appear
+as compiler errors in a loaded compilation with valid framework references. Inspect
+`diagnostics.ndjson` and restore dependencies before treating them as source defects.
+This is especially relevant to `--no-restore`; the framework check does not replace restore.
+
+Compiler diagnostics come from Roslyn's `Compilation.GetDiagnostics`. The toolkit does
+not execute third-party diagnostic analyzers or their `DiagnosticSuppressor` instances.
+For example, a test framework may suppress nullable warnings after a not-null assertion
+during a normal build while the toolkit still reports them. `diagnostic_count` and its
+hotspot contribution therefore do not represent the final `dotnet build` diagnostic set.
 
 MSBuild can still be affected by files above the analyzed root, such as
 `Directory.Build.props`, `Directory.Packages.props`, and `NuGet.config`. The
@@ -43,13 +55,26 @@ context.
 ## Project-Load Diagnostic Attribution
 
 `diagnostics.ndjson` includes project-load diagnostics even when they do not
-have a source span. `diagnostic_count@1.0.0` is only emitted for source-linked
+have a source span. `diagnostic_count@1.1.0` is only emitted for source-linked
 file/type/member targets, so source-less project-load diagnostics are not
 attributed to that metric.
 
-When diagnostics are not trusted, `diagnostic_count@1.0.0` is not emitted at
+When diagnostics are not trusted, `diagnostic_count@1.1.0` is not emitted at
 all. Consumers must check `summary.json.analysisHealth.trustedDiagnostics`
 before comparing diagnostic metrics across runs.
+
+Partial declarations contribute all their source spans, with each diagnostic counted
+once per target. Attribution uses line overlap; it cannot distinguish two declarations
+on the same line. Records without both start and end lines are not attributed.
+
+## Member and control-flow populations
+
+Member metrics cover declared methods, constructors, destructors, operators, properties
+and indexers. Top-level statements and field/event initializers do not receive member
+targets. Delegate declarations do not receive type targets. Nested lambdas/local functions
+contribute to their enclosing member's syntax/operation metrics, but separate nested CFGs
+are not collected. CFG complexity clamps `E - N + 2P` to at least 1 and is not a complete
+exception-aware path count. See the [metric guide](toolkit/metrics-guide.md).
 
 ## Call Graph Precision
 
@@ -63,6 +88,8 @@ Duplication compares exact token kinds and source text. Identifier renames and e
 expressions are not normalized. Linked files with different preprocessor configurations
 use the same first analyzed context as the other physical-file metrics.
 
-The collector has fixed token, window and work budgets; exceeding one fails the analysis.
-It does not publish a partial count or silently skip duplication on large inputs. See the
-[metric formulas](../src/CodeMetricsToolkit.Core/Metrics/README.md) for thresholds and limits.
+The collector retains token, rank and window indexes in memory. It has no separate
+duplication token/window/work ceiling, but memory use grows with the selected source
+size. It does not publish a partial count or silently skip duplication on large inputs.
+General input/output limits still apply. See the
+[metric formulas](../src/CodeMetricsToolkit.Core/Metrics/README.md) for matching thresholds.

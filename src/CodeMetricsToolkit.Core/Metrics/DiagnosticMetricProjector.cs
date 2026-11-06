@@ -28,13 +28,13 @@ public static class DiagnosticMetricProjector
         foreach (TypeFacts type in facts.Types.OrderBy(type => type.TargetId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            AddDiagnosticMetrics(metrics, diagnosticsByFile, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine);
+            AddDiagnosticMetrics(metrics, diagnosticsByFile, "type", type.TargetId, type.TargetIdStability, type.FilePath, type.StartLine, type.EndLine, type.Declarations);
         }
 
         foreach (MemberFacts member in facts.Members.OrderBy(member => member.TargetId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            AddDiagnosticMetrics(metrics, diagnosticsByFile, "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine);
+            AddDiagnosticMetrics(metrics, diagnosticsByFile, "member", member.TargetId, member.TargetIdStability, member.FilePath, member.StartLine, member.EndLine, member.Declarations);
         }
 
         return metrics;
@@ -48,9 +48,16 @@ public static class DiagnosticMetricProjector
         string targetIdStability,
         string filePath,
         int startLine,
-        int endLine)
+        int endLine,
+        IReadOnlyList<SourceSpanFacts>? declarations = null)
     {
-        AnalysisDiagnostic[] matchingDiagnostics = diagnosticsByFile.TryGetValue(
+        AnalysisDiagnostic[] matchingDiagnostics = declarations is { Count: > 0 }
+            ? declarations.GroupBy(span => span.FilePath, StringComparer.Ordinal)
+                .SelectMany(group => diagnosticsByFile.GetValueOrDefault(group.Key, [])
+                    .Where(diagnostic => group.Any(span =>
+                        OverlapsTarget(diagnostic, span.FilePath, span.StartLine, span.EndLine))))
+                .ToArray()
+            : diagnosticsByFile.TryGetValue(
                 filePath,
                 out AnalysisDiagnostic[]? candidates)
             ? candidates.Where(diagnostic => OverlapsTarget(diagnostic, filePath, startLine, endLine)).ToArray()
@@ -98,7 +105,7 @@ public static class DiagnosticMetricProjector
 
         if (diagnostic.StartLine is null || diagnostic.EndLine is null)
         {
-            return true;
+            return false;
         }
 
         return diagnostic.StartLine <= endLine && diagnostic.EndLine >= startLine;

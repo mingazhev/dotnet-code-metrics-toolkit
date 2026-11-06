@@ -29,6 +29,35 @@ public sealed class DependencyBoundaryTests
         .ToDictionary(code => code.Value);
 
     [Fact]
+    public void CoreNamespacesHaveNoDependencyCycles()
+    {
+        Assembly assembly = typeof(FileFacts).Assembly;
+        var dependencies = assembly.GetTypes()
+            .Where(type => type.Namespace?.StartsWith("CodeMetricsToolkit.Core", StringComparison.Ordinal) == true)
+            .GroupBy(type => type.Namespace!)
+            .ToDictionary(group => group.Key, group => group.SelectMany(ReferencedTypes)
+                .Where(type => type.Assembly == assembly && type.Namespace is not null && type.Namespace != group.Key)
+                .Select(type => type.Namespace!).ToHashSet(StringComparer.Ordinal));
+
+        foreach (var source in dependencies.Keys)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var pending = new Stack<string>(dependencies[source]);
+            while (pending.TryPop(out var current))
+            {
+                Assert.True(source != current, $"Namespace dependency cycle reaches {source} again.");
+                if (seen.Add(current) && dependencies.TryGetValue(current, out HashSet<string>? targets))
+                {
+                    foreach (var target in targets)
+                    {
+                        pending.Push(target);
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
     public void ScoringDoesNotReferenceAnalyzerOrRoslyn()
     {
         Assert.DoesNotContain(typeof(ScoringEngine).Assembly.GetReferencedAssemblies(), reference =>
@@ -64,7 +93,10 @@ public sealed class DependencyBoundaryTests
     [Theory]
     [InlineData("CodeMetricsToolkit.Core.Reporting")]
     [InlineData("CodeMetricsToolkit.Core.Discovery")]
-    public void MetricCalculationsDoNotDependOnPublicationOrDiscovery(string forbiddenNamespace)
+    [InlineData("CodeMetricsToolkit.Core.Analysis")]
+    [InlineData("CodeMetricsToolkit.Core.Syntax")]
+    [InlineData("CodeMetricsToolkit.Core.Validation")]
+    public void MetricCalculationsDoNotDependOnPipelineLayers(string forbiddenNamespace)
     {
         Type[] metrics = typeof(MetricCatalog).Assembly.GetTypes()
             .Where(type => type.Namespace == typeof(MetricCatalog).Namespace)

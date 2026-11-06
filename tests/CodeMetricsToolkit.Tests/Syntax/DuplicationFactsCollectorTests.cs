@@ -193,45 +193,29 @@ public sealed class DuplicationFactsCollectorTests
     }
 
     [Fact]
-    public void CollectFailsClosedWhenTokenLimitIsExceeded()
+    public void CollectProcessesMillionsOfTokensWithoutTruncatingResults()
     {
-        var limits = new DuplicationCollectorLimits(MaxTokens: 99, MaxWindows: 500, MaxWorkUnits: 10_000);
+        const int fileCount = 2_200;
+        const int linesPerFile = 200;
+        SourceFileContext template = Parse("template.cs", Declarations(linesPerFile));
+        // Share the immutable tree to keep this 2.2-million-token collector regression inexpensive.
+        SourceFileContext[] sources = Enumerable.Range(0, fileCount)
+            .Select(index => template with
+            {
+                SourceFile = template.SourceFile with { RelativePath = $"File{index:D4}.cs" }
+            })
+            .ToArray();
 
-        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
-            DuplicationFactsCollector.Collect(
-                [Parse("a.cs", Declarations(20))],
-                CancellationToken.None,
-                limits));
+        DuplicationFacts facts = DuplicationFactsCollector.Collect(sources, CancellationToken.None);
 
-        Assert.Contains("99", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CollectFailsClosedWhenWindowLimitIsExceeded()
-    {
-        var limits = new DuplicationCollectorLimits(MaxTokens: 500, MaxWindows: 0, MaxWorkUnits: 10_000);
-
-        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
-            DuplicationFactsCollector.Collect(
-                [Parse("a.cs", Declarations(25))],
-                CancellationToken.None,
-                limits));
-
-        Assert.Contains("window limit", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CollectFailsClosedWhenWorkLimitIsExceeded()
-    {
-        var limits = new DuplicationCollectorLimits(MaxTokens: 500, MaxWindows: 500, MaxWorkUnits: 1);
-
-        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
-            DuplicationFactsCollector.Collect(
-                [Parse("a.cs", Declarations(25))],
-                CancellationToken.None,
-                limits));
-
-        Assert.Contains("work limit", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(fileCount, facts.Files.Count);
+        Assert.All(facts.Files, file =>
+        {
+            DuplicationRegionFacts region = Assert.Single(file.Regions);
+            Assert.Equal((1, linesPerFile), (region.StartLine, region.EndLine));
+            Assert.Equal(linesPerFile, file.DuplicatedLineCount);
+        });
+        Assert.Equal(fileCount, facts.Files.SelectMany(file => file.Regions).Select(region => region.Tag).Distinct().Count());
     }
 
     private static string Declarations(

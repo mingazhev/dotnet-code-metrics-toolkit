@@ -30,9 +30,9 @@ The catalog covers source lines, complexity, dependencies, duplication and seman
 Run `codemetrics list-metrics` for the authoritative list and `codemetrics explain <metric-id>` for a formula and its
 known limitations.
 
-Duplication collection currently supports up to 500,000 tokens per analysis. Exceeding
-its budget fails the run rather than publishing incomplete measurements; see the
-[duplication definition and limits](src/CodeMetricsToolkit.Core/Metrics/README.md#duplicated_block_count100-duplicated_line_count100-and-duplicated_line_ratio100).
+Duplication collection has no separate token or work ceiling. It retains token/window
+indexes in memory, so larger inputs need more memory; see the
+[duplication definition](src/CodeMetricsToolkit.Core/Metrics/README.md#duplicated_block_count100-duplicated_line_count100-and-duplicated_line_ratio100).
 
 ## Quick start
 
@@ -100,8 +100,7 @@ See:
 - [Architecture](docs/toolkit/architecture.md)
 - [Security and trust model](docs/toolkit/security.md)
 - [Metric formulas](src/CodeMetricsToolkit.Core/Metrics/README.md)
-- [Cleanup plan and implementation results](docs/research/cleanup-and-design-plan.md)
-- [Metric expansion research](docs/research/metric-expansion.md)
+- [Metric purposes and relationship graphs](docs/toolkit/metrics-guide.md)
 - [Testing strategy and coverage map](docs/testing.md)
 - [Known limitations](docs/mvp-limitations.md)
 - [Autoresearch integration example](docs/toolkit/autoresearch-integration.md)

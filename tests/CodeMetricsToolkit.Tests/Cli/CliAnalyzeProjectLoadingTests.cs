@@ -7,6 +7,38 @@ namespace CodeMetricsToolkit.Tests.Cli;
 public sealed partial class CliAnalyzeTests
 {
     [Fact]
+    public async Task AnalyzeCommandRejectsMissingFrameworkReferencesEvenWhenWorkspaceLoads()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(input.Path, "NoFramework.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                <NoStdLib>true</NoStdLib>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(input.Path, "Sample.cs"), "public class Sample { public int Value() => 1; }");
+
+        var exitCode = await RunCliAllowFailureAsync("analyze", input.Path, "--output", output.Path);
+
+        Assert.Equal(3, exitCode);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        JsonElement health = summary.RootElement.GetProperty("analysisHealth");
+        Assert.Equal("degraded", health.GetProperty("analysisQuality").GetString());
+        Assert.False(health.GetProperty("trustedDiagnostics").GetBoolean());
+        Assert.False(health.GetProperty("diagnosticsIncludedInHotspotRank").GetBoolean());
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        Assert.Contains(metrics, row => HasPropertyValue(row, "metricId", "cyclomatic_complexity"));
+        Assert.DoesNotContain(metrics, row => HasPropertyValue(row, "metricId", "diagnostic_count") ||
+            HasPropertyValue(row, "metricId", "inheritance_depth") ||
+            HasPropertyValue(row, "metricId", "outgoing_type_dependency_count"));
+    }
+
+    [Fact]
     public async Task AnalyzeCommandDoesNotCrashOnBrokenProjectAndEmitsCompilerDiagnostics()
     {
         using var output = TemporaryDirectory.Create();

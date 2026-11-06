@@ -8,6 +8,29 @@ namespace CodeMetricsToolkit.Tests.Syntax;
 
 public sealed class TypeSemanticFactsCollectorTests
 {
+    [Theory]
+    [InlineData("class Sample { }", 0)]
+    [InlineData("class Sample : System.Exception { }", 1)]
+    [InlineData("record Sample;", 0)]
+    [InlineData("interface Sample { }", 0)]
+    [InlineData("struct Sample { }", 0)]
+    [InlineData("readonly record struct Sample(int Value);", 0)]
+    [InlineData("enum Sample { Value }", 0)]
+    public void InheritanceDepthCountsOnlyClassBaseTypes(string source, int expected)
+    {
+        var context = RoslynTestCompilation.Create(source);
+        BaseTypeDeclarationSyntax declaration = context.Root.DescendantNodes()
+            .OfType<BaseTypeDeclarationSyntax>().Single();
+        var symbol = (INamedTypeSymbol)context.SemanticModel.GetDeclaredSymbol(declaration)!;
+
+        TypeSemanticFacts? facts = TypeSemanticFactsCollector.Collect(
+            [new SemanticTypeDeclaration(declaration, context.SemanticModel, symbol)],
+            CancellationToken.None);
+
+        Assert.NotNull(facts);
+        Assert.Equal(expected, facts.InheritanceDepth);
+    }
+
     [Fact]
     public void CollectCountsDistinctArgumentsOfRepeatedGenericDefinitions()
     {

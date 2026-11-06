@@ -8,9 +8,11 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Added
 
+- A guide to all 66 metrics with purpose, interpretation and Mermaid relationship graphs.
+- Exhaustive small-graph and seeded reachability checks, metric relationship invariants,
+  Roslyn edge cases and Core namespace-cycle regression coverage.
 - Project and namespace dependency counts and strongly connected component metrics.
-- Exact-token duplication blocks, line counts and ratios with source regions and bounded
-  collection cost.
+- Exact-token duplication blocks, line counts and ratios with source regions.
 - Type weighted member complexity and member/type size distributions for project and
   solution scopes.
 - Standalone .NET tool packaging for the `codemetrics` command.
@@ -23,6 +25,10 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Changed
 
+- Removed the duplication-only token, window and work ceilings that aborted otherwise
+  analyzable large solutions. Exact matching and cancellation remain; memory use grows
+  with input size. Regression coverage includes 2.2 million tokens and CLI publication
+  above the former 500,000-token ceiling.
 - Shared Core models now live in `Core.Contracts.AnalyzeRequest` and
   `Core.Facts.AnalysisSummary`, removing the Reporting-to-Analysis dependency.
   Source consumers must update imports; CLI and artifact contracts are unchanged.
@@ -49,6 +55,14 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Fixed
 
+- `inheritance_depth@1.0.1` reports zero for structs and enums, matching its class-only
+  contract instead of counting `System.ValueType` and `System.Enum`.
+- `diagnostic_count@1.1.0` includes every partial declaration, counts overlapping spans
+  once per target, and excludes records without complete source coordinates.
+- A loaded workspace without resolvable `System.Object` now produces degraded analysis
+  and CLI exit code 3; its compiler errors no longer become trusted quality metrics.
+- Formula documentation now includes the existing CFG complexity clamp and the nesting
+  contributions of conditional expressions and switch-expression arms.
 - Recursive generic constraints such as `T : IComparable<T>` no longer cause a
   stack overflow during semantic type-coupling collection. Constructed generic
   arguments are still traversed independently before named definitions are deduplicated.
