@@ -93,8 +93,10 @@ public static class AnalysisFactsCollector
             Duplication = duplication,
             AnalyzedProjectPaths = semanticLoad.Contexts.Keys.Order(StringComparer.Ordinal).ToArray(),
             ProjectDependencies = semanticLoad.Contexts
+                .Where(entry => sources.ProjectPaths.Contains(entry.Key, StringComparer.Ordinal))
                 .SelectMany(entry => entry.Value.DirectProjectDependencyPaths.Select(dependencyPath =>
                     new ProjectDependencyFacts(entry.Key, dependencyPath)))
+                .Where(dependency => sources.ProjectPaths.Contains(dependency.ToProjectPath, StringComparer.Ordinal))
                 .Distinct()
                 .OrderBy(dependency => dependency.FromProjectPath, StringComparer.Ordinal)
                 .ThenBy(dependency => dependency.ToProjectPath, StringComparer.Ordinal)

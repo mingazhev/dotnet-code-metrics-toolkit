@@ -36,6 +36,7 @@ internal static class SemanticWorkspaceLoader
 
         try
         {
+            using var buildLog = new WorkspaceBuildLog();
             using var workspace = MSBuildWorkspace.Create(CreateWorkspaceProperties());
             workspace.SkipUnrecognizedProjects = true;
             workspace.LoadMetadataForReferencedProjects = false;
@@ -43,13 +44,15 @@ internal static class SemanticWorkspaceLoader
             var workspaceDiagnostics = new ConcurrentQueue<WorkspaceDiagnostic>();
             workspace.RegisterWorkspaceFailedHandler(args => workspaceDiagnostics.Enqueue(args.Diagnostic));
 
-            Solution solution = await LoadSolutionAsync(sources, workspace, cancellationToken).ConfigureAwait(false);
+            Solution solution = await LoadSolutionAsync(sources, workspace, buildLog, cancellationToken).ConfigureAwait(false);
+            buildLog.Read(cancellationToken);
             IReadOnlySet<string> includedSourcePaths = sources.CandidateSourceFiles
                 .Select(source => NormalizeFullPath(source.FullPath))
                 .ToHashSet(StringComparer.Ordinal);
             Dictionary<string, ProjectSemanticContext> contexts = await CreateProjectContextsAsync(
                     sources.RootPath,
                     solution,
+                    buildLog,
                     includedSourcePaths,
                     collectCompilationDiagnostics: restore.Status != "failed",
                     diagnostics,
@@ -83,12 +86,13 @@ internal static class SemanticWorkspaceLoader
                     $"the analysis root ({examples}); linked external sources are not included and semantic results are not trusted.");
             }
 
-            foreach (WorkspaceDiagnostic workspaceDiagnostic in workspaceDiagnostics)
+            WorkspaceDiagnostic[] classifiedDiagnostics = workspaceDiagnostics.Select(buildLog.Classify).ToArray();
+            foreach (WorkspaceDiagnostic workspaceDiagnostic in classifiedDiagnostics)
             {
                 diagnostics.Add(FromWorkspace(workspaceDiagnostic));
             }
 
-            var workspaceHadFailures = workspaceDiagnostics.Any(
+            var workspaceHadFailures = classifiedDiagnostics.Any(
                 diagnostic => diagnostic.Kind == WorkspaceDiagnosticKind.Failure);
             if (workspaceHadFailures)
             {
@@ -194,12 +198,14 @@ internal static class SemanticWorkspaceLoader
     private static async Task<Solution> LoadSolutionAsync(
         DiscoveredSources sources,
         MSBuildWorkspace workspace,
+        WorkspaceBuildLog buildLog,
         CancellationToken cancellationToken)
     {
         if (sources.SelectedSolutionPath is not null)
         {
             return await workspace.OpenSolutionAsync(
                     Path.Combine(sources.RootPath, sources.SelectedSolutionPath),
+                    msbuildLogger: buildLog.CreateLogger(),
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -224,6 +230,7 @@ internal static class SemanticWorkspaceLoader
 
             await workspace.OpenProjectAsync(
                     fullProjectPath,
+                    msbuildLogger: buildLog.CreateLogger(),
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -234,14 +241,13 @@ internal static class SemanticWorkspaceLoader
     private static async Task<Dictionary<string, ProjectSemanticContext>> CreateProjectContextsAsync(
         string rootPath,
         Solution solution,
+        WorkspaceBuildLog buildLog,
         IReadOnlySet<string> includedSourcePaths,
         bool collectCompilationDiagnostics,
         AnalysisDiagnosticCollector diagnostics,
         CancellationToken cancellationToken)
     {
         var contexts = new Dictionary<string, ProjectSemanticContext>(StringComparer.Ordinal);
-        var projectIdsByPath = new Dictionary<string, ProjectId>(StringComparer.Ordinal);
-        var pathsByProjectId = new Dictionary<ProjectId, string>();
 
         foreach (Project project in solution.Projects.Where(project => project.Language == LanguageNames.CSharp))
         {
@@ -269,8 +275,6 @@ internal static class SemanticWorkspaceLoader
                 csharpCompilation,
                 syntaxTreesByFullPath,
                 []);
-            projectIdsByPath[projectRelativePath] = project.Id;
-            pathsByProjectId[project.Id] = projectRelativePath;
             if (collectCompilationDiagnostics)
             {
                 AddCompilationDiagnostics(
@@ -283,17 +287,14 @@ internal static class SemanticWorkspaceLoader
             }
         }
 
-        ProjectDependencyGraph dependencyGraph = solution.GetProjectDependencyGraph();
-        foreach (KeyValuePair<string, ProjectId> projectEntry in projectIdsByPath)
+        foreach (var projectPath in contexts.Keys.ToArray())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var projectPath = projectEntry.Key;
-            ProjectId projectId = projectEntry.Value;
 
-            var directDependencies = dependencyGraph
-                .GetProjectsThatThisProjectDirectlyDependsOn(projectId)
-                .Where(pathsByProjectId.ContainsKey)
-                .Select(dependencyId => pathsByProjectId[dependencyId])
+            var directDependencies = buildLog.GetProjectReferences(Path.Combine(rootPath, projectPath))
+                .Select(path => ToRelativeProjectPath(rootPath, path))
+                .OfType<string>()
+                .Where(contexts.ContainsKey)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .ToArray();
