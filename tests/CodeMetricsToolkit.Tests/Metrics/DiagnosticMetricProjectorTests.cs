@@ -50,8 +50,13 @@ public sealed class DiagnosticMetricProjectorTests
 
     private static AnalysisDiagnostic Diagnostic(string path, int? startLine, int? endLine) => new()
     {
-        Id = "CS0001", Severity = "warning", Message = "sample", FilePath = path,
-        StartLine = startLine, EndLine = endLine, Tags = ["compiler"]
+        Id = "CS0001",
+        Severity = "warning",
+        Message = "sample",
+        FilePath = path,
+        StartLine = startLine,
+        EndLine = endLine,
+        Tags = ["compiler"]
     };
 
     [Fact]

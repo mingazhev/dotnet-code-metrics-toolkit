@@ -7,6 +7,31 @@ namespace CodeMetricsToolkit.Tests.Cli;
 public sealed partial class CliAnalyzeTests
 {
     [Fact]
+    public async Task AnalyzeCommandPublishesCompleteOutputAboveFormerDuplicationLimit()
+    {
+        using var input = TemporaryDirectory.Create();
+        using var output = TemporaryDirectory.Create();
+        const int linesPerFile = 50_001;
+        var source = string.Join('\n', Enumerable.Range(0, linesPerFile)
+            .Select(index => $"int v{index} = {index};"));
+        File.WriteAllText(Path.Combine(input.Path, "A.cs"), source);
+        File.WriteAllText(Path.Combine(input.Path, "B.cs"), source);
+
+        var exitCode = await RunCliAsync(
+            "analyze", input.Path, "--syntax-only", "--no-restore", "--output", output.Path);
+
+        Assert.Equal(0, exitCode);
+        AssertMandatoryArtifactsExist(output.Path);
+        SchemaAssertions.OutputDirectoryValidates(output.Path);
+        using var summary = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.Path, "summary.json")));
+        Assert.Equal(2, summary.RootElement.GetProperty("fileCount").GetInt32());
+        JsonElement[] metrics = ReadNdjson(Path.Combine(output.Path, "metrics.ndjson"));
+        Assert.Equal(2 * linesPerFile, MetricInt(metrics, "solution:root", "lines_of_code"));
+        Assert.Equal(2 * linesPerFile, MetricInt(metrics, "solution:root", "duplicated_line_count"));
+        Assert.Equal(2, MetricInt(metrics, "solution:root", "duplicated_block_count"));
+    }
+
+    [Fact]
     public async Task AnalyzeCommandWritesSchemaValidOutputForSimpleProject()
     {
         using var output = TemporaryDirectory.Create();

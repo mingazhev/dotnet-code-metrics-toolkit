@@ -142,9 +142,12 @@ duplication result uses the first analyzed context, matching the existing per-fi
 it does not report separate conditional variants for each project. The line-ratio
 denominator uses that same canonical file's `lines_of_code` value.
 
-Analysis with duplication is bounded to 500,000 nonmissing tokens across unique physical
-source files, 500,000 candidate windows, and 20,000,000 work units. Exceeding a bound
-fails analysis with a clear error instead of emitting truncated or zero-valued results.
+There is no separate duplication token, window or work ceiling. For the fixed 100-token
+window, rank construction and matching use a fixed number of passes and hash lookups,
+with expected time and memory proportional to the token input. Matching groups do not
+enumerate all occurrence pairs. Token/rank/window indexes remain in memory; very large
+inputs can exhaust available memory. Cancellation and the general input/output
+validation limits still apply. Counts are never truncated to fit a budget.
 
 ### line classification and ratios
 
@@ -486,6 +489,11 @@ is `true`. If restore or MSBuild project loading fails, or a loaded compilation 
 resolve the framework's `System.Object`, compiler diagnostics are
 not treated as code-quality metrics because they may reflect a broken analysis
 environment instead of broken source code.
+
+These are compilation diagnostics before third-party diagnostic analyzers and
+`DiagnosticSuppressor` processing, not a reproduction of `dotnet build`. Framework
+suppressors can remove warnings during a build that remain in this metric. Compare
+the build output before interpreting such diagnostics as defects.
 
 ## hotspot_rank@2.0.0
 

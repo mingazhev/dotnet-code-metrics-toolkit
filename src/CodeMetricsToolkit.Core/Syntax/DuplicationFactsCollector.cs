@@ -13,26 +13,16 @@ internal static class DuplicationFactsCollector
 
     public static DuplicationFacts Collect(
         IReadOnlyList<SourceFileContext> sourceFiles,
-        CancellationToken cancellationToken,
-        DuplicationCollectorLimits? limits = null)
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sourceFiles);
         cancellationToken.ThrowIfCancellationRequested();
 
-        DuplicationCollectorLimits effectiveLimits = limits ?? DuplicationCollectorLimits.Default;
-        ValidateLimits(effectiveLimits);
-        var work = new WorkBudget(effectiveLimits.MaxWorkUnits, cancellationToken);
-        FileTokenData[] files = CreateFileTokenData(
-            sourceFiles,
-            effectiveLimits,
-            work,
-            cancellationToken);
-        AssignTokenRanks(files, work, cancellationToken);
+        FileTokenData[] files = CreateFileTokenData(sourceFiles, cancellationToken);
+        AssignTokenRanks(files, cancellationToken);
 
         Dictionary<WindowKey, WindowGroup> repeatedWindows = CollectWindows(
             files,
-            effectiveLimits,
-            work,
             cancellationToken);
         var duplicatedStarts = files
             .Select(file => new bool[Math.Max(0, file.Tokens.Length - MinimumWindowTokens + 1)])
@@ -51,7 +41,7 @@ internal static class DuplicationFactsCollector
             var occursInMultipleFiles = false;
             foreach (WindowOccurrence occurrence in occurrences)
             {
-                work.Spend();
+                cancellationToken.ThrowIfCancellationRequested();
                 if (occurrence.FileIndex != firstFileIndex)
                 {
                     occursInMultipleFiles = true;
@@ -63,14 +53,14 @@ internal static class DuplicationFactsCollector
             {
                 foreach (WindowOccurrence occurrence in occurrences)
                 {
-                    work.Spend();
+                    cancellationToken.ThrowIfCancellationRequested();
                     AddDuplicatedWindow(duplicatedStarts, occurrence);
                 }
 
                 continue;
             }
 
-            AddNonOverlappingOccurrences(occurrences, duplicatedStarts, work);
+            AddNonOverlappingOccurrences(occurrences, duplicatedStarts, cancellationToken);
         }
 
         List<DuplicationRegionFacts>[] regionsByFile = files
@@ -85,7 +75,7 @@ internal static class DuplicationFactsCollector
             var mergedRegions = new List<TokenInterval>();
             for (var start = 0; start < duplicatedStarts[fileIndex].Length; start++)
             {
-                work.Spend();
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!duplicatedStarts[fileIndex][start])
                 {
                     continue;
@@ -113,7 +103,7 @@ internal static class DuplicationFactsCollector
                 };
             }
 
-            duplicatedLineCounts[fileIndex] = CountUniqueLines(mergedRegions, work);
+            duplicatedLineCounts[fileIndex] = CountUniqueLines(mergedRegions, cancellationToken);
             regionsByFile[fileIndex].AddRange(mergedRegions.Select(region =>
                 new DuplicationRegionFacts(region.StartLine, region.EndLine, string.Empty)));
         }
@@ -121,28 +111,8 @@ internal static class DuplicationFactsCollector
         return CreateResult(files, regionsByFile, duplicatedLineCounts, cancellationToken);
     }
 
-    private static void ValidateLimits(DuplicationCollectorLimits limits)
-    {
-        if (limits.MaxTokens < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(limits), "The token limit cannot be negative.");
-        }
-
-        if (limits.MaxWindows < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(limits), "The window limit cannot be negative.");
-        }
-
-        if (limits.MaxWorkUnits < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(limits), "The work limit cannot be negative.");
-        }
-    }
-
     private static FileTokenData[] CreateFileTokenData(
         IReadOnlyList<SourceFileContext> sourceFiles,
-        DuplicationCollectorLimits limits,
-        WorkBudget work,
         CancellationToken cancellationToken)
     {
         SourceFileContext[] uniqueSources = sourceFiles
@@ -151,7 +121,6 @@ internal static class DuplicationFactsCollector
             .OrderBy(context => context.SourceFile.RelativePath, StringComparer.Ordinal)
             .ToArray();
         var files = new List<FileTokenData>(uniqueSources.Length);
-        var totalTokenCount = 0;
 
         foreach (SourceFileContext source in uniqueSources)
         {
@@ -159,19 +128,12 @@ internal static class DuplicationFactsCollector
             var tokens = new List<TokenFacts>();
             foreach (SyntaxToken token in source.Root.DescendantTokens(descendIntoTrivia: false))
             {
-                work.Spend();
+                cancellationToken.ThrowIfCancellationRequested();
                 if (token.IsMissing || token.IsKind(SyntaxKind.EndOfFileToken) || token.Span.IsEmpty)
                 {
                     continue;
                 }
 
-                if (totalTokenCount >= limits.MaxTokens)
-                {
-                    throw new InvalidDataException(
-                        $"Duplication analysis exceeds the configured token limit of {limits.MaxTokens} tokens.");
-                }
-
-                totalTokenCount++;
                 var startLine = source.SourceText.Lines.GetLineFromPosition(token.Span.Start).LineNumber + 1;
                 var endLine = source.SourceText.Lines.GetLineFromPosition(token.Span.End - 1).LineNumber + 1;
                 tokens.Add(new TokenFacts(token.RawKind, token.Text, startLine, endLine));
@@ -185,7 +147,6 @@ internal static class DuplicationFactsCollector
 
     private static void AssignTokenRanks(
         IReadOnlyList<FileTokenData> files,
-        WorkBudget work,
         CancellationToken cancellationToken)
     {
         var tokenRanks = new Dictionary<TokenKey, int>();
@@ -197,7 +158,7 @@ internal static class DuplicationFactsCollector
             var ranks = new int[file.Tokens.Length];
             for (var tokenIndex = 0; tokenIndex < file.Tokens.Length; tokenIndex++)
             {
-                work.Spend();
+                cancellationToken.ThrowIfCancellationRequested();
                 TokenFacts token = file.Tokens[tokenIndex];
                 var key = new TokenKey(token.RawKind, token.Text);
                 if (!tokenRanks.TryGetValue(key, out var rank))
@@ -226,7 +187,7 @@ internal static class DuplicationFactsCollector
                 var ranks = new int[rankCount];
                 for (var start = 0; start < rankCount; start++)
                 {
-                    work.Spend();
+                    cancellationToken.ThrowIfCancellationRequested();
                     var pair = new RankPair(previousRanks[start], previousRanks[start + halfLength]);
                     if (!pairRanks.TryGetValue(pair, out var rank))
                     {
@@ -244,12 +205,9 @@ internal static class DuplicationFactsCollector
 
     private static Dictionary<WindowKey, WindowGroup> CollectWindows(
         IReadOnlyList<FileTokenData> files,
-        DuplicationCollectorLimits limits,
-        WorkBudget work,
         CancellationToken cancellationToken)
     {
         var windows = new Dictionary<WindowKey, WindowGroup>();
-        var windowCount = 0;
 
         for (var fileIndex = 0; fileIndex < files.Count; fileIndex++)
         {
@@ -267,12 +225,7 @@ internal static class DuplicationFactsCollector
 
             for (var start = 0; start < windowStartCount; start++)
             {
-                work.Spend();
-                if (++windowCount > limits.MaxWindows)
-                {
-                    throw new InvalidDataException(
-                        $"Duplication analysis exceeds the configured window limit of {limits.MaxWindows} windows.");
-                }
+                cancellationToken.ThrowIfCancellationRequested();
 
                 TokenFacts first = file.Tokens[start];
                 TokenFacts last = file.Tokens[start + MinimumWindowTokens - 1];
@@ -301,13 +254,13 @@ internal static class DuplicationFactsCollector
     private static void AddNonOverlappingOccurrences(
         IReadOnlyList<WindowOccurrence> occurrences,
         IReadOnlyList<bool[]> duplicatedStarts,
-        WorkBudget work)
+        CancellationToken cancellationToken)
     {
         var firstStart = occurrences[0].TokenStart;
         var lastStart = occurrences[^1].TokenStart;
         for (var index = 0; index < occurrences.Count; index++)
         {
-            work.Spend();
+            cancellationToken.ThrowIfCancellationRequested();
             WindowOccurrence current = occurrences[index];
             if (current.TokenStart - firstStart >= MinimumWindowTokens ||
                 lastStart - current.TokenStart >= MinimumWindowTokens)
@@ -326,7 +279,7 @@ internal static class DuplicationFactsCollector
 
     private static int CountUniqueLines(
         IReadOnlyList<TokenInterval> regions,
-        WorkBudget work)
+        CancellationToken cancellationToken)
     {
         if (regions.Count == 0)
         {
@@ -338,7 +291,7 @@ internal static class DuplicationFactsCollector
         var currentEnd = regions[0].EndLine;
         for (var index = 1; index < regions.Count; index++)
         {
-            work.Spend();
+            cancellationToken.ThrowIfCancellationRequested();
             var nextStart = regions[index].StartLine;
             var nextEnd = regions[index].EndLine;
             if (nextStart <= currentEnd + 1)
@@ -418,27 +371,6 @@ internal static class DuplicationFactsCollector
             }
 
             Occurrences.Add(occurrence);
-        }
-    }
-
-    private sealed class WorkBudget(long maximum, CancellationToken cancellationToken)
-    {
-        private const int CancellationCheckMask = 1023;
-        private long Count { get; set; }
-
-        public void Spend(long units = 1)
-        {
-            if (units > maximum - Count)
-            {
-                throw new InvalidDataException(
-                    $"Duplication analysis exceeds the configured work limit of {maximum} units.");
-            }
-
-            Count += units;
-            if ((Count & CancellationCheckMask) == 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-            }
         }
     }
 }

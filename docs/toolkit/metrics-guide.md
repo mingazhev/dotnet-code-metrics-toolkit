@@ -41,9 +41,9 @@ categories do not necessarily partition all LOC.
 | `parameter_count` | Which member signatures require substantial input context? | Read alongside length, coupling and complexity; setters' implicit `value` is excluded. |
 
 Duplication requires 100 consecutive matching tokens spanning at least 10 lines in each
-occurrence. A same-file match must be at least 100 tokens away. Collection fails above
-500,000 tokens or its work budget; scope large runs to projects. This limit affects the
-whole analysis, not only the duplication rows.
+occurrence. A same-file match must be at least 100 tokens away. The collector makes a
+fixed number of token passes without enumerating matching pairs. It has no separate
+token/window/work ceiling; its in-memory indexes grow with the selected source size.
 
 ```mermaid
 flowchart TB
@@ -207,7 +207,7 @@ flowchart LR
 | `unreachable_basic_block_count` | Is there statically unreachable control flow? | Total blocks minus reachable blocks; inspect before treating as dead code. |
 | `control_flow_edge_count` | How many explicit CFG successors exist? | `E` in the CFG formula; excludes branches without destination blocks. |
 | `cfg_cyclomatic_complexity` | How complex is the collected CFG topology? | `max(1, E − N + 2P)`; omitted without a CFG, differs from syntax complexity. |
-| `diagnostic_count` | What compiler/syntax/nullable observations overlap this target? | Trusted source-span diagnostics across all partial declarations; tags overlap. |
+| `diagnostic_count` | What compiler/syntax/nullable observations overlap this target? | Trusted source-span diagnostics across all partial declarations; tags overlap. Third-party analyzers/suppressors are not executed, so counts can differ from a build. |
 | `hotspot_rank` | What should be inspected first within this run? | Weighted empirical percentiles, then a global ordinal rank; 1 is highest priority. |
 
 Operations include nested lambda/local-function bodies, but their separate CFGs are not

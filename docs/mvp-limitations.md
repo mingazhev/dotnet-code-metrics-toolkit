@@ -27,6 +27,12 @@ as compiler errors in a loaded compilation with valid framework references. Insp
 `diagnostics.ndjson` and restore dependencies before treating them as source defects.
 This is especially relevant to `--no-restore`; the framework check does not replace restore.
 
+Compiler diagnostics come from Roslyn's `Compilation.GetDiagnostics`. The toolkit does
+not execute third-party diagnostic analyzers or their `DiagnosticSuppressor` instances.
+For example, a test framework may suppress nullable warnings after a not-null assertion
+during a normal build while the toolkit still reports them. `diagnostic_count` and its
+hotspot contribution therefore do not represent the final `dotnet build` diagnostic set.
+
 MSBuild can still be affected by files above the analyzed root, such as
 `Directory.Build.props`, `Directory.Packages.props`, and `NuGet.config`. The
 summary health messages report these ambient files. Historical snapshots should
@@ -82,6 +88,8 @@ Duplication compares exact token kinds and source text. Identifier renames and e
 expressions are not normalized. Linked files with different preprocessor configurations
 use the same first analyzed context as the other physical-file metrics.
 
-The collector has fixed token, window and work budgets; exceeding one fails the analysis.
-It does not publish a partial count or silently skip duplication on large inputs. See the
-[metric formulas](../src/CodeMetricsToolkit.Core/Metrics/README.md) for thresholds and limits.
+The collector retains token, rank and window indexes in memory. It has no separate
+duplication token/window/work ceiling, but memory use grows with the selected source
+size. It does not publish a partial count or silently skip duplication on large inputs.
+General input/output limits still apply. See the
+[metric formulas](../src/CodeMetricsToolkit.Core/Metrics/README.md) for matching thresholds.

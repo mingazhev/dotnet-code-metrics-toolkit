@@ -71,7 +71,8 @@ command twice with distinct output directories:
   --no-restore --output /tmp/codemetrics-semantic-sample
 ```
 
-This input does not exercise the duplication ceilings or thousands of projects.
-The duplication pass fails the whole analysis at its documented resource limits;
-its bounded collector is not a global complexity bound for every existing projector.
+This historical input did not exercise the then-current duplication ceilings or
+thousands of projects. Those ceilings were removed in the
+[2026-11-07 follow-up](../architecture-review/2026-11-07-review.md); the earlier measurements
+above describe the original bounded implementation, not the revised collector.
 The existing medium-fixture CLI smoke also passed within its 60-second ceiling.

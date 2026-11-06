@@ -15,6 +15,7 @@ Every catalog metric must pass both gates:
 | --- | --- | --- |
 | Physical, token and comment LOC | `LineFactsCollectorTests`, `SyntaxMetricProjectorTests` | exact file/project/solution results in `ExpandedMetricsProject` |
 | Syntax complexity and aggregates | `ControlFlowFactsCollectorTests`, `SyntaxMetricProjectorTests` | exact member/file targets in the golden contract; `ComplexityProject` stress sample |
+| Exact-token duplication | `DuplicationFactsCollectorTests`, `DuplicationMetricProjectorTests` | complete collector output for 2.2 million tokens; schema-valid CLI artifacts above the former 500,000-token ceiling |
 | Type/call graphs, SCCs and transitive counts | `GraphMetricProjectorTests`, `DirectedGraphAnalyzerTests` | exact semantic IDs and graph-derived values in the golden contract; `SemanticGraphProject` relationship sample |
 | Inheritance, coupling and API documentation | `TypeSemanticFactsCollectorTests`, `SemanticMetricProjectorTests` | exact type/project values in the golden contract |
 | IOperation and CFG | `OperationFactsCollectorTests`, `SemanticMetricProjectorTests` | exact operations, allocations, awaits, blocks, edges and CFG complexity in the golden contract |
@@ -46,5 +47,5 @@ The golden file is intentionally reviewed source, not regenerated during a test.
 - IL-based architecture tests reject Core namespace cycles and Metrics dependencies on
   pipeline, Roslyn traversal, validation, discovery or publication layers.
 
-The 2026-11-07 review ran 318 tests without skips on macOS arm64. This is behavioral
+The 2026-11-07 review and duplication follow-up ran 317 tests without skips on macOS arm64. This is behavioral
 coverage, not a claim of 100% branch coverage or support for every C# language feature.

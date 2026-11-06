@@ -12,8 +12,7 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 - Exhaustive small-graph and seeded reachability checks, metric relationship invariants,
   Roslyn edge cases and Core namespace-cycle regression coverage.
 - Project and namespace dependency counts and strongly connected component metrics.
-- Exact-token duplication blocks, line counts and ratios with source regions and bounded
-  collection cost.
+- Exact-token duplication blocks, line counts and ratios with source regions.
 - Type weighted member complexity and member/type size distributions for project and
   solution scopes.
 - Standalone .NET tool packaging for the `codemetrics` command.
@@ -26,6 +25,10 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Changed
 
+- Removed the duplication-only token, window and work ceilings that aborted otherwise
+  analyzable large solutions. Exact matching and cancellation remain; memory use grows
+  with input size. Regression coverage includes 2.2 million tokens and CLI publication
+  above the former 500,000-token ceiling.
 - Shared Core models now live in `Core.Contracts.AnalyzeRequest` and
   `Core.Facts.AnalysisSummary`, removing the Reporting-to-Analysis dependency.
   Source consumers must update imports; CLI and artifact contracts are unchanged.
