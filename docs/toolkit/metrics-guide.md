@@ -154,7 +154,7 @@ in the whole system. An edge records a static relationship, not runtime executio
 | `transitive_type_dependent_count` | How far could a change propagate through static dependencies? | Reverse reachability, not proof of runtime impact. |
 | `dependency_cycle_membership` | Is the type part of a dependency cycle? | 1 iff `dependency_component_size > 0`. |
 | `dependency_component_size` | How many types are mutually reachable in that cycle? | Cyclic strongly connected component (SCC) size; zero otherwise. |
-| `outgoing_project_dependency_count` | How many analyzed projects are directly referenced? | Declared project references; package references and type-use edges do not count. |
+| `outgoing_project_dependency_count` | How many analyzed projects are directly referenced? | Evaluated direct project references (imports and conditions included); package, implicit transitive compiler references and type-use edges do not count. |
 | `incoming_project_dependency_count` | How many analyzed projects reference this project? | Reverse direct project references. |
 | `project_dependency_cycle_membership` | Is the project in a direct-reference cycle? | 1 iff its cyclic component size is positive. |
 | `project_dependency_component_size` | How many projects participate in that component? | SCC size; self-reference is 1, acyclic is 0. |

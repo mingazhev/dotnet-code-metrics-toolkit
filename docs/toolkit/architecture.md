@@ -100,3 +100,18 @@ serialized result fields are independent of these C# changes.
 All current producers emit numeric metrics. Their shared `MetricResultLine` describes
 that output; the wire schema and independent Scoring reader also understand string and
 boolean values. No unused string/boolean producer model or per-metric interface is needed.
+
+### MSBuild project references and diagnostics
+
+The loader records a temporary MSBuild binary log while Roslyn loads the workspace.
+It uses the recorded project configurations to evaluate direct `ProjectReference`
+items before build targets inject transitive compiler references. Both graph endpoints
+must belong to the selected analysis. Compiler references stay intact, so transitive
+references remain available for type binding.
+
+Roslyn 5.6 reports build warnings as workspace failures. The loader restores warning
+severity only when the project and message match a recorded MSBuild warning and no
+matching error exists. Unknown failures and warnings promoted to errors remain failures.
+Warnings stay in `diagnostics.ndjson`; they are not suppressed. Logs are deleted when
+loading finishes (including failure paths), and are never published as analysis artifacts.
+This adds temporary disk I/O and project evaluation work; it does not run an additional build.

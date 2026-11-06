@@ -25,6 +25,12 @@ versioning for the tool package. Artifact and metric contracts are versioned sep
 
 ### Changed
 
+- Project dependency counts use metric version 1.0.1: only evaluated direct
+  `ProjectReference` items count, including imports and conditions. SDK-injected
+  transitive compiler references no longer appear as direct graph edges.
+- Workspace build warnings remain visible without degrading otherwise complete
+  semantic analysis. Actual errors and unclassified workspace failures still degrade.
+
 - Removed the duplication-only token, window and work ceilings that aborted otherwise
   analyzable large solutions. Exact matching and cancellation remain; memory use grows
   with input size. Regression coverage includes 2.2 million tokens and CLI publication
